@@ -261,26 +261,26 @@ export function RaceMenu({
             onClick={onStartRace}
             className="mt-6 w-full bg-[#51a7d5] px-10 py-3.5 text-[15px] font-semibold tracking-wide text-white transition hover:bg-[#51a7d5]/90 inline-flex gap-1 items-center justify-center"
           >
-            Start Race (Singleplayer)
             <ArrowUpRight size={20} />
+            Start Race (Singleplayer)
           </button>
           {onOpenMultiplayer && (
             <button
               onClick={onOpenMultiplayer}
               className="mt-2.5 w-full border border-[#51a7d5] bg-[#51a7d5]/15 px-6 py-3 text-[14px] font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/25 active:scale-[0.98] inline-flex items-center justify-center gap-1"
             >
-              Multiplayer Lobby
               <Swords size={20} />
+              Multiplayer Lobby
             </button>
           )}
           <button
             onClick={onFreeDrive}
             className="mt-2.5 w-full border border-white/12 bg-white/5 px-6 py-3 text-[14px] font-medium text-gray-100 transition hover:bg-white/10 active:scale-[0.98]  inline-flex items-center justify-center gap-1"
           >
+            <LoaderPinwheel size={20} />
             {traffic === "off"
               ? "Free Roam"
               : `Free Roam · ${TRAFFIC_OPTIONS.find((o) => o.id === traffic)?.label} traffic`}
-            <LoaderPinwheel size={20} />
           </button>
         </div>
       </div>

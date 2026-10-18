@@ -32,6 +32,7 @@ export interface CarTelemetry {
   slipRatio: number
   drift: boolean
   dash: CarDashConfig
+  aggression?: number
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -83,6 +84,13 @@ export class CarController {
   gear: Gear = 1
   autoMode = true
   rpm: number
+  aggression = 0
+  private aggressionHoldTimer = 0
+  private gearChangeDelayTimer = 0
+  private decisionThrottle = 0
+  private kickdownTimer = 0
+  private kickdownTargetGear: Gear | null = null
+  private clutchDumpTimer = 0
   private shiftTimer = 0
   private clutch = 1
   private wheelOmega = 0
@@ -188,6 +196,13 @@ export class CarController {
     this.gear = 1
     this.rpm = this.P.engine.idleRPM
     this.shiftTimer = 0
+    this.aggression = 0
+    this.aggressionHoldTimer = 0
+    this.gearChangeDelayTimer = 0
+    this.decisionThrottle = 0
+    this.kickdownTimer = 0
+    this.kickdownTargetGear = null
+    this.clutchDumpTimer = 0
     this.feedT = 99
     this.prevThrottle = 0
     this.prevLaunching = false
@@ -313,6 +328,10 @@ export class CarController {
     const beta = clamp(latVGlobal / Math.max(10, Math.abs(fwdSpeed)), -0.4, 0.4)
 
     if (input.throttle > 0.3) this.parkingBrake = false
+    if (input.throttle < 0.65 || input.brake > 0.1) {
+      this.kickdownTimer = 0
+      this.kickdownTargetGear = null
+    }
 
     const speedKmh = Math.abs(fwdSpeed) * 3.6
     const S = P.wheels.steering
@@ -353,6 +372,28 @@ export class CarController {
     else if (this.gear === -1)
       gearRatio = P.transmission.reverseRatio * finalDrive
 
+    const launchTargetRPM = P.transmission.launchControlRPM || 4500
+
+    if (this.launchArmed) {
+      this.launchTimer = 2.5
+    } else if (this.launchTimer > 0) {
+      this.launchTimer -= dt
+    }
+    if (this.clutchDumpTimer > 0) {
+      this.clutchDumpTimer -= dt
+    }
+
+    const coupled = Math.abs((rollingOmega * gearRatio * 60) / (2 * Math.PI))
+
+    // Active launch phase: starts the instant brake is released from launchArmed,
+    // and holds engine in peak powerband until drivetrain synchronizes with engine
+    this.launching =
+      !this.launchArmed &&
+      this.launchTimer > 0 &&
+      input.throttle > 0.65 &&
+      this.gear === 1 &&
+      coupled < launchTargetRPM * 0.98
+
     let targetRpm: number
     if (this.gear === 0) {
       targetRpm =
@@ -366,23 +407,41 @@ export class CarController {
         this.rpm = P.engine.idleRPM + excess * Math.exp(-decay * dt)
       }
     } else {
-      const coupled = Math.abs((rollingOmega * gearRatio * 60) / (2 * Math.PI))
       const clutchSlip =
         clamp(1 - Math.abs(fwdSpeed) / 6, 0, 1) * (1 - this.clutch * 0)
       const throttleFlare = input.throttle * clutchSlip * 2500
-      targetRpm = Math.max(P.engine.idleRPM * 0.95, coupled + throttleFlare)
-      if (
-        !this.launchArmed &&
-        Math.abs(fwdSpeed) < 3 &&
-        input.throttle > 0.1 &&
-        this.gear >= 1
-      ) {
+
+      if (this.launchArmed) {
+        targetRpm = launchTargetRPM
+      } else if (this.launching) {
+        // Realistic clutch bite load: momentary 500-700 RPM bog as clutch locks into stationary tarmac
+        const launchElapsed = 2.5 - this.launchTimer
+        let bogDrop = 0
+        if (launchElapsed < 0.38) {
+          const t = launchElapsed / 0.38
+          bogDrop = Math.sin(t * Math.PI) * 720
+        }
+        targetRpm = Math.max(launchTargetRPM - bogDrop, coupled)
+      } else if (this.clutchDumpTimer > 0) {
+        // High-RPM neutral drop / clutch dump: keep engine singing in peak powerband while tires spin
         targetRpm = Math.max(
-          targetRpm,
-          P.engine.idleRPM + input.throttle * 2200,
+          this.rpm,
+          coupled,
+          P.engine.idleRPM +
+            input.throttle *
+              (P.engine.redlineRPM - P.engine.idleRPM) *
+              0.88,
         )
+      } else {
+        targetRpm = Math.max(P.engine.idleRPM * 0.95, coupled + throttleFlare)
+        if (Math.abs(fwdSpeed) < 3 && input.throttle > 0.1 && this.gear >= 1) {
+          targetRpm = Math.max(
+            targetRpm,
+            P.engine.idleRPM + input.throttle * 2200,
+          )
+        }
       }
-      if (this.launchArmed) targetRpm = P.transmission.launchControlRPM
+
       if (
         input.throttle > 0.1 &&
         this.gear >= 1 &&
@@ -390,39 +449,184 @@ export class CarController {
       ) {
         targetRpm = Math.max(targetRpm, P.engine.revLimiterRPM - 100)
       }
-      this.rpm += (targetRpm - this.rpm) * Math.min(1, dt * 10)
+
+      // Pre-kickdown engine surge / torque converter & dual-clutch micro-slip (+100 to 150 RPM)
+      if (this.kickdownTimer > 0) {
+        const kickdownProgress = clamp(1 - this.kickdownTimer / 0.18, 0, 1)
+        targetRpm += 80 + kickdownProgress * 120
+      }
+
+      const revBlendRate = this.launching
+        ? 16
+        : this.clutchDumpTimer > 0
+          ? 16
+          : this.kickdownTimer > 0
+            ? 14
+            : 10
+      this.rpm += (targetRpm - this.rpm) * Math.min(1, dt * revBlendRate)
     }
 
-    this.launching = false
     if (this.launchArmed) {
-      this.launchTimer = 2.0
-      if (this.rpm > P.transmission.launchControlRPM) {
-        this.rpm =
-          P.transmission.launchControlRPM + Math.sin(this.simTime * 50) * 120
+      if (this.rpm > launchTargetRPM) {
+        this.rpm = launchTargetRPM + Math.sin(this.simTime * 50) * 100
       }
-    } else {
-      this.launchTimer = Math.max(0, this.launchTimer - dt)
     }
-    this.launching =
-      !this.launchArmed &&
-      this.launchTimer > 0 &&
-      !atStandstill &&
-      input.throttle > 0.7
+
     const LIM = P.engine.revLimiterRPM
     if (this.rpm >= LIM) this.limiterCut = true
     else if (this.rpm < LIM - 400) this.limiterCut = false
     if (this.rpm > LIM) this.rpm = LIM
 
-    if (this.autoMode && this.shiftTimer <= 0 && this.gear >= 1) {
-      if (
-        this.rpm > P.transmission.autoUpshiftRPM &&
-        this.gear < ratios.length
+    // ============================================================
+    // Dynamic Shift Map Calculation (BeamNG ShiftLogic Engine)
+    // Fully dynamic based on the car's engine RPM limits & ratios
+    // ============================================================
+    const idle = P.engine.idleRPM
+    const redline = P.engine.redlineRPM
+    const highUp = Math.min(
+      P.transmission.autoUpshiftRPM || redline - 200,
+      redline - 150,
+    )
+    // Low-throttle upshift: early economy cruising point (22% into the powerband above idle)
+    const lowUp = Math.round(idle + (highUp - idle) * 0.22)
+    // Low-throttle downshift point: prevents engine lugging and stalling
+    const lowDown = Math.max(Math.round(idle * 1.3), idle + 250)
+    // High-throttle downshift point: aggressive kickdown to access maximum torque
+    const highDown = Math.round(lowDown + (highUp - lowDown) * 0.54)
+
+    // 1. Gearbox decision throttle smoothing (asymmetric low-pass filter)
+    const decisionRate = input.throttle > this.decisionThrottle ? 2.5 : 2.0
+    this.decisionThrottle +=
+      (input.throttle - this.decisionThrottle) * Math.min(1, dt * decisionRate)
+
+    // 2. Driver Aggression calculation (pedal position + tip-in speed d(throttle)/dt)
+    const throttleRate =
+      (input.throttle - this.prevThrottle) / Math.max(dt, 0.001)
+    const tipInBonus = throttleRate > 1.8 ? 0.35 : 0
+    const brakeBonus = input.brake > 0.4 ? 0.25 : 0
+    const rawAggression = clamp(
+      this.decisionThrottle + tipInBonus + brakeBonus,
+      0,
+      1,
+    )
+
+    if (rawAggression >= this.aggression) {
+      // Aggression rises quickly under throttle demand
+      this.aggression +=
+        (rawAggression - this.aggression) * Math.min(1, dt * 1.8)
+      this.aggressionHoldTimer = 1.75 // BeamNG aggressionHoldOffThrottleDelay
+    } else {
+      // Aggression holds during key lifts/feathering before slowly decaying
+      if (this.aggressionHoldTimer > 0) {
+        this.aggressionHoldTimer -= dt
+      } else {
+        this.aggression +=
+          (rawAggression - this.aggression) * Math.min(1, dt * 0.4)
+      }
+    }
+    this.aggression = clamp(this.aggression, 0, 1)
+
+    // Non-linear aggression coefficient (quadratic curve)
+    const aggressionCoef = this.aggression * this.aggression
+
+    // Interpolate active shift thresholds based on driver aggression
+    const targetShiftUpRPM = lerp(lowUp, highUp, aggressionCoef)
+    // Apply hysteresis offset factor (1.28) to eliminate cyclical gear hunting
+    const targetShiftDownRPM = Math.min(
+      lerp(lowDown, highDown, aggressionCoef),
+      targetShiftUpRPM / 1.28,
+    )
+
+    // Cooldown timer between shifts (transmissionGearChangeDelay)
+    this.gearChangeDelayTimer = Math.max(0, this.gearChangeDelayTimer - dt)
+
+    // Shift prevention: inhibit upshifting during wheelspin/burnouts or heavy slides
+    const isSlipping = this.slipRatioAvg > 0.24
+    const isHeavySlide = Math.abs(this.lateralVelocity()) > 5.5
+
+    const isAntiStall = this.gear > 1 && (this.rpm < idle * 1.2 || speedKmh < 6)
+
+    if (
+      this.autoMode &&
+      this.shiftTimer <= 0 &&
+      (this.gearChangeDelayTimer <= 0 || isAntiStall) &&
+      this.gear >= 1
+    ) {
+      // 1. Anti-stall floor: when approaching stop or RPM drops to idle, drop directly to 1st
+      if (isAntiStall) {
+        this.doShift(1 - this.gear)
+      }
+      // 2. Upshift: when RPM exceeds targetShiftUpRPM
+      // Must NOT upshift if launch control is armed or vehicle is stationary (< 10 km/h)
+      else if (
+        this.rpm > targetShiftUpRPM &&
+        this.gear < ratios.length &&
+        !this.launchArmed &&
+        speedKmh > 10
       ) {
-        this.doShift(1)
-      } else if (this.rpm < 1400 && this.gear > 1) {
-        this.doShift(-1)
-      } else if (speedKmh < 5 && this.gear > 1) {
-        this.doShift(-1)
+        const forceLimiterShift = this.rpm >= highUp || this.limiterCut
+        if ((!isSlipping || forceLimiterShift) && !isHeavySlide) {
+          this.doShift(1)
+        }
+      }
+      // 3. Direct multi-gear kickdown:
+      // When stamping throttle and NOT already near upshift RPM, scan for lowest safe gear directly
+      // (e.g. from 8th gear straight to 3rd in one jump without passing through 7th/5th)
+      else if (
+        this.gear > 1 &&
+        this.rpm < targetShiftUpRPM - 300 &&
+        ((input.throttle > 0.75 && aggressionCoef > 0.4) ||
+          input.throttle > 0.88)
+      ) {
+        const safeHeadroom = Math.max(450, (redline - idle) * 0.08)
+        const maxSafeRPM = redline - safeHeadroom
+        let kickdownGear: Gear | null = null
+
+        // Scan from 1st gear upwards to find the lowest gear with maximum torque that does not over-rev
+        for (let g = 1; g < this.gear; g++) {
+          const pred = this.predictedRpm(g as Gear)
+          if (pred < maxSafeRPM && pred >= idle * 1.1) {
+            kickdownGear = g as Gear
+            break
+          }
+        }
+
+        if (kickdownGear !== null && kickdownGear < this.gear) {
+          if (this.kickdownTimer <= 0 && this.kickdownTargetGear === null) {
+            this.kickdownTargetGear = kickdownGear
+            this.kickdownTimer = 0.375
+          }
+
+          this.kickdownTargetGear = kickdownGear
+          this.kickdownTimer -= dt
+
+          if (this.kickdownTimer <= 0) {
+            this.doShift(kickdownGear - this.gear)
+            this.kickdownTargetGear = null
+            this.kickdownTimer = 0
+          }
+        } else {
+          this.kickdownTargetGear = null
+          this.kickdownTimer = 0
+        }
+      }
+
+      else if (this.rpm < targetShiftDownRPM && this.gear > 1) {
+        let targetDownGear: Gear = (this.gear - 1) as Gear
+        for (let g = (this.gear - 1) as number; g >= 1; g--) {
+          const pred = this.predictedRpm(g as Gear)
+          if (pred < targetShiftUpRPM - 200) {
+            if (pred >= targetShiftDownRPM + 150) {
+              targetDownGear = g as Gear
+              break
+            } else {
+              targetDownGear = g as Gear
+            }
+          }
+        }
+        if (targetDownGear < this.gear) {
+          this.doShift(targetDownGear - this.gear)
+        }
       }
     }
     const shifting = this.shiftTimer > 0
@@ -438,23 +642,40 @@ export class CarController {
 
     const tcGain =
       (input.handbrake ? 0 : P.assists.tractionControl) *
-      (this.launching || this.launchArmed ? 0.9 : 1)
+      (this.launching
+        ? 0.35
+        : this.launchArmed
+          ? 0
+          : this.clutchDumpTimer > 0
+            ? 0.2
+            : 1)
     if (this.slipRatioAvg > 0.15) {
       let cut = clamp((this.slipRatioAvg - 0.15) / 0.35, 0, 1)
-      if (input.throttle > 0.5 && Math.abs(beta) > 0.14 && !this.launching) {
+      if (
+        input.throttle > 0.5 &&
+        Math.abs(beta) > 0.14 &&
+        !this.launching &&
+        this.clutchDumpTimer <= 0
+      ) {
         cut = Math.min(1, cut + clamp((Math.abs(beta) - 0.14) * 4, 0, 0.3))
       }
       if (
         !input.handbrake &&
         Math.abs(this.steerAngle) > 0.12 &&
-        !this.launching
+        !this.launching &&
+        this.clutchDumpTimer <= 0
       ) {
         cut = Math.min(
           1,
           cut + clamp((this.slipRatioAvg - 0.15) * 2.5, 0, 0.55),
         )
       }
-      engineTorque *= lerp(1, 1 - Math.min(0.88, tcGain * 2.2), cut)
+      const maxCut = this.launching
+        ? 0.3
+        : this.clutchDumpTimer > 0
+          ? 0.2
+          : 0.88
+      engineTorque *= lerp(1, 1 - Math.min(maxCut, tcGain * 2.2), cut)
     }
     engineTorque = Math.max(0, engineTorque)
 
@@ -493,7 +714,9 @@ export class CarController {
       this.prevThrottle = input.throttle
       this.prevLaunching = this.launching
       if (dir > 0 && this.gear === 1 && input.throttle > 0.5) {
-        feedFactor = Math.min(1, 0.25 + (0.75 * this.feedT) / 0.7)
+        feedFactor = this.launching || this.clutchDumpTimer > 0
+          ? 1.0
+          : Math.min(1, 0.4 + (0.6 * this.feedT) / 0.5)
       }
     }
 
@@ -555,7 +778,12 @@ export class CarController {
           : (driveTorqueTotal * (1 - split)) / 2
         if (driveDir > 0 && !input.handbrake) {
           if (this.gear === 1)
-            driveT = Math.min(driveT, P.drivetrain.torqueCapGear1)
+            driveT = Math.min(
+              driveT,
+              this.launching || this.clutchDumpTimer > 0
+                ? P.drivetrain.torqueCapGear1 * 1.35
+                : P.drivetrain.torqueCapGear1,
+            )
           else if (this.gear === 2)
             driveT = Math.min(driveT, P.drivetrain.torqueCapGear2)
         }
@@ -837,6 +1065,7 @@ export class CarController {
       slipRatio: this.slipRatioAvg,
       drift: this.drifting,
       dash: this.dash,
+      aggression: this.aggression,
     }
   }
 
@@ -873,12 +1102,45 @@ export class CarController {
       this.predictedRpm(order[j]) > this.P.engine.redlineRPM - 200
     )
       return
+    const prevGear = this.gear
+    const prevRpm = this.rpm
     this.gear = order[j]
     this.shiftTimer = this.P.transmission.shiftTimeManual
+    this.gearChangeDelayTimer = 0.85
+
+    // High-RPM clutch dump / neutral drop:
+    if (
+      prevGear === 0 &&
+      this.gear === 1 &&
+      prevRpm > this.P.engine.idleRPM * 1.8
+    ) {
+      this.clutchDumpTimer = 0.65
+      const biteDrop = Math.min(800, prevRpm * 0.12)
+      this.rpm = Math.max(prevRpm - biteDrop, this.P.engine.idleRPM * 2)
+
+      const ratio =
+        this.P.transmission.gearRatios[0] *
+        this.P.transmission.finalDriveRatio
+      const spinOmega = ((this.rpm / 60) * (2 * Math.PI)) / ratio
+      const split = this.P.drivetrain.frontTorqueSplit
+      const rearDriven = split < 0.999
+      const frontDriven = split > 0.001
+
+      for (let wi = 0; wi < this.wheelDefs.length; wi++) {
+        const w = this.wheelDefs[wi]
+        const driven = w.front ? frontDriven : rearDriven
+        if (driven && this.wheelDynamics.wheels[wi]) {
+          this.wheelDynamics.wheels[wi].omega = spinOmega * 0.85
+        }
+      }
+      this.wheelOmega = spinOmega * 0.85
+      return
+    }
+
     this.afterShift()
   }
 
-  private doShift(dir: 1 | -1) {
+  private doShift(dir: number) {
     const n = this.P.transmission.gearRatios.length
     const next = clamp((this.gear as number) + dir, 1, n) as Gear
     if (next === this.gear) return
@@ -886,6 +1148,7 @@ export class CarController {
       return
     this.gear = next
     this.shiftTimer = this.P.transmission.shiftTimeAuto
+    this.gearChangeDelayTimer = Math.abs(dir) > 1 ? 1.1 : 0.85
     this.afterShift()
   }
 

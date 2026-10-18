@@ -98,13 +98,18 @@ export class InputManager {
       (has("KeyA") || has("ArrowLeft") ? 1 : 0) -
       (has("KeyD") || has("ArrowRight") ? 1 : 0)
 
-    const pedalSpeed = 6
-    this.throttle +=
-      Math.sign(throttleTarget - this.throttle) *
-      Math.min(Math.abs(throttleTarget - this.throttle), pedalSpeed * dt)
-    this.brake +=
-      Math.sign(brakeTarget - this.brake) *
-      Math.min(Math.abs(brakeTarget - this.brake), pedalSpeed * dt)
+    // BeamNG-style keyboard temporal slew rate filtering (inRate / outRate)
+    const throttleInRate = 3.2
+    const throttleOutRate = 4.0
+    const tDelta = throttleTarget - this.throttle
+    const tRate = tDelta > 0 ? throttleInRate : throttleOutRate
+    this.throttle += Math.sign(tDelta) * Math.min(Math.abs(tDelta), tRate * dt)
+
+    const brakeInRate = 3.5
+    const brakeOutRate = 5.0
+    const bDelta = brakeTarget - this.brake
+    const bRate = bDelta > 0 ? brakeInRate : brakeOutRate
+    this.brake += Math.sign(bDelta) * Math.min(Math.abs(bDelta), bRate * dt)
 
     const steerSpeed = steerTarget !== 0 ? 4.5 : 7.0
     this.steer +=

@@ -8,10 +8,10 @@ export interface BrakeLight {
 
 export const BRAKE_HEAT = new THREE.Color(0xff3d38)
 
-const LAMP_RANGE = 0.16
-const LAMP_IDLE = 0.62
+const LAMP_RANGE = 10
+const LAMP_IDLE = 0.5
 const LAMP_BRAKE = 3.4
-const HEAT_MIX = 0.8
+const HEAT_MIX = 1.8
 
 export function applyBrakeHeat(l: BrakeLight, heat: number) {
   l.mat.emissiveIntensity = l.idle * (1 + LAMP_BRAKE * heat)

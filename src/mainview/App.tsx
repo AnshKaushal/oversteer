@@ -964,7 +964,7 @@ export default function App() {
         }
         window.addEventListener("resize", onResize)
 
-        let chaseFar = true
+        let chaseFar = false
         let last = performance.now()
         let buriedTimer = 0
         let buriedFrames = 0
@@ -2086,8 +2086,8 @@ export default function App() {
                   onClick={resumeGame}
                   className="w-full bg-[#51a7d5] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#51a7d5]/90 active:scale-[0.98] inline-flex items-center justify-center gap-2"
                 >
-                  Keep driving
                   <Play size={16} />
+                  Keep driving
                 </button>
                 <button
                   onClick={() => {
