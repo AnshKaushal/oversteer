@@ -522,16 +522,15 @@ export default function Dashboard({ tele }: { tele: CarTelemetry }) {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const launching = tele.launchArmed || tele.launching
   return (
     <div
       className="pointer-events-none absolute inset-0 select-none"
       style={{ fontFamily: SANS }}
     >
-      {launching && (
+      {!tele.launching && tele.launchArmed && (
         <div className="absolute top-8 left-1/2 -translate-x-1/2 rounded-xl border-4 border-red-500 bg-[#14090b] px-8 py-2">
           <div className="text-center text-xl font-bold tracking-[0.2em] text-red-500">
-            {tele.launching ? "Launch" : "Launch control ready"}
+            {!tele.launching && "Launch control activated!"}
           </div>
           {!tele.launching && (
             <div className="mt-0.5 text-center text-[11px] tracking-[0.18em] text-red-200/80">

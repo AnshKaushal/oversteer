@@ -17,7 +17,10 @@ export function roadDirYaw(s: number): number {
 }
 
 const ARC_STEP = 5
-const ARC_MIN = -500
+// The road function is periodic, so it is valid for negative s too. The lower
+// bound has to be generous: driving in reverse walks s downwards indefinitely,
+// and anything clamped here silently freezes roadArcLength.
+const ARC_MIN = -25000
 const ARC_MAX = 12500
 let arcTable: Float64Array | null = null
 
@@ -305,6 +308,14 @@ export class WorldManager {
   private cloudLastCarS = -999999
   private readonly GRASS_ENABLED = true
 
+  /**
+   * +1 when the car is advancing along s, -1 when reversing. Streaming,
+   * recycling and respawn all key off this instead of assuming forward travel,
+   * which is what makes the world generate identically in both directions.
+   */
+  travelDir = 1
+  private lastCarS = Number.NaN
+
   async init(scene: THREE.Scene, baseUrl: string) {
     const W = WORLD_CONFIG
     scene.add(this.group)
@@ -583,21 +594,25 @@ export class WorldManager {
 
   private updateClouds(carS: number, carPos: THREE.Vector3) {
     if (this.cloudVariants.length === 0) return
-    const behindZ = -(carS - 600)
-    const aheadZ = -(carS - 2000)
+    const dir = this.travelDir
     let dirty = false
     for (let i = 0; i < this.cloudEntries.length; i++) {
       const c = this.cloudEntries[i]
-      if (c.pos.z > behindZ) {
-        const seed = i * 4001 + Math.floor(carS) * 13
-        c.pos.set(
-          carPos.x + (this.rand(seed) - 0.5) * 700,
-          60 + this.rand(seed * 7) * 60,
-          aheadZ - this.rand(seed * 3) * 400,
-        )
-        c.rot = this.rand(seed * 11) * Math.PI * 2
-        dirty = true
-      }
+      // s = -z. A cloud is trailing when it sits more than 600m behind the car
+      // along the travel axis; that test flips with the driving direction.
+      const cloudS = -c.pos.z
+      if (dir * (cloudS - carS) >= -600) continue
+      const seed = i * 4001 + Math.floor(carS) * 13
+      // Ahead means further along the travel axis, so reversing pushes the new
+      // position to lower s instead of higher.
+      const aheadS = carS + dir * (2000 + this.rand(seed * 3) * 400)
+      c.pos.set(
+        carPos.x + (this.rand(seed) - 0.5) * 700,
+        60 + this.rand(seed * 7) * 60,
+        -aheadS,
+      )
+      c.rot = this.rand(seed * 11) * Math.PI * 2
+      dirty = true
     }
     if (dirty || Math.abs(carS - this.cloudLastCarS) > 50) {
       this.cloudLastCarS = carS
@@ -1046,7 +1061,7 @@ export class WorldManager {
     return out
   }
 
-  private ensureSegs(minSeg: number, maxSeg: number) {
+  private ensureSegs(minSeg: number, maxSeg: number, carSeg: number) {
     if (this.primed && this.segMax >= minSeg && this.segMin <= maxSeg) {
       let complete = true
       for (let s = minSeg; s <= maxSeg; s++) {
@@ -1066,9 +1081,13 @@ export class WorldManager {
     let total = 0
     for (const arr of this.segProps.values()) total += arr.length
     const missing: number[] = []
-    for (let s = maxSeg; s >= minSeg; s--) {
+    for (let s = minSeg; s <= maxSeg; s++) {
       if (!this.segProps.has(s)) missing.push(s)
     }
+    // Nearest to the car first. Building in axis order starved whichever end
+    // the per-frame budget never reached, so the segments right under the car
+    // stayed empty whenever the car was moving toward that end.
+    missing.sort((a, b) => Math.abs(a - carSeg) - Math.abs(b - carSeg))
     const budget = this.primed ? this.SEGS_PER_FRAME : missing.length
     for (let i = 0; i < Math.min(budget, missing.length); i++) {
       const s = missing[i]
@@ -1140,6 +1159,14 @@ export class WorldManager {
   update(carS: number, carPos: THREE.Vector3, grassTarget = 1) {
     const W = WORLD_CONFIG
     this.carPos.copy(carPos)
+    // Dead-band keeps travelDir stable while parked or crawling, so recycling
+    // does not oscillate between the two ends of the window.
+    if (Number.isFinite(this.lastCarS)) {
+      const delta = carS - this.lastCarS
+      if (delta > 1e-3) this.travelDir = 1
+      else if (delta < -1e-3) this.travelDir = -1
+    }
+    this.lastCarS = carS
     const startS =
       Math.floor((carS - W.road.segmentsBehind * this.segLen) / this.segLen) *
       this.segLen
@@ -1166,10 +1193,20 @@ export class WorldManager {
       sun.target.updateMatrixWorld()
     }
     const carSeg = Math.floor(carS / this.segLen)
-    this.ensureSegs(carSeg - this.SEG_BEHIND, carSeg + this.SEG_AHEAD)
+    this.ensureSegs(
+      carSeg - this.SEG_BEHIND,
+      carSeg + this.SEG_AHEAD,
+      carSeg,
+    )
     for (const h of this.hills) {
-      if (h.seg < carSeg - this.SEG_BEHIND)
-        this.placeHill(h, carSeg + this.SEG_AHEAD + (h.seg % 3))
+      // Recycle whichever side has fallen out of range and re-seed it ahead of
+      // the car in the direction it is actually travelling.
+      if (Math.abs(h.seg - carSeg) > this.SEG_AHEAD) {
+        this.placeHill(
+          h,
+          carSeg + this.travelDir * (this.SEG_AHEAD + (Math.abs(h.seg) % 3)),
+        )
+      }
     }
     this.updateClouds(carS, carPos)
     this.grassDensity += (grassTarget - this.grassDensity) * 0.08

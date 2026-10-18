@@ -739,7 +739,10 @@ export default function App() {
           const thalf: 1 | -1 = tdir === 1 ? 1 : -1
           let ts0 = 0
           for (let attempt = 0; attempt < 8; attempt++) {
-            const cand = 250 + Math.random() * 600
+            // Straddle the start line so traffic is populated on both sides
+            // whichever way the player sets off.
+            const cand =
+              (Math.random() < 0.5 ? -1 : 1) * (250 + Math.random() * 600)
             ts0 = cand
             const clash = placed.some(
               (q) => q.half === thalf && Math.abs(q.s - cand) < 18,
@@ -1558,13 +1561,17 @@ export default function App() {
                 tS > playerS + TRAFFIC_AHEAD
               ) {
                 tc.stuckT = 0
-                let aheadS = playerS + 900
+                // Respawn ahead of the player along the axis they are
+                // actually travelling. Spawning at a fixed +s offset meant
+                // reversing pushed every car behind you and left the road you
+                // were driving into empty.
+                const travelDir = wm.travelDir
+                let aheadS = playerS + travelDir * 900
                 const myHalf = tdir
                 for (let a2 = 0; a2 < 8; a2++) {
+                  const base = tdir === 1 ? 900 : 500
                   const cand =
-                    tdir === 1
-                      ? playerS + 900 + Math.random() * 400
-                      : playerS + 500 + Math.random() * 400
+                    playerS + travelDir * (base + Math.random() * 400)
                   aheadS = cand
                   const clear = trafficCars.every((o) => {
                     if (o === tc) return true
