@@ -323,8 +323,9 @@ export class CarController {
     this.simTime += dt
     const origThrottle = input.throttle
     const origBrake = input.brake
-    // In reverse gear S acts as throttle (per controls).
-    if (this.gear === -1) {
+    // In reverse gear, auto mode keeps S as throttle (per controls).
+    // Manual mode: W is throttle, S is brake, even in reverse.
+    if (this.gear === -1 && this.autoMode) {
       input = {
         ...input,
         throttle: input.brake,

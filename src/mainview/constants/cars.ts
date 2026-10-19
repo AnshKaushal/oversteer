@@ -581,7 +581,130 @@ const challenger: CarDefinition = {
   tested: { zeroToHundredS: 5.0, topSpeedKmh: 274 },
 }
 
-export const CARS: CarDefinition[] = [m3, r8, gwagon, urus, aventador, challenger]
+const f1: CarDefinition = {
+  id: "f1-car",
+  name: "Formula 1 Car",
+  shortName: "F1",
+  modelFile: "models/f1_car.glb",
+  physics: createPhysicsConfig({
+    mass: { chassis: 770, frontWheel: 7, rearWheel: 7, total: 798 },
+    dimensions: {
+      width: 1.9,
+      height: 0.95,
+      length: 5.0,
+      wheelbase: 3.29,
+      trackWidth: 1.7,
+      groundClearance: 0.05,
+      centerOfMassHeight: 0.35,
+    },
+    engine: {
+      ...CAR_PHYSICS.engine,
+      maxPowerHP: 950,
+      maxTorqueNm: 850,
+      maxPowerRPM: 12000,
+      maxTorqueRPM: 4000,
+      redlineRPM: 15000,
+      revLimiterRPM: 15000,
+      idleRPM: 4000,
+      torqueCurve: [
+        [0, 0.5],
+        [1000, 0.6],
+        [2000, 0.72],
+        [3000, 0.85],
+        [4000, 1.0],
+        [5000, 0.98],
+        [7000, 0.95],
+        [9000, 0.92],
+        [11000, 0.88],
+        [13000, 0.82],
+        [15000, 0.7],
+        [15500, 0.0],
+      ],
+      frictionTorqueBase: 20,
+      frictionTorqueRPMFactor: 0.008,
+    },
+    transmission: {
+      ...CAR_PHYSICS.transmission,
+      gearRatios: [3.8, 3.0, 2.4, 1.95, 1.6, 1.35, 1.15, 1.0],
+      finalDriveRatio: 5.0,
+      reverseRatio: 4.0,
+      launchControlRPM: 8000,
+      autoUpshiftRPM: 14500,
+      autoDownshiftRPM: 5000,
+      torqueConverter: {
+        ...CAR_PHYSICS.transmission.torqueConverter,
+        creepForce: 300,
+        creepForceReverse: 300,
+      },
+    },
+    differential: {
+      ...CAR_PHYSICS.differential,
+      lsdAccelLock: 0.3,
+      lsdDecelLock: 0.2,
+      preloadTorque: 30,
+    },
+    drivetrain: {
+      type: "rwd",
+      frontTorqueSplit: 0,
+      torqueCapGear1: 2500,
+      torqueCapGear2: 4000,
+    },
+    wheels: {
+      ...CAR_PHYSICS.wheels,
+      radius: 0.36,
+      width: 0.33,
+      frictionMu: 1.7,
+      referenceLoad: 1960,
+      rollingResist: 0.015,
+      suspension: {
+        ...CAR_PHYSICS.wheels.suspension,
+        springRate: 120000,
+        damperRate: 7000,
+        travel: 0.08,
+        antiRollBarFront: 20000,
+        antiRollBarRear: 18000,
+      },
+      brakeForce: { front: 3500, rear: 2800 },
+      handbrakeForce: 0,
+      steering: {
+        ...CAR_PHYSICS.wheels.steering,
+        maxAngle: 0.45,
+        speedFalloffKmh: 260,
+        minAngleAtSpeed: 0.03,
+      },
+    },
+    aero: {
+      ...CAR_PHYSICS.aero,
+      dragCoefficient: 0.7,
+      frontalArea: 1.4,
+      liftCoefficient: -2.5,
+      downforceAt100kmh: 1000,
+    },
+    assists: {
+      ...CAR_PHYSICS.assists,
+      tractionControl: 0.2,
+      stabilityControl: 0.1,
+      countersteerAssist: 3000,
+      speedFeel: {
+        ...CAR_PHYSICS.assists.speedFeel,
+        fovAtMaxSpeedKmh: 375,
+      },
+    },
+  }),
+  wheels: [
+    { x: -0.851, z: -1.365, front: true, left: true },
+    { x: 0.851, z: -1.365, front: true, left: false },
+    { x: -0.841, z: 1.921, front: false, left: true },
+    { x: 0.841, z: 1.921, front: false, left: false },
+  ],
+  pivots: { names: ["Cylinder", "Cylinder004", "Cylinder007", "Cylinder009"] },
+  dash: { maxRpm: 15000, redFromRpm: 14000, maxKmh: 375 },
+  defaultTint: null,
+  paintMatch: ["Base-Color"],
+  tested: { zeroToHundredS: 2.6, topSpeedKmh: 372 },
+}
+
+export const CARS: CarDefinition[] = [m3, r8, gwagon, urus, aventador, challenger, f1]
 
 export const DEFAULT_CAR_ID = "bmw-m3"
 
