@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import { Play, RotateCcw, LogOut } from "lucide-react"
+import { Play, RotateCcw, LogOut, Loader2 } from "lucide-react"
 import {
   initPhysics,
   createWorld,
@@ -2166,17 +2166,7 @@ export default function App() {
           from={{ autoAlpha: 0 }}
           stagger={[{ selector: "[data-load]", from: { autoAlpha: 0, y: 16 } }]}
         >
-          <div className="text-center">
-            <div className="text-[11px] font-semibold tracking-[0.4em] text-[#8f99a8]">
-              PADDOCK
-            </div>
-            <div data-load className="mt-2 text-2xl font-bold">
-              Getting your {getCar(carId).name} ready
-            </div>
-            <div data-load className="mt-1 text-sm text-gray-400">
-              Warming up physics and loading the world
-            </div>
-          </div>
+          <Loader2 size={24} />
         </Screen>
       )}
       {error && (

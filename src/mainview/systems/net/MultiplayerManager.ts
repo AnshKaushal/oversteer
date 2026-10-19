@@ -28,7 +28,7 @@ import {
 } from "./stateProtocol"
 import type { CarStatePacket, NetworkEventPacket, PeerPlayer } from "./types"
 
-const BROADCAST_INTERVAL_MS = 33
+const BROADCAST_INTERVAL_MS = 16
 const PING_INTERVAL_MS = 2000
 
 export function roomPasswordHash(roomId: string, password: string): string {

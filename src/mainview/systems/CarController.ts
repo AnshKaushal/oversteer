@@ -87,6 +87,12 @@ export class CarController {
   aggression = 0
   private aggressionHoldTimer = 0
   private gearChangeDelayTimer = 0
+  private autoReverseHoldTimer = 0
+  private autoReversePending = false
+  private autoReversePendingTimer = 0
+  private autoForwardHoldTimer = 0
+  private autoForwardPending = false
+  private autoForwardPendingTimer = 0
   private decisionThrottle = 0
   private kickdownTimer = 0
   private kickdownTargetGear: Gear | null = null
@@ -199,6 +205,12 @@ export class CarController {
     this.aggression = 0
     this.aggressionHoldTimer = 0
     this.gearChangeDelayTimer = 0
+    this.autoReverseHoldTimer = 0
+    this.autoReversePending = false
+    this.autoReversePendingTimer = 0
+    this.autoForwardHoldTimer = 0
+    this.autoForwardPending = false
+    this.autoForwardPendingTimer = 0
     this.decisionThrottle = 0
     this.kickdownTimer = 0
     this.kickdownTargetGear = null
@@ -299,6 +311,16 @@ export class CarController {
     const P = this.P
     dt = Math.min(dt, P.simulation.maxFrameDt)
     this.simTime += dt
+    const origThrottle = input.throttle
+    const origBrake = input.brake
+    // In reverse gear S acts as throttle (per controls).
+    if (this.gear === -1) {
+      input = {
+        ...input,
+        throttle: input.brake,
+        brake: input.throttle,
+      }
+    }
 
     if (input.toggleModePressed) this.autoMode = !this.autoMode
     if (input.toggleLaunchPressed) this.launchEnabled = !this.launchEnabled
@@ -355,6 +377,112 @@ export class CarController {
     )
 
     const atStandstill = Math.abs(fwdSpeed) < 1.2
+
+    // BeamNG-style auto: holding brake while stationary shifts 1 -> N -> R.
+    if (this.autoMode) {
+      if (
+        atStandstill &&
+        this.gear === 1 &&
+        origBrake > 0.4 &&
+        origThrottle < 0.1
+      ) {
+        this.autoReverseHoldTimer += dt
+        if (
+          this.autoReverseHoldTimer > 0.7 &&
+          this.shiftTimer <= 0 &&
+          !this.autoReversePending
+        ) {
+          this.gear = 0
+          this.shiftTimer = 0
+          this.autoReverseHoldTimer = 0
+          this.autoReversePending = true
+          this.autoReversePendingTimer = 0.35
+        }
+      } else if (!this.autoReversePending) {
+        this.autoReverseHoldTimer = 0
+      }
+      if (this.autoReversePending) {
+        if (this.gear === 0) {
+          if (origThrottle > 0.4) {
+            this.gear = 1
+            this.autoReversePending = false
+            this.autoReversePendingTimer = 0
+          } else if (origBrake > 0.4) {
+            this.autoReversePendingTimer -= dt
+            if (this.autoReversePendingTimer <= 0 && this.shiftTimer <= 0) {
+              this.gear = -1
+              this.autoReversePending = false
+              this.autoReversePendingTimer = 0
+            }
+          } else {
+            this.autoReversePending = false
+            this.autoReversePendingTimer = 0
+          }
+        } else {
+          this.autoReversePending = false
+          this.autoReversePendingTimer = 0
+        }
+      }
+
+      // Exit reverse: holding W (brake after swap) while stopped shifts R -> N -> 1.
+      if (
+        Math.abs(fwdSpeed) < 3 &&
+        this.gear === -1 &&
+        origThrottle > 0.4 &&
+        origBrake < 0.1
+      ) {
+        this.autoForwardHoldTimer += dt
+        if (
+          this.autoForwardHoldTimer > 0.7 &&
+          this.shiftTimer <= 0 &&
+          !this.autoForwardPending
+        ) {
+          this.gear = 0
+          this.shiftTimer = 0
+          this.autoForwardHoldTimer = 0
+          this.autoForwardPending = true
+          this.autoForwardPendingTimer = 0.35
+        }
+      } else if (!this.autoForwardPending) {
+        this.autoForwardHoldTimer = 0
+      }
+      if (this.autoForwardPending) {
+        if (this.gear === 0) {
+          if (origBrake > 0.4) {
+            this.gear = -1
+            this.autoForwardPending = false
+            this.autoForwardPendingTimer = 0
+          } else if (origThrottle > 0.4) {
+            this.autoForwardPendingTimer -= dt
+            if (this.autoForwardPendingTimer <= 0 && this.shiftTimer <= 0) {
+              this.gear = 1
+              this.autoForwardPending = false
+              this.autoForwardPendingTimer = 0
+            }
+          } else {
+            this.autoForwardPending = false
+            this.autoForwardPendingTimer = 0
+          }
+        } else {
+          this.autoForwardPending = false
+          this.autoForwardPendingTimer = 0
+        }
+      }
+
+      // Neutral: pressing either pedal engages corresponding gear.
+      if (
+        this.gear === 0 &&
+        !this.autoReversePending &&
+        !this.autoForwardPending
+      ) {
+        if (origBrake > 0.4 && origThrottle < 0.1) {
+          this.gear = -1
+        } else if (origThrottle > 0.4 && origBrake < 0.1) {
+          this.gear = 1
+        }
+      }
+    }
+
     this.launchArmed =
       this.launchEnabled &&
       atStandstill &&

@@ -31,7 +31,7 @@ export interface InterpTarget {
 
 export type InterpMode = "empty" | "hold" | "interp" | "extrap"
 
-export const INTERP_DELAY_MS = 100
+export const INTERP_DELAY_MS = 50
 export const EXTRAP_MAX_MS = 250
 export const SNAPSHOT_CAP = 32
 

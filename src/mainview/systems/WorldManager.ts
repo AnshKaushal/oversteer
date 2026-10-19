@@ -645,6 +645,38 @@ export class WorldManager {
       )
       hill.body = hb
       this.syncHillBody(hill)
+      // Colliders for trees/rocks dressed onto the hill.
+      for (const child of hill.mesh.children) {
+        const cm = child as any
+        if (!cm.isMesh) continue
+        if (!cm.userData?.collidable) continue
+        const geo = cm.geometry as THREE.BufferGeometry
+        geo.computeBoundingBox()
+        const bb = geo.boundingBox
+        if (!bb) continue
+        const size = new THREE.Vector3()
+        bb.getSize(size)
+        const center = new THREE.Vector3()
+        bb.getCenter(center)
+        const he = new THREE.Vector3(
+          (size.x * cm.scale.x) / 2,
+          (size.y * cm.scale.y) / 2,
+          (size.z * cm.scale.z) / 2,
+        )
+        if (he.x < 1e-4 || he.y < 1e-4 || he.z < 1e-4) continue
+        const localCenter = center
+          .clone()
+          .multiply(cm.scale)
+          .applyQuaternion(cm.quaternion)
+          .add(cm.position)
+        const q = cm.quaternion
+        const col = R.ColliderDesc.cuboid(he.x, he.y, he.z)
+          .setTranslation(localCenter.x, localCenter.y, localCenter.z)
+          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+          .setFriction(0.7)
+          .setRestitution(0)
+        world.createCollider(col, hb)
+      }
     }
     return body
   }
@@ -934,6 +966,7 @@ export class WorldManager {
       m.quaternion.copy(q)
       m.position.copy(s.pos).addScaledVector(s.nrm, -sink)
       m.scale.setScalar(sc)
+      m.userData.collidable = pv.category === "tree" || pv.category === "rock"
       hill.mesh.add(m)
     })
   }

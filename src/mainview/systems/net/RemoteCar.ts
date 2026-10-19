@@ -40,7 +40,7 @@ export interface RemoteCarOptions {
 
 const REMOTE_DEFAULT_MODEL = "models/bmw_m3.glb"
 const TIRE_RADIUS = 0.33
-const DRIVE_EXTRAPOLATION_S = 0.1
+const DRIVE_EXTRAPOLATION_S = 0.15
 const POS_GAIN = 4.5
 const CORRECTION_MAX = 10
 const MAX_DRIVE_SPEED = 120
