@@ -29,6 +29,8 @@ export interface CarTelemetry {
   launchArmed: boolean
   launching: boolean
   parkingBrake: boolean
+  cruiseOn: boolean
+  cruiseTargetKmh: number | null
   slipRatio: number
   drift: boolean
   dash: CarDashConfig
@@ -83,6 +85,10 @@ export class CarController {
 
   gear: Gear = 1
   autoMode = true
+  cruiseActive = false
+  cruiseTargetKmh: number | null = null
+  private cruiseTrim = 0
+  private cruisePulling = false
   rpm: number
   aggression = 0
   private aggressionHoldTimer = 0
@@ -218,6 +224,10 @@ export class CarController {
     this.feedT = 99
     this.prevThrottle = 0
     this.prevLaunching = false
+    this.cruiseActive = false
+    this.cruiseTargetKmh = null
+    this.cruiseTrim = 0
+    this.cruisePulling = false
     this.clutch = 1
     this.wheelOmega = 0
     this.spinOmega = 0
@@ -356,6 +366,52 @@ export class CarController {
     }
 
     const speedKmh = Math.abs(fwdSpeed) * 3.6
+
+    // BeamNG-style cruise control: [/Set+Slow, ]/Resume+Up, ;/Toggle.
+    // Set only locks a speed >= 30 km/h; brake/handbrake/park pause it and
+    // keep the target for resume. Throttle overrides, ] resumes when off.
+    if (this.cruiseActive) {
+      if (
+        origBrake > 0.05 ||
+        input.handbrake ||
+        this.parkingBrake ||
+        this.gear < 1 ||
+        fwdSpeed < -0.5 ||
+        Math.abs(fwdSpeed) * 3.6 < 12
+      ) {
+        this.cruiseActive = false
+      }
+    }
+    if (input.cruiseTogglePressed) {
+      if (this.cruiseActive) this.cruiseActive = false
+      else if (this.cruiseTargetKmh !== null) this.cruiseActive = true
+    }
+    if (input.cruiseSetPressed) {
+      if (this.cruiseActive && this.cruiseTargetKmh !== null) {
+        this.cruiseTargetKmh = Math.max(
+          30,
+          this.cruiseTargetKmh - 1,
+        )
+      } else if (!this.cruiseActive && speedKmh >= 30) {
+        this.cruiseTargetKmh = Math.round(speedKmh)
+        this.cruiseActive = true
+      }
+    }
+    if (input.cruiseUpPressed) {
+      if (this.cruiseActive && this.cruiseTargetKmh !== null) {
+        this.cruiseTargetKmh = Math.min(
+          this.dash.maxKmh,
+          this.cruiseTargetKmh + 1,
+        )
+      } else if (
+        !this.cruiseActive &&
+        this.cruiseTargetKmh !== null &&
+        speedKmh >= 30
+      ) {
+        this.cruiseActive = true
+      }
+    }
+
     const S = P.wheels.steering
     const steerFactor =
       1 /
@@ -489,6 +545,42 @@ export class CarController {
       this.gear === 1 &&
       input.throttle > 0.7 &&
       input.brake > 0.2
+
+    // Cruise pedal injection: P-hold toward target, light retard on overspeed;
+    // full driver throttle always wins until released.
+    // Cruise pedal injection: PI controller — proportional term reacts
+    // immediately, integral trim closes the residual drag offset so the car
+    // holds the set speed exactly. Driver throttle always wins, and after the
+    // pedal is released the car coasts down naturally — cruise only regulates
+    // again once the speed reaches the target (or after a grace timeout).
+    if (this.cruiseActive && this.cruiseTargetKmh !== null && this.gear >= 1) {
+      const err = this.cruiseTargetKmh - speedKmh
+      const overridden = input.throttle > 0.05
+      if (overridden) this.cruisePulling = true
+      if (!overridden && err >= -0.3) this.cruisePulling = false
+
+      if (!overridden) {
+        const cChrottle = err * 0.06 + this.cruiseTrim
+        const u = clamp(cChrottle, 0, 0.85)
+        // Anti-windup: only integrate while the output can still move.
+        if ((u < 0.85 || err < 0) && (u > 0 || err > 0)) {
+          this.cruiseTrim = clamp(this.cruiseTrim + err * dt * 0.09, -0.3, 0.35)
+        }
+        const cruiseThrottle = u
+        const cruiseBrake =
+          cChrottle < -0.04 && !this.cruisePulling
+            ? clamp(-cChrottle * 0.8 - 0.02, 0, 0.25)
+            : 0
+        input = {
+          ...input,
+          throttle: Math.max(input.throttle, cruiseThrottle),
+          brake: Math.max(input.brake, cruiseBrake),
+        }
+      }
+    } else if (this.cruisePulling || this.cruiseTrim !== 0) {
+      this.cruiseTrim = 0
+      this.cruisePulling = false
+    }
 
     const ratios = P.transmission.gearRatios
     const finalDrive = P.transmission.finalDriveRatio
@@ -1190,6 +1282,8 @@ export class CarController {
       launchArmed: this.launchArmed,
       launching: this.launching,
       parkingBrake: this.parkingBrake,
+      cruiseOn: this.cruiseActive,
+      cruiseTargetKmh: this.cruiseTargetKmh,
       slipRatio: this.slipRatioAvg,
       drift: this.drifting,
       dash: this.dash,

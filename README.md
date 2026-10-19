@@ -26,6 +26,9 @@ Grab the latest DMG (macOS) or Setup zip (Windows) from the [Releases page](../.
 | `Q` / `E`         | Downshift / upshift (manual mode)                                     |
 | `M`               | Toggle auto / manual gearbox                                          |
 | `L`               | Toggle launch control                                                 |
+| `;`               | Toggle cruise control                                                 |
+| `[`               | Cruise: set to current speed / slow down (while active)               |
+| `]`               | Cruise: resume last speed / speed up (while active)                   |
 | `Space`           | Handbrake — disables TC and ESC                                       |
 | `R`               | Reset the car onto the road                                           |
 | `C`               | Toggle chase-camera distance                                          |

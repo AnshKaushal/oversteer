@@ -21,6 +21,9 @@ export interface DriveInput {
   toggleCameraPressed: boolean
   startPressed: boolean
   pausePressed: boolean
+  cruiseSetPressed: boolean
+  cruiseUpPressed: boolean
+  cruiseTogglePressed: boolean
 }
 
 export class InputManager {
@@ -30,6 +33,10 @@ export class InputManager {
   throttle = 0
   brake = 0
   steer = 0
+
+  // Cruise control hold-repeat: first extra tap after ~350ms, then every 150ms.
+  private ccHold = new Map<string, number>()
+  private ccRepeat = new Map<string, number>()
 
   constructor() {
     this.onKeyDown = this.onKeyDown.bind(this)
@@ -67,7 +74,10 @@ export class InputManager {
       c === "KeyP" ||
       c === "KeyO" ||
       c === "KeyR" ||
-      c === "KeyC"
+      c === "KeyC" ||
+      c === "BracketLeft" ||
+      c === "BracketRight" ||
+      c === "Semicolon"
     ) {
       e.preventDefault()
     }
@@ -78,6 +88,8 @@ export class InputManager {
   private onKeyUp(e: KeyboardEvent) {
     if (isTypingTarget(e)) return
     this.keys.delete(this.normalize(e))
+    this.ccHold.delete(this.normalize(e))
+    this.ccRepeat.delete(this.normalize(e))
   }
 
   clear() {
@@ -86,6 +98,8 @@ export class InputManager {
     this.throttle = 0
     this.brake = 0
     this.steer = 0
+    this.ccHold.clear()
+    this.ccRepeat.clear()
   }
 
   update(dt: number): DriveInput {
@@ -124,6 +138,25 @@ export class InputManager {
       return false
     }
 
+    const ccRepeatEdge = (c: string) => {
+      if (k.has(c)) {
+        const hold = this.ccHold.get(c) ?? -1
+        if (hold >= 0) this.ccHold.set(c, hold + dt * 1000)
+        const n = this.ccRepeat.get(c) ?? 0
+        if (hold > 350 && (hold - 350) >= n * 150) {
+          this.ccRepeat.set(c, n + 1)
+          return true
+        }
+      }
+      return false
+    }
+    for (const c of ["BracketLeft", "BracketRight"]) {
+      if (this.edgeQueue.has(c)) {
+        this.ccHold.set(c, 0)
+        this.ccRepeat.set(c, 0)
+      }
+    }
+
     const out: DriveInput = {
       throttle: this.throttle,
       brake: this.brake,
@@ -138,6 +171,9 @@ export class InputManager {
       toggleCameraPressed: edge("KeyC"),
       startPressed: edge("Enter"),
       pausePressed: edge("KeyP"),
+      cruiseSetPressed: edge("BracketLeft") || ccRepeatEdge("BracketLeft"),
+      cruiseUpPressed: edge("BracketRight") || ccRepeatEdge("BracketRight"),
+      cruiseTogglePressed: edge("Semicolon"),
     }
 
     this.edgeQueue.clear()

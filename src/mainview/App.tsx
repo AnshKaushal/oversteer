@@ -87,6 +87,8 @@ const initialTele: CarTelemetry = {
   launchArmed: false,
   launching: false,
   parkingBrake: true,
+  cruiseOn: false,
+  cruiseTargetKmh: null,
   slipRatio: 0,
   drift: false,
   dash: DEFAULT_DASH,
@@ -838,6 +840,9 @@ export default function App() {
             toggleCameraPressed: false,
             startPressed: false,
             pausePressed: false,
+            cruiseSetPressed: false,
+            cruiseUpPressed: false,
+            cruiseTogglePressed: false,
           }
           const allCars = [car, ...rivals.map((r) => r.car)]
           for (let i = 0; i < 120; i++) {
@@ -1262,6 +1267,9 @@ export default function App() {
                       toggleCameraPressed: false,
                       startPressed: false,
                       pausePressed: false,
+                      cruiseSetPressed: false,
+                      cruiseUpPressed: false,
+                      cruiseTogglePressed: false,
                     }
               const postFinishFree =
                 playerFinished && !raceFinished && playerDoneT > 4

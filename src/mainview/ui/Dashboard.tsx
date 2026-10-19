@@ -540,6 +540,20 @@ export default function Dashboard({ tele }: { tele: CarTelemetry }) {
         </div>
       )}
 
+      {tele.cruiseOn && (
+        <div className="absolute top-8 right-6 flex items-center gap-2 rounded-lg border-2 border-[#7db8ec]/70 bg-[#0a141d]/90 px-3 py-1.5">
+          <span className="text-lg text-[#7db8ec]">◎</span>
+          <div className="leading-tight">
+            <div className="text-[10px] font-bold tracking-[0.25em] text-[#7db8ec]">
+              CRUISE
+            </div>
+            <div className="text-sm font-bold text-white">
+              {Math.round(tele.cruiseTargetKmh ?? 0)} KM/H
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between">
         <div className="w-[clamp(190px,25vw,340px)]">
           <Dial
