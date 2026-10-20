@@ -704,7 +704,110 @@ const f1: CarDefinition = {
   tested: { zeroToHundredS: 2.6, topSpeedKmh: 372 },
 }
 
-export const CARS: CarDefinition[] = [m3, r8, gwagon, urus, aventador, challenger, f1]
+const cheetah: CarDefinition = {
+  id: "cheetah-84",
+  name: "Cheetah '84",
+  shortName: "Cheetah",
+  modelFile: "models/cheetah_84.glb",
+  physics: createPhysicsConfig({
+    mass: { chassis: 1280, frontWheel: 20, rearWheel: 22, total: 1322 },
+    dimensions: {
+      width: 1.94,
+      height: 1.18,
+      length: 4.55,
+      wheelbase: 2.61,
+      trackWidth: 1.65,
+      groundClearance: 0.13,
+      centerOfMassHeight: 0.42,
+    },
+    engine: {
+      ...CAR_PHYSICS.engine,
+      maxPowerHP: 270,
+      maxTorqueNm: 304,
+      maxPowerRPM: 7000,
+      maxTorqueRPM: 5500,
+      redlineRPM: 7700,
+      revLimiterRPM: 7700,
+      idleRPM: 900,
+      torqueCurve: [
+        [0, 0.35],
+        [1000, 0.5],
+        [2000, 0.68],
+        [3000, 0.82],
+        [4000, 0.92],
+        [5500, 1.0],
+        [6500, 0.95],
+        [7000, 0.88],
+        [7700, 0.6],
+        [7900, 0.0],
+      ],
+    },
+    transmission: {
+      ...CAR_PHYSICS.transmission,
+      gearRatios: [3.2, 2.15, 1.55, 1.18, 0.92],
+      finalDriveRatio: 3.7,
+      reverseRatio: 3.0,
+      launchControlRPM: 5000,
+      autoUpshiftRPM: 7500,
+      autoDownshiftRPM: 2500,
+    },
+    drivetrain: {
+      type: "rwd",
+      frontTorqueSplit: 0,
+      torqueCapGear1: 2000,
+      torqueCapGear2: 3200,
+    },
+    wheels: {
+      ...CAR_PHYSICS.wheels,
+      radius: 0.32,
+      width: 0.24,
+      frictionMu: 1.3,
+      referenceLoad: 3200,
+      suspension: {
+        ...CAR_PHYSICS.wheels.suspension,
+        springRate: 55000,
+        damperRate: 3800,
+        travel: 0.1,
+        antiRollBarFront: 13000,
+        antiRollBarRear: 11000,
+      },
+      brakeForce: { front: 1600, rear: 1200 },
+      handbrakeForce: 3800,
+      steering: {
+        ...CAR_PHYSICS.wheels.steering,
+        maxAngle: 0.55,
+        speedFalloffKmh: 190,
+        minAngleAtSpeed: 0.05,
+      },
+    },
+    aero: {
+      ...CAR_PHYSICS.aero,
+      dragCoefficient: 0.32,
+      frontalArea: 1.8,
+      liftCoefficient: 0.12,
+      downforceAt100kmh: 110,
+    },
+    assists: {
+      ...CAR_PHYSICS.assists,
+      tractionControl: 0.25,
+      stabilityControl: 0.1,
+      countersteerAssist: 4200,
+    },
+  }),
+  wheels: [
+    { x: -0.825, z: -1.279, front: true, left: true },
+    { x: 0.825, z: -1.279, front: true, left: false },
+    { x: -0.802, z: 1.331, front: false, left: true },
+    { x: 0.802, z: 1.331, front: false, left: false },
+  ],
+  pivots: { names: ["Cheetah84_WheelStock_FL", "Cheetah84_WheelStock_FR", "Cheetah84_WheelStock_RL", "Cheetah84_WheelStock_RR"] },
+  dash: { maxRpm: 8000, redFromRpm: 7000, maxKmh: 280 },
+  defaultTint: null,
+  paintMatch: ["Cheetah84_Bodymat"],
+  tested: { zeroToHundredS: 6.0, topSpeedKmh: 260 },
+}
+
+export const CARS: CarDefinition[] = [m3, r8, gwagon, urus, aventador, challenger, f1, cheetah]
 
 export const DEFAULT_CAR_ID = "bmw-m3"
 

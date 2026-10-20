@@ -10,7 +10,7 @@ export default {
     baseUrl: "https://github.com/AnshKaushal/car-game/releases/latest/download",
   },
   build: {
-    mainProcess: "cottontail",
+    mainProcess: "bun",
     cottontail: {
       entrypoint: "src/bun/index.ts",
     },
@@ -21,17 +21,36 @@ export default {
       "dist/models": "views/mainview/models",
     },
     watchIgnore: ["dist/**"],
+    powerPreference: "high-power",
     mac: {
       bundleCEF: false,
+      bundleWGPU: true,
+      chromiumFlags: {
+        "disable-gpu": false,
+        "ignore-gpu-blocklist": true,
+        "enable-gpu-rasterization": true,
+      },
       icons: "icon.iconset",
       codesign: process.env.ELECTROBUN_DEVELOPER_ID !== undefined,
     },
     linux: {
       bundleCEF: false,
+      bundleWGPU: true,
+      chromiumFlags: {
+        "disable-gpu": false,
+        "ignore-gpu-blocklist": true,
+        "enable-gpu-rasterization": true,
+      },
       icon: "src/mainview/public/icon-256.png",
     },
     win: {
       bundleCEF: false,
+      bundleWGPU: true,
+      chromiumFlags: {
+        "disable-gpu": false,
+        "ignore-gpu-blocklist": true,
+        "enable-gpu-rasterization": true,
+      },
       icon: "src/mainview/public/icon-256.png",
     },
   },

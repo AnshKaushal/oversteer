@@ -478,9 +478,9 @@ export default function App() {
         if (disposed) return
         renderer = new THREE.WebGLRenderer({ antialias: true })
         renderer.setSize(mount.clientWidth, mount.clientHeight)
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0))
         renderer.shadowMap.enabled = true
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap
+        renderer.shadowMap.type = THREE.PCFShadowMap
         mount.appendChild(renderer.domElement)
         rendererRef.current = renderer
 
