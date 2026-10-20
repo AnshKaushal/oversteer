@@ -231,6 +231,46 @@ const url = await getMainViewUrl()
 const mainWindow = createWindow(url, isWindowed)
 
 let wantFullscreen = !isWindowed
+let macCancelOp: any = null
+
+// macOS: pressing Escape exits native fullscreen by default. Override the
+// window's cancelOperation: (AppKit) so Escape is delivered to web content
+// instead of leaving fullscreen. Mirrors Wails' DisableEscapeExitsFullscreen.
+if (process.platform === "darwin") {
+  try {
+    const { dlopen, JSCallback, CFunction } = await import("bun:ffi")
+    const libobjc = dlopen("/usr/lib/libobjc.A.dylib", {
+      object_getClass: { args: ["ptr"], returns: "ptr" },
+      sel_registerName: { args: ["cstring"], returns: "ptr" },
+      class_getInstanceMethod: { args: ["ptr", "ptr"], returns: "ptr" },
+      method_setImplementation: { args: ["ptr", "ptr"], returns: "ptr" },
+    })
+    let originalCancelOpFn: any = null
+    macCancelOp = new JSCallback(
+      (self: any, _cmd: any, sender: any) => {
+        try {
+          if (mainWindow.isFullScreen()) return
+        } catch {}
+        if (originalCancelOpFn) originalCancelOpFn(self, _cmd, sender)
+      },
+      { args: ["ptr", "ptr", "ptr"], returns: "void", threadsafe: true },
+    )
+    const ptr = mainWindow.ptr
+    if (ptr) {
+      const cls = libobjc.symbols.object_getClass(ptr)
+      const sel = libobjc.symbols.sel_registerName("cancelOperation:")
+      const method = libobjc.symbols.class_getInstanceMethod(cls, sel)
+      if (method && macCancelOp.ptr) {
+        const oldImp = libobjc.symbols.method_setImplementation(method, macCancelOp.ptr)
+        if (oldImp) {
+          originalCancelOpFn = CFunction({ ptr: oldImp, args: ["ptr", "ptr", "ptr"], returns: "void" })
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[fullscreen] failed to disable escape-exits-fullscreen:", e)
+  }
+}
 
 ApplicationMenu.on("application-menu-clicked", (event: any) => {
   const data = event?.data ?? event

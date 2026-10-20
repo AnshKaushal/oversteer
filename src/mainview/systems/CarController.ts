@@ -85,6 +85,7 @@ export class CarController {
 
   gear: Gear = 1
   autoMode = true
+  autoShiftEnabled = true
   cruiseActive = false
   cruiseTargetKmh: number | null = null
   private cruiseTrim = 0
@@ -436,11 +437,11 @@ export class CarController {
     const atStandstill = Math.abs(fwdSpeed) < 1.2
 
     // BeamNG-style auto: holding brake while stationary shifts 1 -> N -> R.
-    if (this.autoMode) {
+    if (this.autoMode && this.autoShiftEnabled) {
       if (
         atStandstill &&
         this.gear === 1 &&
-        origBrake > 0.4 &&
+        origBrake > 0.4 && !input.handbrake &&
         origThrottle < 0.1
       ) {
         this.autoReverseHoldTimer += dt
@@ -464,7 +465,7 @@ export class CarController {
             this.gear = 1
             this.autoReversePending = false
             this.autoReversePendingTimer = 0
-          } else if (origBrake > 0.4) {
+          } else if (origBrake > 0.4 && !input.handbrake) {
             this.autoReversePendingTimer -= dt
             if (this.autoReversePendingTimer <= 0 && this.shiftTimer <= 0) {
               this.gear = -1
@@ -505,7 +506,7 @@ export class CarController {
       }
       if (this.autoForwardPending) {
         if (this.gear === 0) {
-          if (origBrake > 0.4) {
+          if (origBrake > 0.4 && !input.handbrake) {
             this.gear = -1
             this.autoForwardPending = false
             this.autoForwardPendingTimer = 0
@@ -532,7 +533,7 @@ export class CarController {
         !this.autoReversePending &&
         !this.autoForwardPending
       ) {
-        if (origBrake > 0.4 && origThrottle < 0.1) {
+        if (origBrake > 0.4 && !input.handbrake && origThrottle < 0.1) {
           this.gear = -1
         } else if (origThrottle > 0.4 && origBrake < 0.1) {
           this.gear = 1

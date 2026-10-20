@@ -1215,6 +1215,7 @@ export default function App() {
                 return { body: b, x: p.x, z: p.z }
               })
               for (const rival of rivals) {
+                rival.car.autoShiftEnabled = racing
                 rival.cached =
                   racing && !rival.finished
                     ? rival.ai.drive(rival.car, traffic, dt)
@@ -1238,6 +1239,7 @@ export default function App() {
                 return { body: b, x: p.x, z: p.z }
               })
               for (const tc of trafficCars) {
+                tc.car.autoShiftEnabled = true
                 tc.cached = tc.ai.drive(tc.car, tEntries, dt)
                 tc.edgeArmed = true
                 if (tc.ai.recovering) {
@@ -1273,9 +1275,9 @@ export default function App() {
                     }
               const postFinishFree =
                 playerFinished && !raceFinished && playerDoneT > 4
-              const playerInp =
-                !playerFinished || postFinishFree ? subInp : holdInput()
               const preGreen = raceActive && !racing && !playerFinished
+              car.autoShiftEnabled = !preGreen
+              const playerInp = !playerFinished || postFinishFree ? subInp : holdInput()
               let lockT: { x: number; y: number; z: number } | null = null
               let lockR: { x: number; y: number; z: number; w: number } | null =
                 null

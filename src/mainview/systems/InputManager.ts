@@ -77,7 +77,8 @@ export class InputManager {
       c === "KeyC" ||
       c === "BracketLeft" ||
       c === "BracketRight" ||
-      c === "Semicolon"
+      c === "Semicolon" ||
+      c === "Escape"
     ) {
       e.preventDefault()
     }
@@ -170,7 +171,7 @@ export class InputManager {
       resetPressed: edge("KeyR"),
       toggleCameraPressed: edge("KeyC"),
       startPressed: edge("Enter"),
-      pausePressed: edge("KeyP"),
+      pausePressed: edge("KeyP") || edge("Escape"),
       cruiseSetPressed: edge("BracketLeft") || ccRepeatEdge("BracketLeft"),
       cruiseUpPressed: edge("BracketRight") || ccRepeatEdge("BracketRight"),
       cruiseTogglePressed: edge("Semicolon"),
