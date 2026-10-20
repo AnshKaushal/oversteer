@@ -151,6 +151,124 @@ const r8: CarDefinition = {
   tested: { zeroToHundredS: 3.4, topSpeedKmh: 342 },
 }
 
+const rs7: CarDefinition = {
+  id: "audi-rs7",
+  name: "Audi RS 7 Performance",
+  shortName: "RS 7",
+  modelFile: "models/audi_rs7.glb",
+  physics: createPhysicsConfig({
+    mass: { chassis: 2040, frontWheel: 30, rearWheel: 30, total: 2100 },
+    dimensions: {
+      width: 1.911,
+      height: 1.419,
+      length: 5.012,
+      wheelbase: 2.915,
+      trackWidth: 1.63,
+      groundClearance: 0.12,
+      centerOfMassHeight: 0.48,
+    },
+    engine: {
+      ...CAR_PHYSICS.engine,
+      maxPowerHP: 605, // 445 kW @ 6,100-6,800 rpm
+      // The car is a game tune, not a spec sheet: the overboost torque is
+      // lifted to 850 Nm and the drag trimmed to 0.28 so the thing can
+      // actually reach its 345 km/h dash limit. The real car makes
+      // 750 Nm and 305 km/h.
+      maxTorqueNm: 850,
+      maxPowerRPM: 6100,
+      maxTorqueRPM: 2500,
+      redlineRPM: 7000,
+      revLimiterRPM: 7000,
+      idleRPM: 750,
+      // 4.0 TFSI twin-turbo V8: overboost peaks at 2,500 rpm and holds a
+      // near-flat plateau to 6,000 rpm before the power peak at 6,100 rpm.
+      torqueCurve: [
+        [0, 0.3],
+        [800, 0.48],
+        [1500, 0.68],
+        [2000, 0.8],
+        [2500, 1.0],
+        [3500, 0.99],
+        [4500, 0.97],
+        [5500, 0.94],
+        [6100, 0.92],
+        [7000, 0.8],
+        [7200, 0.0],
+      ],
+    },
+    transmission: {
+      ...CAR_PHYSICS.transmission,
+      // 8-speed Tiptronic (S tronic), final drive 3.08
+      gearRatios: [3.157, 1.905, 1.512, 1.16, 0.903, 0.716, 0.633, 0.521],
+      finalDriveRatio: 3.08,
+      reverseRatio: 2.85,
+      launchControlRPM: 3000,
+      autoUpshiftRPM: 6800,
+      torqueConverter: {
+        ...CAR_PHYSICS.transmission.torqueConverter,
+        creepForce: 2000,
+      },
+    },
+    drivetrain: {
+      type: "awd",
+      // quattro with a sport rear differential — rear biased
+      frontTorqueSplit: 0.4,
+      torqueCapGear1: 3000,
+      torqueCapGear2: 4500,
+    },
+    wheels: {
+      ...CAR_PHYSICS.wheels,
+      // From model: tyre 0.716 m across → radius 0.358 m (275/30 R21)
+      radius: 0.358,
+      width: 0.3,
+      frictionMu: 1.5,
+      referenceLoad: 5000, // 2040 kg * 9.81 / 4
+      suspension: {
+        ...CAR_PHYSICS.wheels.suspension,
+        // RS sports air suspension — softer than a pure sports car, but
+        // still a lot stiffer than the stock car it replaced
+        springRate: 75000,
+        damperRate: 5000,
+        travel: 0.13,
+        antiRollBarFront: 16000,
+        antiRollBarRear: 14000,
+      },
+      // 390 mm six-piston front discs, carbon-ceramic optional
+      brakeForce: { front: 2100, rear: 1650 },
+      handbrakeForce: 3500,
+      steering: {
+        ...CAR_PHYSICS.wheels.steering,
+        maxAngle: 0.58,
+        speedFalloffKmh: 200,
+      },
+    },
+    aero: {
+      ...CAR_PHYSICS.aero,
+      dragCoefficient: 0.28, // 0.30 on the road — trimmed for the top end
+      frontalArea: 2.3,
+      downforceAt100kmh: 120,
+    },
+    assists: {
+      ...CAR_PHYSICS.assists,
+      tractionControl: 0.4,
+      countersteerAssist: 5000,
+    },
+  }),
+  wheels: [
+    { x: -0.761, z: -1.546, front: true, left: true },
+    { x: 0.761, z: -1.546, front: true, left: false },
+    { x: -0.758, z: 1.362, front: false, left: true },
+    { x: 0.758, z: 1.362, front: false, left: false },
+  ],
+  pivots: { pattern: "^Wheel_[FLR][LR]$" },
+  dash: { maxRpm: 7000, redFromRpm: 6200, maxKmh: 350 },
+  defaultTint: null,
+  // Only the painted body shell takes the colour — the bumpers, sills and
+  // glass are separate materials on this model and stay black.
+  paintMatch: ["^body$"],
+  tested: { zeroToHundredS: 3.7, topSpeedKmh: 345 },
+}
+
 const gwagon: CarDefinition = {
   id: "g-wagon",
   name: "Mercedes G 63",
@@ -807,7 +925,17 @@ const cheetah: CarDefinition = {
   tested: { zeroToHundredS: 6.0, topSpeedKmh: 260 },
 }
 
-export const CARS: CarDefinition[] = [m3, r8, gwagon, urus, aventador, challenger, f1, cheetah]
+export const CARS: CarDefinition[] = [
+  m3,
+  r8,
+  rs7,
+  gwagon,
+  urus,
+  aventador,
+  challenger,
+  f1,
+  cheetah,
+]
 
 export const DEFAULT_CAR_ID = "bmw-m3"
 

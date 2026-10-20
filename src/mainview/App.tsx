@@ -2294,12 +2294,6 @@ export default function App() {
                 >
                   OverSteer
                 </h1>
-                <p
-                  data-intro-sub
-                  className="mt-4 max-w-[480px] text-[15px] text-gray-400"
-                >
-                  Pick your car, race rivals, and roam two-way roads.
-                </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2310,9 +2304,6 @@ export default function App() {
               >
                 Enter the garage
               </button>
-              <div data-intro-cta className="text-[12px] text-gray-500">
-                press any key or click anywhere to continue
-              </div>
             </div>
           </div>
         </Screen>

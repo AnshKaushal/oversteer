@@ -55,6 +55,7 @@ const check = (car: string, name: string, cond: boolean, extra = "") => {
 const EXPECT: Record<string, { t100: number; vmax: number }> = {
   "bmw-m3": { t100: 7, vmax: 270 },
   "audi-r8": { t100: 5, vmax: 335 },
+  "audi-rs7": { t100: 5, vmax: 320 },
   "g-wagon": { t100: 6, vmax: 315 },
   "lambo-urus": { t100: 5.5, vmax: 315 },
 }
