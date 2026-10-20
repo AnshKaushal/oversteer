@@ -21,7 +21,7 @@ export default {
       "dist/models": "views/mainview/models",
     },
     watchIgnore: ["dist/**"],
-    powerPreference: "high-power",
+    powerPreference: "high-performance",
     mac: {
       bundleCEF: false,
       bundleWGPU: true,

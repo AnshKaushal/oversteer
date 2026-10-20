@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import { Play, RotateCcw, LogOut, Loader2 } from "lucide-react"
+import { Play, RotateCcw, LogOut, Loader2, Settings } from "lucide-react"
 import {
   initPhysics,
   createWorld,
@@ -49,6 +49,13 @@ import {
 import Dashboard from "./ui/Dashboard"
 import { EASE, Screen, usePresence, Wipe } from "./ui/anim"
 import { RaceHud, RaceLiveBoard, RaceMenu, RaceResults } from "./ui/RaceOverlay"
+import { SettingsModal } from "./ui/SettingsModal"
+import {
+  loadSettings,
+  saveSettings,
+  applyRendererResolution,
+  type AppSettings,
+} from "./systems/settings"
 import { SpeedLines } from "./ui/SpeedLines"
 import { MultiplayerManager } from "./systems/net/MultiplayerManager"
 import { MultiplayerLobby, MultiplayerHudBadge } from "./ui/MultiplayerLobby"
@@ -126,6 +133,25 @@ export default function App() {
   const startedRef = useRef(false)
   const pausedRef = useRef(false)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+
+  const handleUpdateSettings = (next: AppSettings) => {
+    setSettings(next)
+    saveSettings(next)
+    if (rendererRef.current && cameraRef.current && mountRef.current) {
+      applyRendererResolution(
+        rendererRef.current,
+        cameraRef.current,
+        mountRef.current,
+        next,
+      )
+    }
+  }
+
   const inputRef = useRef<InputManager | null>(null)
   const resetRef = useRef(false)
   const pauseFnRef = useRef(() => {})
@@ -476,10 +502,12 @@ export default function App() {
       try {
         const mount = mountRef.current!
         if (disposed) return
-        renderer = new THREE.WebGLRenderer({ antialias: true })
-        renderer.setSize(mount.clientWidth, mount.clientHeight)
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0))
-        renderer.shadowMap.enabled = true
+        renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: false,
+        })
+        renderer.shadowMap.enabled = settingsRef.current.shadows
         renderer.shadowMap.type = THREE.PCFShadowMap
         mount.appendChild(renderer.domElement)
         rendererRef.current = renderer
@@ -492,6 +520,9 @@ export default function App() {
           0.1,
           2500,
         )
+        cameraRef.current = camera
+
+        applyRendererResolution(renderer, camera, mount, settingsRef.current)
 
         const R = await initPhysics()
         const world = createWorld()
@@ -532,8 +563,6 @@ export default function App() {
         const netTotal = netIds ? netIds.length : 1
         const gridCount = 1 + rivalCount + (isNetRace ? netPeerCount : 0)
         const raceActiveInit = rivalCount > 0 || isNetRace
-        const prCap = 1.75
-        renderer!.setPixelRatio(Math.min(window.devicePixelRatio, prCap))
         if (raceActiveInit) {
           const fc = document.createElement("canvas")
           fc.width = 128
@@ -966,9 +995,12 @@ export default function App() {
         let hadLock = false
 
         const onResize = () => {
-          camera.aspect = mount.clientWidth / mount.clientHeight
-          camera.updateProjectionMatrix()
-          renderer!.setSize(mount.clientWidth, mount.clientHeight)
+          applyRendererResolution(
+            renderer!,
+            camera,
+            mount,
+            settingsRef.current,
+          )
         }
         window.addEventListener("resize", onResize)
 
@@ -1277,7 +1309,8 @@ export default function App() {
                 playerFinished && !raceFinished && playerDoneT > 4
               const preGreen = raceActive && !racing && !playerFinished
               car.autoShiftEnabled = !preGreen
-              const playerInp = !playerFinished || postFinishFree ? subInp : holdInput()
+              const playerInp =
+                !playerFinished || postFinishFree ? subInp : holdInput()
               let lockT: { x: number; y: number; z: number } | null = null
               let lockR: { x: number; y: number; z: number; w: number } | null =
                 null
@@ -1879,6 +1912,8 @@ export default function App() {
         renderer.dispose()
         renderer.domElement.remove()
       }
+      cameraRef.current = null
+      rendererRef.current = null
     }
   }, [session])
 
@@ -1992,8 +2027,15 @@ export default function App() {
           onFreeDrive={startGame}
           onStartRace={startRace}
           onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
+          onOpenSettings={() => setShowSettings(true)}
         />
       )}
+      <SettingsModal
+        open={showSettings}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        onClose={() => setShowSettings(false)}
+      />
       {lobbyVisible && (
         <MultiplayerLobby
           open={showMultiplayerLobby}
@@ -2115,6 +2157,13 @@ export default function App() {
                 >
                   <RotateCcw size={16} />
                   Put me back on the road
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="w-full border border-[#51a7d5]/40 bg-[#51a7d5]/10 px-6 py-3 text-[14px] font-medium text-[#6ec2f0] transition hover:bg-[#51a7d5]/20 hover:text-white active:scale-[0.98] inline-flex items-center justify-center gap-2"
+                >
+                  <Settings size={16} />
+                  Resolution & Graphics
                 </button>
                 <button
                   onClick={quitToMenu}

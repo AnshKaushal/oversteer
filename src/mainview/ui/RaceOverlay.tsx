@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LoaderPinwheel,
+  Settings,
   Swords,
 } from "lucide-react"
 
@@ -53,6 +54,7 @@ export function RaceMenu({
   onFreeDrive,
   onStartRace,
   onOpenMultiplayer,
+  onOpenSettings,
 }: {
   open: boolean
   rivals: number
@@ -72,6 +74,7 @@ export function RaceMenu({
   onFreeDrive: () => void
   onStartRace: () => void
   onOpenMultiplayer?: () => void
+  onOpenSettings?: () => void
 }) {
   const idx = Math.max(
     0,
@@ -109,8 +112,19 @@ export function RaceMenu({
         },
       ]}
     >
-      {}
+      {/* 3D Viewport Controls */}
       <div className="relative min-h-[30vh] flex-1">
+        {onOpenSettings && (
+          <button
+            data-fade
+            onClick={onOpenSettings}
+            title="Graphics & Resolution Settings"
+            className="pointer-events-auto absolute top-4 left-4 z-10 flex items-center gap-2 border border-[#51a7d5] bg-[#0b0e14]/85 px-3 py-2 text-xs font-semibold text-[#6ec2f0] backdrop-blur transition hover:bg-[#51a7d5]/25 hover:text-white active:scale-95"
+          >
+            <Settings size={15} />
+            <span>RESOLUTION / SETTINGS</span>
+          </button>
+        )}
         <button
           data-fade
           onClick={onPrevCar}
@@ -139,9 +153,21 @@ export function RaceMenu({
         className="pointer-events-auto relative max-h-[62vh] w-full overflow-y-auto border-white/10 bg-[#0b0e14]/94 shadow-[0_30px_100px_rgba(0,0,0,0.7)] no-scrollbar md:max-h-none md:h-full md:w-[400px] md:border-l"
       >
         <div className="p-6">
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">
-            {selected?.name ?? "Choose your car"}
-          </h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-white truncate">
+              {selected?.name ?? "Choose your car"}
+            </h1>
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                title="Graphics & Resolution Settings"
+                className="mt-1 shrink-0 flex items-center gap-1.5 border border-[#51a7d5] bg-[#51a7d5]/15 px-2.5 py-1.5 text-xs font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/30 hover:text-white active:scale-95"
+              >
+                <Settings size={15} />
+                <span>SETTINGS</span>
+              </button>
+            )}
+          </div>
 
           <div className="mt-4 grid grid-cols-2 gap-1.5">
             {specRows.map(([k, v]) => (
@@ -282,6 +308,15 @@ export function RaceMenu({
               ? "Free Roam"
               : `Free Roam · ${TRAFFIC_OPTIONS.find((o) => o.id === traffic)?.label} traffic`}
           </button>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="mt-2.5 w-full border border-white/10 bg-white/5 px-6 py-2.5 text-[13px] font-medium text-gray-300 transition hover:bg-white/10 hover:text-white active:scale-[0.98] inline-flex items-center justify-center gap-1.5"
+            >
+              <Settings size={15} />
+              Display & Resolution Settings
+            </button>
+          )}
         </div>
       </div>
     </Screen>
