@@ -23,6 +23,7 @@ import {
   roadYaw,
 } from "./systems/WorldManager"
 import { CarVisual } from "./systems/CarVisual"
+import { AirplaneFlyby } from "./systems/AirplaneFlyby"
 import { TireSmoke } from "./systems/TireSmoke"
 import { InputManager, type DriveInput } from "./systems/InputManager"
 import {
@@ -538,6 +539,9 @@ export default function App() {
           return
         }
         const groundBody = wm.createPhysicsGround(R, world)
+
+        const flyby = new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
+        await flyby.init(scene, baseUrl)
 
         const net = multiplayerRef.current
         if (net) {
@@ -1845,6 +1849,16 @@ export default function App() {
             }
           }
 
+          // After the camera, so the flyby can fade with the distance the
+          // player is actually seeing it from.
+          flyby.update(
+            dt,
+            -bp.z,
+            car.forwardSpeed,
+            camera,
+            startedRef.current && !raceActive,
+          )
+
           renderer!.render(scene, camera)
 
           if (t && now - teleRef.last > 50) {
@@ -1865,6 +1879,11 @@ export default function App() {
           document.removeEventListener("pointerlockerror", onForceHide)
           document.removeEventListener("pointerlockchange", onLockChange)
           input.detach()
+          try {
+            flyby.dispose()
+          } catch (e) {
+            console.warn("[Teardown] flyby dispose failed:", e)
+          }
           if (lockRetry) window.clearTimeout(lockRetry)
           window.clearInterval(lockGuard)
           document.removeEventListener("pointermove", onForceHide)

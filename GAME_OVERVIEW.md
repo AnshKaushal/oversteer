@@ -55,6 +55,7 @@ src/mainview/
 │   ├── CarController.ts       # ALL vehicle physics (the core of the project, ~700 lines)
 │   ├── InputManager.ts        # keyboard → DriveInput, with analog smoothing
 │   ├── CarVisual.ts           # GLB load, wheel pivot extraction, per-frame pose
+│   ├── AirplaneFlyby.ts       # cinematic angled flyby across the road (free roam only)
 │   ├── TireSmoke.ts           # pooled GPU point-sprite smoke
 │   └── WorldManager.ts        # road ribbons, instanced trees, hills, physics ground
 └── ui/
@@ -633,7 +634,80 @@ a given stretch of road looks the same every time you pass it, and they respawn
 
 ---
 
-## 6. Controls
+## 6. The flyby
+
+`systems/AirplaneFlyby.ts` drops aircraft across the road every 8–13 s of
+free roam. It is pure set dressing — no physics body, no collision,
+nothing in the simulation.
+
+**The traffic.** Three aircraft, and every pass picks one at random, so
+the sky is never the same twice:
+
+| Aircraft           | Span | Speed            | Manoeuvres                     |
+| ------------------ | ---- | ---------------- | ------------------------------ |
+| Twin-turboprop     | 36 m | 1.0× (200 km/h)  | take-off, landing, cruise       |
+| C-17 Globemaster   | 52 m | 1.7× (340 km/h)  | take-off, cruise                |
+| Cessna 172         | 18 m | 0.85× (170 km/h) | take-off, landing, cruise       |
+
+Each model is scaled to the span it flies with — the real span, except the
+Cessna, which is drawn at 18 m because an 11 m light aircraft is too
+small to pick out at the far end of a pass — and turned so its nose points
+along +Z. The transport is authored nose-towards −X with the
+span along Z, so it needs a quarter turn; the other two are already
+nose-towards +Z. The Globemaster is a jet and has no propeller.
+
+**Propellers.** The transport's are separate meshes, found by shape (a
+thin disc whose other two extents match, at the front of a compact engine
+pod) and spun about the thrust axis. The Cessna is a single merged mesh,
+so its blades are islands of geometry inside the fuselage: they are found
+by shape too — a thin plate at the nose, big enough to be a blade — and
+then cut out into a mesh of their own, hung on a pivot at the hub so the
+whole prop turns about the thrust axis without wobbling.
+
+The pass is kinematic. When one starts it draws **three** random numbers: the
+angle to the road (20°–90°), which side of the road the aircraft comes
+from, and whether it slides along the road as it crosses. That gives a
+straight flight path through the point where it crosses, and the path is
+**fixed for the whole pass** — it does not slide along with the car. Where
+the car happens to be only matters for the choice of crossing point: a fast
+car covers ground while the aircraft is still closing in, so the crossing
+is pushed further out (up to 700 m) to keep the pass in front of the
+player. Three profiles are rolled at random: **take-off** (low over the
+treeline, climbing away), **landing** (high and fast, dropping to the
+treeline) and **cruise** (level).
+
+**The cruise flies above the weather.** The cloud layer is instanced
+between 53 m and 127 m, and a cruise sits at 145 m — above every one of
+them, seen against open sky. It also crosses further down the road
+(380 m instead of 120 m): a plane that high would sit over the top of
+the frame at the usual distance, so it crosses where the chase camera can
+still hold it.
+
+**Fading.** Two factors multiply. The first is the position along the
+pass, so the aircraft never pops in or out at either end. The second
+follows the **frame**: the aircraft is solid while it is on screen and
+dissolves as it swings out of it. There is deliberately no fade on
+distance — the scene's own fog already does that, and a second fade on
+range made the aircraft go transparent in the middle of the screen while
+it was still large in frame, which read as the plane simply vanishing.
+
+**Shadow.** The aircraft drops a soft patch on the ground, offset along
+the sun (180 m up, 120 m east, 60 m north) and spreading and fading as it
+climbs. It is a projected blob rather than a real shadow map entry: the
+sun's shadow camera only covers 80 m around the car, and the aircraft
+crosses 120 m ahead of it, so a real shadow would need the world's shadow
+camera doubled in size and the car's own shadow halved in sharpness.
+
+**Hills.** The hills are seeded by segment index and sit well off the
+road, but a pass that sweeps 400 m either side of the crossing can still
+clip one. `WorldManager.terrainHeightAt` raycasts the hill geometry for
+the terrain height at a point, and `pickCrossing` shifts the crossing
+along the road (forward first) until the sampled path clears the terrain
+by at least 6 m.
+
+---
+
+## 7. Controls
 
 | Input             | Action                                              |
 | ----------------- | --------------------------------------------------- |
@@ -659,7 +733,7 @@ acceleration), plus a belt-and-braces `cursor: none` on `html` and `body`.
 
 ---
 
-## 7. Testing
+## 8. Testing
 
 Three headless Bun scripts that construct the same Rapier world and drive
 `CarController` at a fixed 1/120 s:
@@ -686,7 +760,7 @@ to `DriveInput` absorbs it) but a leftover.
 
 ---
 
-## 8. Honest assessment of the physics
+## 9. Honest assessment of the physics
 
 **What is genuinely implemented**
 
@@ -733,7 +807,7 @@ to `DriveInput` absorbs it) but a leftover.
 
 ---
 
-## 9. Where physics tuning would go
+## 10. Where physics tuning would go
 
 1. `src/mainview/constants/physics.ts` — the single source of vehicle truth.
    Anything you want to change about the car's behaviour belongs here (or be
@@ -750,7 +824,7 @@ to `DriveInput` absorbs it) but a leftover.
 
 ---
 
-## 10. Changelog
+## 11. Changelog
 
 ### Neutral RPM wind-down fix
 

@@ -146,6 +146,7 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
     "bmw_m3.glb": 1,
     "audi_r8.glb": 2, // rear strip + its own dimmer brake strip
     "lamborghini_urus.glb": 1,
+    "porsche_997.1_gt2.glb": 1, // rear lens, authored red in the GLB
     "g_wagon.glb": 0, // shell, glass and lights share one textured material
   }
   for (const [file, want] of Object.entries(EXPECTED)) {

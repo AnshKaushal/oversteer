@@ -298,6 +298,7 @@ export class WorldManager {
   private segColliders = new Map<number, RAPIER.Collider[]>()
   private carPos = new THREE.Vector3()
   private hills: Hill[] = []
+  private hillRay = new THREE.Raycaster()
   private readonly SEG_BEHIND = 12
   private readonly SEG_AHEAD = 24
   private readonly ROAD_RIB = RIB_DIV
@@ -1265,6 +1266,32 @@ export class WorldManager {
 
   static sFromPos(p: THREE.Vector3) {
     return -p.z
+  }
+
+  /**
+   * Height of the ground at a world position: zero out on the flat plane,
+   * or the surface of whichever hill covers it. The flyby uses this to
+   * keep its flight path off the terrain.
+   */
+  terrainHeightAt(x: number, z: number): number {
+    let h = 0
+    for (const hill of this.hills) {
+      const dx = x - hill.mesh.position.x
+      const dz = z - hill.mesh.position.z
+      // The noise can push the rim out past the nominal radius.
+      const r = hill.radius * 1.4
+      if (dx * dx + dz * dz > r * r) continue
+      // The hill may have been recycled since the last render, so its
+      // world matrix cannot be trusted to be current.
+      hill.mesh.updateWorldMatrix(true, false)
+      this.hillRay.set(
+        new THREE.Vector3(x, 400, z),
+        new THREE.Vector3(0, -1, 0),
+      )
+      const hit = this.hillRay.intersectObject(hill.mesh, false)
+      if (hit.length > 0 && hit[0].point.y > h) h = hit[0].point.y
+    }
+    return h
   }
 }
 

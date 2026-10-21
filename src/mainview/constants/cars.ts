@@ -269,6 +269,121 @@ const rs7: CarDefinition = {
   tested: { zeroToHundredS: 3.7, topSpeedKmh: 345 },
 }
 
+const gt2: CarDefinition = {
+  id: "porsche-997-gt2",
+  name: "Porsche 911 GT2 (997)",
+  shortName: "GT2",
+  modelFile: "models/porsche_997.1_gt2.glb",
+  physics: createPhysicsConfig({
+    mass: { chassis: 1390, frontWheel: 25, rearWheel: 25, total: 1440 },
+    dimensions: {
+      width: 1.852,
+      height: 1.285,
+      length: 4.469,
+      wheelbase: 2.35,
+      trackWidth: 1.53,
+      groundClearance: 0.1,
+      centerOfMassHeight: 0.42,
+    },
+    engine: {
+      ...CAR_PHYSICS.engine,
+      // 3.6 l twin-turbo flat-six (M97/70S): 390 kW (530 PS) at 6,500 rpm,
+      // 680 Nm held from 2,200 to 4,500 rpm. The max engine speed is
+      // 6,750 rpm, so that is the limiter.
+      maxPowerHP: 530,
+      maxTorqueNm: 680,
+      maxPowerRPM: 6500,
+      maxTorqueRPM: 2200,
+      redlineRPM: 6750,
+      revLimiterRPM: 6750,
+      idleRPM: 850,
+      // Turbo plateau: full boost torque from 2,200 rpm, held to 4,500,
+      // then tapering to the power peak at 6,500 (573 Nm there, 84 %).
+      torqueCurve: [
+        [0, 0.34],
+        [1000, 0.52],
+        [1500, 0.7],
+        [2200, 1.0],
+        [3200, 1.0],
+        [4500, 1.0],
+        [5500, 0.95],
+        [6000, 0.9],
+        [6500, 0.84],
+        [6750, 0.76],
+        [6900, 0.0],
+      ],
+    },
+    transmission: {
+      ...CAR_PHYSICS.transmission,
+      // Six-speed manual (G97/88), same box as the GT3, 3.44 final drive.
+      // The ratios put 6th at 6,750 rpm = 327 km/h with the 0.327 m tyre.
+      gearRatios: [3.82, 2.2, 1.52, 1.16, 0.92, 0.74],
+      finalDriveRatio: 3.44,
+      reverseRatio: 3.0,
+      launchControlRPM: 4500,
+      autoUpshiftRPM: 6600,
+    },
+    drivetrain: {
+      type: "rwd",
+      frontTorqueSplit: 0,
+      torqueCapGear1: 2600,
+      torqueCapGear2: 4000,
+    },
+    wheels: {
+      ...CAR_PHYSICS.wheels,
+      // 235/35 ZR19 front, 325/30 ZR19 rear — radius 0.327 m
+      radius: 0.327,
+      width: 0.3,
+      frictionMu: 1.55,
+      referenceLoad: 3530, // 1440 kg * 9.81 / 4
+      suspension: {
+        ...CAR_PHYSICS.wheels.suspension,
+        // Race-tuned PASM: stiffer than a Carrera, short travel
+        springRate: 88000,
+        damperRate: 5600,
+        travel: 0.1,
+        antiRollBarFront: 19000,
+        antiRollBarRear: 16000,
+      },
+      // PCCB: 6-piston front, 4-piston rear
+      brakeForce: { front: 2200, rear: 1800 },
+      handbrakeForce: 3200,
+      steering: {
+        ...CAR_PHYSICS.wheels.steering,
+        maxAngle: 0.55,
+        speedFalloffKmh: 210,
+      },
+    },
+    aero: {
+      ...CAR_PHYSICS.aero,
+      dragCoefficient: 0.32, // official Cd
+      frontalArea: 2.0,
+      // Big GT-style rear wing on swan-neck mounts
+      downforceAt100kmh: 250,
+    },
+    assists: {
+      ...CAR_PHYSICS.assists,
+      tractionControl: 0.3,
+      countersteerAssist: 5000,
+    },
+  }),
+  wheels: [
+    { x: -0.742, z: -1.173, front: true, left: true },
+    { x: 0.742, z: -1.173, front: true, left: false },
+    { x: -0.768, z: 1.185, front: false, left: true },
+    { x: 0.768, z: 1.185, front: false, left: false },
+  ],
+  pivots: { pattern: "^Wheel_[FLR][LR]$" },
+  dash: { maxRpm: 7000, redFromRpm: 6000, maxKmh: 340 },
+  defaultTint: null,
+  // Only the painted body shell takes the colour. The chassis, bumpers and
+  // light cluster are separate materials on this model and stay black.
+  paintMatch: ["^New_Material$"],
+  // Measured in car-matrix: 3.83 s to 100 km/h, 318 km/h on the limiter
+  // (the real car does 3.7 s and 329 km/h).
+  tested: { zeroToHundredS: 3.8, topSpeedKmh: 318 },
+}
+
 const gwagon: CarDefinition = {
   id: "g-wagon",
   name: "Mercedes G 63",
@@ -929,6 +1044,7 @@ export const CARS: CarDefinition[] = [
   m3,
   r8,
   rs7,
+  gt2,
   gwagon,
   urus,
   aventador,

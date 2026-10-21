@@ -73,6 +73,25 @@ All models face +Z. This is how the forward direction was determined for each on
 | **BMW M3**  | The axle overhangs are 1.07 m and 0.85 m. The real M3 has a longer rear overhang (1.01 m) than front (0.92 m), so the long-overhang axle (z = -1.33) is the rear.          |
 | **G-Wagen** | The `wheelF` nodes are at z = +1.41 and `wheelB` at z = -1.45. The overhangs of 0.87 m and 1.05 m match the real front and rear, since the spare wheel hangs off the back. |
 | **Urus**    | The wheel diameter (0.84 m) and wheelbase (3.03 m) read off the model match the real car. The bumper-chunk pattern also matches the BMW's.                                 |
+| **997 GT2** | Authored nose-towards -Z, like most Sketchfab exports: the plate, the rear wing and the wide 325/30 rear tyres all sit at +Z. `scripts/prepare-porsche-gt2.ts` bakes the half turn into the file. |
+
+### Models that need editing before they are usable
+
+Most GLBs can be dropped in as they are. Some do not:
+
+- **The nose is the wrong way round.** Bake a 180° yaw into the file rather
+  than rotating it in the registry — `scripts/prepare-porsche-gt2.ts` shows
+  how to do it on the glTF JSON, which keeps the embedded textures intact
+  (a three.js re-export loses them, because the loader cannot decode
+  images outside a browser).
+- **The lamps are not red.** The 997 GT2 ships its rear lenses as unlit
+  blue-grey glass. The prep script gives that material a red base colour
+  and a red emissive so `carLights` can find it and brighten it under
+  braking.
+- **The wheel pivots have unusable names.** Sketchfab calls them
+  `fl.001_17` and friends, and the loader strips the dots, so the registry
+  would have to spell them out. The prep script renames them to
+  `Wheel_FL`/`FR`/`RL`/`RR` instead.
 
 ---
 
@@ -91,6 +110,13 @@ Run the inspection script to see what the lamp detection finds on a new GLB:
 bun scripts/light-info.ts <car-id>
 ```
 
+And check the model the way the game loads it — scaled, yawed a half turn
+and centred, with its four wheel pivots found and classified:
+
+```bash
+bun scripts/car-visual-check.ts <car-id>
+```
+
 Run the test script to guard both behaviours:
 
 ```bash
@@ -100,6 +126,10 @@ bun scripts/light-materials-test.ts
 ### Known limitation
 
 A car whose lamps are baked into one shared texture (the G-Wagen) has nothing separable to glow, so it is left out of the glow behaviour by design.
+
+The idle brightness of a tail lamp is `emissiveIntensity * 10 * 0.5`, so an
+authored strength of 0.2 gives the resting level of 1.0 that the test
+expects. The M3 still ships with 10, which is why that check fails today.
 
 ---
 
