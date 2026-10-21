@@ -84,7 +84,7 @@ let propTurned = 0
 let passes = 0
 for (let step = 0; step < 60 * 60; step++) {
   const dt = 1 / 60
-  flyby.update(dt, carS, 40, camera, true)
+  flyby.update(dt, carS, 40, true)
   // Look for the aircraft that is in the air and note its props.
   for (const ac of (flyby as any).aircraft as any[]) {
     if (!ac.root.visible) continue
@@ -118,6 +118,36 @@ check(propTurned > 0, "a propeller turned")
     }
     const turned = before.angleTo(node.quaternion)
     check(turned > 1, "the propeller turns about its hub", turned.toFixed(2) + " rad")
+  }
+}
+
+// The propeller has to turn at a steady rate, not wind itself up.
+{
+  const ac = ((flyby as any).aircraft as any[]).find(
+    (a) => a.spec.prop === "merged",
+  )
+  if (ac) {
+    const node = ac.props[0].node
+    // How far the prop turns in one frame, measured against the frame
+    // before it.
+    const steps: number[] = []
+    let prev = node.quaternion.clone()
+    for (let i = 0; i < 240; i++) {
+      flyby.update(1 / 60, carS, 40, true)
+      if (!ac.root.visible) {
+        prev = node.quaternion.clone()
+        continue
+      }
+      steps.push(prev.angleTo(node.quaternion))
+      prev = node.quaternion.clone()
+    }
+    const first = steps[0] ?? 0
+    const later = steps[Math.min(20, steps.length - 1)] ?? 0
+    check(
+      first > 0.1 && Math.abs(first - later) < 1e-6,
+      "the propeller turns at a steady rate",
+      `${first.toFixed(4)} rad/frame, then ${later.toFixed(4)}`,
+    )
   }
 }
 

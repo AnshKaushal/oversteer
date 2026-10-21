@@ -18,6 +18,7 @@ import {
 } from "../src/mainview/systems/carLights"
 import { CarVisual } from "../src/mainview/systems/CarVisual"
 import type { BrakeLight } from "../src/mainview/systems/carLights"
+import { CARS } from "../src/mainview/constants/cars"
 
 let failures = 0
 function check(ok: boolean, label: string, detail = "") {
@@ -155,6 +156,27 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
       found.length === want,
       `${file} lamp count`,
       `want ${want}, found ${found.length}`,
+    )
+  }
+}
+
+// 4. Painting a car must not turn it into a brake lamp. A red car is
+//    red, and taking the paint for a lamp made the whole body glow when
+//    the brakes came on.
+{
+  for (const def of CARS) {
+    const file = def.modelFile.split("/").pop()!
+    const plain = collectBrakeLights(await loadScene(file))
+    const model = (await loadScene(file)).clone(true)
+    tintCar(model, 0xe30613, {
+      match: def.paintMatch,
+      texture: def.paintTexture,
+    })
+    const painted = collectBrakeLights(model)
+    check(
+      painted.length === plain.length,
+      `${file} lamp count is not changed by a red paint`,
+      `${plain.length} -> ${painted.length}`,
     )
   }
 }

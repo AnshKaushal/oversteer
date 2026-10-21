@@ -31,7 +31,12 @@ function isBrakeLamp(mat: THREE.Material): boolean {
   const std = mat as THREE.MeshStandardMaterial
   if (!std.emissive || !std.color) return false
   if (std.emissive.r + std.emissive.g + std.emissive.b <= 0.02) return false
-  return isRed(std.emissive) || isRed(std.color)
+  // The glowing colour is what makes a lamp a lamp. The base colour is
+  // not: a red-painted car is red too, and taking the paint for a lamp
+  // made the whole body glow when the brakes came on — on the G-Wagon
+  // that meant the headlights and the indicators turned red as well,
+  // because the shell, the glass and the lights all share one material.
+  return isRed(std.emissive)
 }
 
 export function collectBrakeLights(root: THREE.Object3D): BrakeLight[] {

@@ -26,8 +26,12 @@ export const CROSS_LEAD = 120
 export const PASS_HALF = 400
 /** Total length of a pass, from one end to the other. */
 export const PASS_LENGTH = PASS_HALF * 2
-/** Distance over which the aircraft fades in and out at the ends of the pass. */
-const FADE_LEN = 140
+/**
+ * How far past the end of its path the aircraft keeps flying before the
+ * pass is over. It is deep in the haze by then, so it can simply be
+ * switched off rather than faded away.
+ */
+const EXIT_LEN = 400
 /** How far ahead of the car the crossing may be pushed for a fast car. */
 const MAX_LEAD = 700
 /** Seconds between passes once one has finished. */
@@ -43,21 +47,6 @@ const FIRST_GAP_MAX = 5
 const MIN_ANGLE = 20
 /** Largest angle to the road a pass may use, in degrees. */
 const MAX_ANGLE = 90
-/**
- * Where the aircraft has to sit in the frame before it is fully solid, and
- * where it has gone altogether. Both are in the camera's clip space, where
- * 1 is the edge of the frame: solid up to 85 % of the way out, dissolved
- * by 115 %.
- *
- * The fade follows the frame rather than the distance. The scene already
- * has fog, which is what makes far things wash out, so a second fade based
- * on distance only made the aircraft dissolve in plain sight — it went
- * transparent while it was still large in the middle of the screen. This
- * way it is solid for as long as it is on screen and only fades at the
- * edge, where it is leaving anyway.
- */
-const CONE_SOLID = 0.85
-const CONE_FAR = 1.15
 /**
  * Height of a cruising aircraft. The cloud layer sits between 53 m and
  * 127 m, so this is above the weather and the aircraft is seen against
@@ -79,10 +68,6 @@ const SUN_SHADOW_X = 120 / 180
 const SUN_SHADOW_Z = 60 / 180
 
 const DEG = Math.PI / 180
-
-/** Scratch vectors, so the per-frame update allocates nothing. */
-const _camSpace = new THREE.Vector3()
-const _ndc = new THREE.Vector3()
 
 export type FlybyMode = "takeoff" | "landing" | "cruise"
 
@@ -168,6 +153,11 @@ export interface LoadedAircraft {
   mats: THREE.MeshStandardMaterial[]
   /** Wingspan in metres. */
   span: number
+  /**
+   * How far below the flight path the ground has to stay. The path is
+   * the aircraft's centre line, so its belly hangs this far below.
+   */
+  clearance: number
 }
 
 /** Reports the height of the ground at a world position. */
@@ -243,11 +233,6 @@ function profileFor(mode: FlybyMode, u: number): Profile {
   }
 }
 
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t))
-  return x * x * (3 - 2 * x)
-}
-
 /**
  * Builds the line the aircraft flies: a straight path through the point
  * where it crosses the road, at `theta` to the road's direction of travel.
@@ -292,8 +277,6 @@ export interface PassState {
   pitch: number
   /** Airspeed in m/s. */
   speed: number
-  /** 0..1 opacity, used for the fade in and out. */
-  opacity: number
 }
 
 /**
@@ -319,26 +302,7 @@ export function passState(
     heading: Math.atan2(path.dx, path.dz),
     pitch: pr.pitch,
     speed: pr.speed * speedFactor,
-    opacity:
-      smoothstep(traveled / FADE_LEN) *
-      smoothstep((path.length - traveled) / FADE_LEN),
   }
-}
-
-/**
- * How solid the aircraft is at a given place in the frame. `ndcX` is its
- * position across the frame in clip space: -1 is the left edge, 1 the
- * right, 0 the middle.
- *
- * It fades in as the aircraft swings into shot and dissolves as it leaves
- * to the side, so it never appears from nothing in the middle of the
- * screen, and never dissolves there either.
- */
-export function viewFade(ndcX: number): number {
-  const edge = Math.abs(ndcX)
-  if (edge <= CONE_SOLID) return 1
-  if (edge >= CONE_FAR) return 0
-  return 1 - smoothstep((edge - CONE_SOLID) / (CONE_FAR - CONE_SOLID))
 }
 
 /**
@@ -360,7 +324,6 @@ export interface ShadowState {
 
 export function shadowState(
   st: PassState,
-  opacity: number,
   terrainAt?: TerrainAt,
   span = TARGET_SPAN,
 ): ShadowState {
@@ -375,30 +338,46 @@ export function shadowState(
     span: span * (1 + h * 0.012),
     length: span * 0.9 * (1 + h * 0.012),
     heading: st.heading,
-    alpha: (0.5 / (1 + h * 0.03)) * opacity,
+    alpha: 0.5 / (1 + h * 0.03),
   }
 }
 
 /**
- * Whether the flight path would clip a hill. The path is sampled along its
- * length and compared with the terrain underneath it.
+ * Whether the flight path would clip a hill.
+ *
+ * The whole aircraft has to clear the ground, not just the fuselage: the
+ * wingtips are half a span either side of the line, and the Globemaster
+ * is 52 m across. The height of the path is the height of the
+ * aircraft's centre, so the belly is a clearance below it.
  */
 export function pathBlocked(
   path: FlightPath,
   mode: FlybyMode,
   terrainAt: TerrainAt,
+  span = TARGET_SPAN,
+  clearance = 6,
+  extra = 0,
 ): boolean {
   // The path is long, so it has to be sampled finely or a hill can slip
-  // between two samples.
-  const samples = Math.max(16, Math.round(path.length / 15))
+  // between two samples. `extra` is the distance the aircraft keeps
+  // flying past the end of the path, which has to be clear as well.
+  const total = path.length + extra
+  const samples = Math.max(16, Math.round(total / 15))
+  const half = span / 2
+  // The direction across the path.
+  const px = -path.dz
+  const pz = path.dx
   for (let i = 0; i <= samples; i++) {
     const u = i / samples
-    const along = u * path.length - path.length / 2
+    const along = u * total - total / 2
     const x = path.x + along * path.dx
     const z = path.z + along * path.dz
-    const y = profileFor(mode, u).y
-    // Leave a little room under the wingtip and the tail fin.
-    if (terrainAt(x, z) > y - 6) return true
+    const y = profileFor(mode, Math.min(1, u * total / path.length)).y
+    if (terrainAt(x, z) > y - clearance) return true
+    if (half > 0) {
+      if (terrainAt(x + px * half, z + pz * half) > y - clearance) return true
+      if (terrainAt(x - px * half, z - pz * half) > y - clearance) return true
+    }
   }
   return false
 }
@@ -410,6 +389,9 @@ export function pathBlocked(
  * is moved along the road — forwards first, so the pass still happens
  * ahead of the player — until the path is clear. The crossing is never
  * moved to the far side of the car.
+ *
+ * Returns -1 when no crossing along the road is clear: there is no point
+ * flying through a hill.
  */
 export function pickCrossing(
   base: number,
@@ -418,6 +400,9 @@ export function pickCrossing(
   terrainAt: TerrainAt,
   carS: number,
   minLead: number,
+  span = TARGET_SPAN,
+  clearance = 6,
+  extra = 0,
 ): number {
   const offsets = [
     0, 70, -70, 140, -140, 210, -210, 300, -300, 400, -400, 520, -520,
@@ -426,9 +411,9 @@ export function pickCrossing(
     const s = base + off
     const ahead = s - carS
     if (minLead >= 0 ? ahead < minLead : ahead > minLead) continue
-    if (!pathBlocked(pathFor(s), mode, terrainAt)) return s
+    if (!pathBlocked(pathFor(s), mode, terrainAt, span, clearance, extra)) return s
   }
-  return base
+  return -1
 }
 
 /**
@@ -443,7 +428,7 @@ export function pickCrossing(
 export function prepareAircraft(
   model: THREE.Object3D,
   spec: AircraftSpec,
-): { props: PropDisc[]; span: number } {
+): { props: PropDisc[]; span: number; height: number } {
   model.updateMatrixWorld(true)
 
   let props: PropDisc[] = []
@@ -465,7 +450,9 @@ export function prepareAircraft(
   model.updateMatrixWorld(true)
   const c = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3())
   model.position.set(-c.x, -c.y, -c.z)
-  return { props, span: spec.span }
+  model.updateMatrixWorld(true)
+  const height = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y
+  return { props, span: spec.span, height }
 }
 
 /**
@@ -841,7 +828,6 @@ export class AirplaneFlyby {
   private flight: Flight | null = null
   private timer = 0
   private nextIn = 0
-  private spin = 0
   private ready = false
   private disposed = false
 
@@ -876,7 +862,7 @@ export class AirplaneFlyby {
         const model = glb.scene
         model.updateMatrixWorld(true)
 
-        const { props, span } = prepareAircraft(model, spec)
+        const { props, span, height } = prepareAircraft(model, spec)
         const mats = this.prepareFade(model)
 
         if (this.disposed) return false
@@ -889,7 +875,17 @@ export class AirplaneFlyby {
         root.add(body)
         root.visible = false
         scene.add(root)
-        this.aircraft.push({ spec, root, body, props, mats, span })
+        this.aircraft.push({
+          spec,
+          root,
+          body,
+          props,
+          mats,
+          span,
+          // The belly of the aircraft hangs half its height below the
+          // centre line, plus a little for the wingtips.
+          clearance: height / 2 + 1,
+        })
       } catch (e) {
         console.warn(`${spec.file} failed to load, no flyby for it`, e)
       }
@@ -915,7 +911,9 @@ export class AirplaneFlyby {
       let c = clones.get(m)
       if (!c) {
         c = (m as THREE.MeshStandardMaterial).clone()
-        c.transparent = true
+        // The aircraft is never faded, so it must not be sorted as a
+        // transparent object: that would draw it over the clouds.
+        c.transparent = false
         clones.set(m, c)
         mats.push(c)
       }
@@ -947,7 +945,6 @@ export class AirplaneFlyby {
     dt: number,
     carS: number,
     carSpeed: number,
-    camera: THREE.Camera,
     active: boolean,
   ) {
     if (!this.ready) return
@@ -984,43 +981,29 @@ export class AirplaneFlyby {
     ac.body.rotation.x = -st.pitch
     ac.body.rotation.z = (sway * 2.2 + (f.mode === "landing" ? 3 : -2)) * DEG
 
-    // The fade follows the frame: solid while the aircraft is on screen,
-    // dissolving as it swings out of it. The scene fog is what makes it
-    // wash out with distance, so there is no fade on range as well.
-    camera.updateMatrixWorld()
-    const camSpace = _camSpace.set(st.x, st.y, st.z).applyMatrix4(
-      camera.matrixWorldInverse,
-    )
-    let cone = 0
-    if (camSpace.z < -0.5) {
-      const ndc = _ndc.set(st.x, st.y, st.z).project(camera)
-      cone = viewFade(ndc.x)
-    }
-    const opacity = st.opacity * cone
-    this.setOpacity(ac, opacity)
+    // No fade: the aircraft is simply there or it is not. It flies its
+    // line, on past the end of the path, until it is lost in the haze.
+    this.updateShadow(st, ac.span)
 
-    this.updateShadow(st, opacity, ac.span)
-
-    this.spin += (16 + f.speed * 0.2) * dt
+    // The propeller turns by this much each frame. Applying the total
+    // instead would compound it, and the prop would wind itself up
+    // over the pass.
+    const turn = (16 + f.speed * 0.2) * dt
     for (const p of ac.props) {
       p.node.quaternion.multiply(
-        new THREE.Quaternion().setFromAxisAngle(p.axis, this.spin),
+        new THREE.Quaternion().setFromAxisAngle(p.axis, turn),
       )
     }
 
-    if (f.traveled >= f.path.length) this.endFlight()
+    if (f.traveled >= f.path.length + EXIT_LEN) this.endFlight()
   }
 
   /**
    * Drops the aircraft's shadow on the ground, offset along the sun and
    * spreading as it climbs.
    */
-  private updateShadow(st: PassState, opacity: number, span: number) {
-    if (opacity <= 0.01) {
-      this.shadowRoot.visible = false
-      return
-    }
-    const sh = shadowState(st, opacity, this.terrainAt, span)
+  private updateShadow(st: PassState, span: number) {
+    const sh = shadowState(st, this.terrainAt, span)
     this.shadowRoot.visible = true
     this.shadowRoot.position.set(sh.x, sh.y, sh.z)
     this.shadowRoot.rotation.y = sh.heading
@@ -1065,7 +1048,17 @@ export class AirplaneFlyby {
       this.terrainAt,
       carS,
       lead * 0.35,
+      ac.span,
+      ac.clearance,
+      EXIT_LEN,
     )
+    // Every crossing along the road is blocked by a hill, so there is
+    // nothing to fly: try again in a moment rather than fly through it.
+    if (sCross < 0) {
+      this.timer = 0
+      this.nextIn = 2 + Math.random() * 3
+      return
+    }
 
     // Only one aircraft is in the air at a time.
     for (const other of this.aircraft) other.root.visible = false
@@ -1088,14 +1081,8 @@ export class AirplaneFlyby {
     this.flight = null
     this.shadowRoot.visible = false
     this.shadowMat.opacity = 0
-    this.setOpacity(this.aircraft[0], 0)
     this.timer = 0
     this.nextIn = MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP)
-  }
-
-  private setOpacity(ac: LoadedAircraft, o: number) {
-    const v = Math.max(0, Math.min(1, o))
-    for (const m of ac.mats) m.opacity = v
   }
 
   dispose() {

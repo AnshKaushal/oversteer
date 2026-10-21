@@ -13,7 +13,6 @@ import {
   pathBlocked,
   pickCrossing,
   prepareAircraft,
-  viewFade,
   AIRCRAFT,
   shadowState,
   makePath,
@@ -149,31 +148,24 @@ check(pitch("takeoff", 0) > 8, "take-off starts nose up", `${pitch("takeoff", 0)
 check(pitch("takeoff", PASS_LENGTH) < 3, "take-off levels off", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
 check(pitch("landing", PASS_LENGTH) < -4, "landing ends nose down", `${pitch("landing", PASS_LENGTH).toFixed(1)} deg`)
 
-// 8. It fades in and out at the ends of the pass.
+// 8. The aircraft is never faded. It flies its line, on past the end of
+//    the path, and is simply switched off when it is gone.
 for (const mode of MODES) {
   const path = makePath(300, 60 * DEG, 1, 1)
-  const o0 = passState(mode, 0, path, 0).opacity
-  const oMid = passState(mode, PASS_LENGTH / 2, path, 0).opacity
-  const oEnd = passState(mode, PASS_LENGTH, path, 0).opacity
-  check(o0 < 0.02, `${mode} fades in from nothing`, `opacity=${o0.toFixed(3)}`)
-  check(oMid > 0.98, `${mode} is solid across the road`, `opacity=${oMid.toFixed(3)}`)
-  check(oEnd < 0.02, `${mode} fades out to nothing`, `opacity=${oEnd.toFixed(3)}`)
-}
-
-// 9. The view fade: solid while it is in shot, gone once it has left.
-check(viewFade(0) === 1, "solid in the middle of the frame")
-check(viewFade(0.8) === 1, "solid near the edge of the frame")
-check(viewFade(1.2) === 0, "gone once it is past the edge")
-check(viewFade(-1.2) === 0, "gone on the other side as well")
-{
-  let monotonic = true
-  let prev = 1
-  for (let x = 0; x <= 1.4; x += 0.01) {
-    const f = viewFade(x)
-    if (f > prev + 1e-9) monotonic = false
-    prev = f
-  }
-  check(monotonic, "the view fade only ever gets fainter")
+  const st = passState(mode, 0, path, 0)
+  check(
+    (st as unknown as { opacity?: number }).opacity === undefined,
+    `${mode} carries no opacity: it is never faded`,
+  )
+  // Past the end of the path it keeps going in the same direction.
+  const last = passState(mode, PASS_LENGTH, path, 0)
+  const beyond = passState(mode, PASS_LENGTH + 300, path, 0)
+  const dLast = Math.hypot(beyond.x - last.x, beyond.z - last.z)
+  check(
+    dLast > 250,
+    `${mode} keeps flying past the end of its path`,
+    `${dLast.toFixed(0)} m further`,
+  )
 }
 
 // 10. The shadow sits on the ground, offset along the sun, and fades with
@@ -181,7 +173,7 @@ check(viewFade(-1.2) === 0, "gone on the other side as well")
 {
   const path = makePath(700, 60 * DEG, 1, 1)
   const st = passState("cruise", 200, path, 0)
-  const sh = shadowState(st, 1)
+  const sh = shadowState(st)
   check(sh.y > 0 && sh.y < 1, "the shadow is on the ground", `y=${sh.y.toFixed(2)}`)
   const dx = sh.x - st.x
   const dz = sh.z - st.z
@@ -191,11 +183,11 @@ check(viewFade(-1.2) === 0, "gone on the other side as well")
     "the shadow offset follows the sun's angle",
     `ratio=${(dx / dz).toFixed(2)}`,
   )
-  const low = shadowState(passState("takeoff", 0, path, 0), 1)
-  const high = shadowState(passState("takeoff", 400, path, 0), 1)
+  const low = shadowState(passState("takeoff", 0, path, 0))
+  const high = shadowState(passState("takeoff", 400, path, 0))
   check(high.alpha < low.alpha, "the shadow fades as the aircraft climbs", `${low.alpha.toFixed(2)} -> ${high.alpha.toFixed(2)}`)
   check(high.span > low.span, "the shadow spreads as the aircraft climbs", `${low.span.toFixed(0)} -> ${high.span.toFixed(0)} m`)
-  check(shadowState(st, 0).alpha === 0, "no shadow when the aircraft is invisible")
+  check(shadowState(st).alpha > 0, "the shadow is there while the aircraft is")
 }
 
 // 11. Hills in the way push the crossing along the road.
@@ -220,6 +212,49 @@ check(viewFade(-1.2) === 0, "gone on the other side as well")
   check(pickCrossing(hillS, "takeoff", pathFor, flat, hillS, 0) === hillS, "a clear crossing is left where it is")
   const ahead = pickCrossing(hillS, "takeoff", pathFor, withHill, hillS, 100)
   check(ahead >= hillS + 100, "the crossing is not moved behind the car", `${ahead}`)
+}
+
+// 11b. The whole aircraft has to clear the ground, wingtips included: a
+//      hill just off the line still gets in the way of a 52 m span.
+{
+  const span = 52
+  const clearance = 9
+  const path = makePath(500, 90 * DEG, 1, 1)
+  // A ridge that only reaches up under the left wingtip.
+  const px = -path.dz
+  const pz = path.dx
+  const ridgeX = path.x + px * (span / 2)
+  const ridgeZ = path.z + pz * (span / 2)
+  const underWing: TerrainAt = (x, z) => {
+    const d = Math.hypot(x - ridgeX, z - ridgeZ)
+    return d < 12 ? 50 : 0
+  }
+  const centre: TerrainAt = (x, z) => {
+    const d = Math.hypot(x - path.x, z - path.z)
+    return d < 20 ? 0 : 0
+  }
+  check(
+    !pathBlocked(path, "takeoff", centre, span, clearance),
+    "a clear path under the fuselage is not blocked",
+  )
+  check(
+    pathBlocked(path, "takeoff", underWing, span, clearance),
+    "a hill under the wingtip blocks the path",
+  )
+  check(
+    !pathBlocked(path, "takeoff", underWing, 10, clearance),
+    "the same hill is out of the way of a small aircraft",
+  )
+}
+
+// 11c. If every crossing along the road is blocked, there is no pass.
+{
+  const everywhere: TerrainAt = () => 40
+  const pathFor = (s: number) => makePath(s, 60 * DEG, 1, 1)
+  const none = pickCrossing(300, "takeoff", pathFor, everywhere, 0, 0)
+  check(none < 0, "no crossing means no pass", `${none}`)
+  const some = pickCrossing(300, "takeoff", pathFor, () => 0, 0, 0)
+  check(some === 300, "a clear road still gives a crossing", `${some}`)
 }
 
 // 12. The chase camera can actually see it: the pass has to be framed, not
@@ -253,7 +288,7 @@ check(viewFade(-1.2) === 0, "gone on the other side as well")
         if (t === PASS_LENGTH / 2) {
           crossX = p.x
           crossY = p.y
-          solidAtCross = viewFade(p.x) * st.opacity
+          solidAtCross = 1
         }
       }
       // A square-on pass sweeps 400 m either side of the road, so most of
@@ -270,7 +305,7 @@ check(viewFade(-1.2) === 0, "gone on the other side as well")
         `ndc=(${crossX.toFixed(2)}, ${crossY.toFixed(2)})`,
       )
       check(
-        solidAtCross > 0.9,
+        solidAtCross === 1,
         `a ${deg} degree ${mode} crossing is fully solid`,
         `opacity=${solidAtCross.toFixed(2)}`,
       )

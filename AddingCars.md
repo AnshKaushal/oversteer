@@ -100,7 +100,12 @@ Most GLBs can be dropped in as they are. Some do not:
 Headlights never take paint, and tail lights glow under braking. **Nothing about this needs editing in the registry.**
 
 - **`carTint`** skips emissive materials when it looks for paint. Previously the M3's white headlight strip was repainted, which gave black cars black headlights.
-- **`carLights`** finds each car's red lamps by their glowing color.
+- **`carLights`** finds each car's red lamps by their **glowing** colour —
+  the emissive, not the base colour. A red-painted car is red too, and
+  taking the paint for a lamp made the whole body glow when the brakes
+  came on. On the G-Wagon that was very visible: its shell, glass and
+  lights share one material, so the headlights and the indicators turned
+  red along with the tail lights.
 
 ### Checking a new model
 

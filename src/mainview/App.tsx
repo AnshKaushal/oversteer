@@ -1014,10 +1014,6 @@ export default function App() {
         let buriedFrames = 0
         const stepper = createFixedStepper()
         let substepTick = 0
-        let fpsFrames = 0
-        let fpsLast = -1
-        let frameMsAcc = 0
-        let frameMsLast = -1
         const camPos = new THREE.Vector3(startX, 3, 8)
         const showDesired = new THREE.Vector3()
         const camLook = new THREE.Vector3()
@@ -1166,16 +1162,6 @@ export default function App() {
         const loop = (now: number) => {
           if (disposed) return
           raf = requestAnimationFrame(loop)
-          fpsFrames++
-          if (fpsLast < 0) fpsLast = now
-          if (frameMsLast < 0) frameMsLast = now
-          frameMsAcc += now - frameMsLast
-          frameMsLast = now
-          if (now - fpsLast >= 500) {
-            fpsFrames = 0
-            frameMsAcc = 0
-            fpsLast = now
-          }
           let dt = (now - last) / 1000
           last = now
           dt = Math.min(dt, CAR_PHYSICS.simulation.maxFrameDt)
@@ -1855,7 +1841,6 @@ export default function App() {
             dt,
             -bp.z,
             car.forwardSpeed,
-            camera,
             startedRef.current && !raceActive,
           )
 

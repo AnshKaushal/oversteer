@@ -683,13 +683,18 @@ them, seen against open sky. It also crosses further down the road
 the frame at the usual distance, so it crosses where the chase camera can
 still hold it.
 
-**Fading.** Two factors multiply. The first is the position along the
-pass, so the aircraft never pops in or out at either end. The second
-follows the **frame**: the aircraft is solid while it is on screen and
-dissolves as it swings out of it. There is deliberately no fade on
-distance — the scene's own fog already does that, and a second fade on
-range made the aircraft go transparent in the middle of the screen while
-it was still large in frame, which read as the plane simply vanishing.
+**No fade.** The aircraft is never made transparent. It is either there
+or it is not, and its materials are opaque so it is drawn in the normal
+pass — a transparent aircraft would be sorted after the clouds and paint
+itself over them.
+
+It flies its line and then keeps going, 400 m past the end of the path,
+which puts it deep enough in the fog that switching it off is not
+visible. Earlier versions faded it in and out, and every version of that
+was wrong in the same way: the aircraft went transparent while it was
+still large in the middle of the screen, which reads as the plane
+simply vanishing rather than flying away. The scene's own fog is what
+makes distance look like distance.
 
 **Shadow.** The aircraft drops a soft patch on the ground, offset along
 the sun (180 m up, 120 m east, 60 m north) and spreading and fading as it
@@ -702,8 +707,14 @@ camera doubled in size and the car's own shadow halved in sharpness.
 road, but a pass that sweeps 400 m either side of the crossing can still
 clip one. `WorldManager.terrainHeightAt` raycasts the hill geometry for
 the terrain height at a point, and `pickCrossing` shifts the crossing
-along the road (forward first) until the sampled path clears the terrain
-by at least 6 m.
+along the road (forward first) until the path is clear.
+
+It is the whole aircraft that has to clear, not just the fuselage: the
+path is checked at the wingtips as well, half a span either side of the
+line, and the clearance is the aircraft's own belly depth below the
+centre line (9 m for the Globemaster, 7 m for the transport, 3 m for the
+Cessna). If every crossing along the road is blocked, there is no pass
+at all — it tries again in a few seconds rather than fly through a hill.
 
 ---
 
