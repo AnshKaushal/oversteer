@@ -3,6 +3,10 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD_CONFIG } from "../constants/world"
+import {
+  type TimeOfDayMode,
+  TIME_OF_DAY_PRESETS,
+} from "../constants/timeOfDay"
 
 export function roadCenterX(s: number): number {
   return Math.sin(s * 0.004) * 60 + Math.sin(s * 0.0013 + 1.7) * 120
@@ -230,6 +234,12 @@ export class WorldManager {
   private propShadows = true
   private readonly SHADOW_FADE_RADIUS = 110
   private shadowFadeMat: THREE.MeshDepthMaterial | null = null
+  private timeOfDay: TimeOfDayMode = "day"
+  private sunLight: THREE.DirectionalLight | null = null
+  private hemiLight: THREE.HemisphereLight | null = null
+  private sunOffset = new THREE.Vector3(120, 180, 60)
+  private sceneRef: THREE.Scene | null = null
+  private starsPoints: THREE.Points | null = null
 
   setPropShadows(on: boolean) {
     if (on === this.propShadows) return
@@ -237,6 +247,63 @@ export class WorldManager {
     for (const pv of this.propVariants) {
       if (pv.category === "grass" || pv.category === "cloud") continue
       pv.im.castShadow = on
+    }
+  }
+
+  getTimeOfDay(): TimeOfDayMode {
+    return this.timeOfDay
+  }
+
+  setTimeOfDay(mode: TimeOfDayMode) {
+    this.timeOfDay = mode
+    const preset = TIME_OF_DAY_PRESETS[mode]
+    if (!preset) return
+
+    this.sunOffset.set(
+      preset.sunPosition.x,
+      preset.sunPosition.y,
+      preset.sunPosition.z,
+    )
+
+    if (this.sunLight) {
+      this.sunLight.color.setHex(preset.sunColor)
+      this.sunLight.intensity = preset.sunIntensity
+    }
+
+    if (this.hemiLight) {
+      this.hemiLight.color.setHex(preset.hemiSkyColor)
+      this.hemiLight.groundColor.setHex(preset.hemiGroundColor)
+      this.hemiLight.intensity = preset.hemiIntensity
+    }
+
+    if (this.sceneRef) {
+      if (this.sceneRef.background instanceof THREE.Color) {
+        this.sceneRef.background.setHex(preset.skyColor)
+      } else {
+        this.sceneRef.background = new THREE.Color(preset.skyColor)
+      }
+
+      if (this.sceneRef.fog instanceof THREE.Fog) {
+        this.sceneRef.fog.color.setHex(preset.fogColor)
+        this.sceneRef.fog.near = preset.fogNear
+        this.sceneRef.fog.far = preset.fogFar
+      }
+    }
+
+    if (this.ground && preset.groundColor) {
+      const gMat = this.ground.material as THREE.MeshStandardMaterial
+      if (gMat && gMat.color) {
+        gMat.color.setHex(preset.groundColor)
+      }
+    }
+
+    if (this.starsPoints) {
+      const isNight = mode === "night"
+      this.starsPoints.visible = isNight
+      const smat = this.starsPoints.material as THREE.PointsMaterial
+      if (smat) {
+        smat.opacity = isNight ? 0.85 : 0
+      }
     }
   }
 
@@ -319,6 +386,7 @@ export class WorldManager {
 
   async init(scene: THREE.Scene, baseUrl: string) {
     const W = WORLD_CONFIG
+    this.sceneRef = scene
     scene.add(this.group)
     scene.fog = new THREE.Fog(
       W.environment.fogColor,
@@ -336,8 +404,38 @@ export class WorldManager {
     sun.shadow.camera.bottom = -80
     sun.shadow.camera.far = 500
     this.group.add(sun)
-    this.group.add(new THREE.HemisphereLight(0xbdd7ff, 0x3d5a2a, 0.9))
+    this.sunLight = sun
+
+    const hemi = new THREE.HemisphereLight(0xbdd7ff, 0x3d5a2a, 0.9)
+    this.group.add(hemi)
+    this.hemiLight = hemi
     ;(this.group as any)._sun = sun
+
+    // Night starry sky dome (single-draw-call, zero FPS impact)
+    const starGeo = new THREE.BufferGeometry()
+    const starCount = 600
+    const starPos = new Float32Array(starCount * 3)
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.random() * (Math.PI / 2.3)
+      const r = 900 + Math.random() * 200
+      starPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta)
+      starPos[i * 3 + 1] = r * Math.cos(phi) + 50
+      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
+    }
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3))
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 2.2,
+      transparent: true,
+      opacity: 0,
+      sizeAttenuation: false,
+      depthWrite: false,
+    })
+    this.starsPoints = new THREE.Points(starGeo, starMat)
+    this.starsPoints.frustumCulled = false
+    this.starsPoints.visible = false
+    this.group.add(this.starsPoints)
 
     const gGeo = new THREE.PlaneGeometry(1200, 1200, 1, 1)
     const gMat = new THREE.MeshStandardMaterial({
@@ -1220,11 +1318,20 @@ export class WorldManager {
     }
     this.ground.position.x = Math.round(carPos.x / 8) * 8
     this.ground.position.z = Math.round(carPos.z / 8) * 8
-    const sun = (this.group as any)._sun as THREE.DirectionalLight | undefined
+    const sun =
+      this.sunLight ??
+      ((this.group as any)._sun as THREE.DirectionalLight | undefined)
     if (sun) {
-      sun.position.set(carPos.x + 120, 180, carPos.z + 60)
+      sun.position.set(
+        carPos.x + this.sunOffset.x,
+        this.sunOffset.y,
+        carPos.z + this.sunOffset.z,
+      )
       sun.target.position.set(carPos.x, 0, carPos.z)
       sun.target.updateMatrixWorld()
+    }
+    if (this.starsPoints && this.starsPoints.visible) {
+      this.starsPoints.position.set(carPos.x, 0, carPos.z)
     }
     const carSeg = Math.floor(carS / this.segLen)
     this.ensureSegs(

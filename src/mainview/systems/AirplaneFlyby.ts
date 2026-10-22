@@ -1,6 +1,7 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { roadCenterX, roadYaw } from "./WorldManager"
+import { type TimeOfDayMode, isLowLight } from "../constants/timeOfDay"
 
 /**
  * Set dressing: a twin-turboprop transport that periodically crosses the
@@ -158,6 +159,14 @@ export interface LoadedAircraft {
    * the aircraft's centre line, so its belly hangs this far below.
    */
   clearance: number
+  /** Container for aircraft navigation and strobe lights. */
+  lightsRoot: THREE.Group
+  /** Flashing wingtip strobes. */
+  strobes: THREE.Mesh[]
+  /** Flashing anti-collision beacons. */
+  beacons: THREE.Mesh[]
+  lightGeoms: THREE.BufferGeometry[]
+  lightMats: THREE.Material[]
 }
 
 /** Reports the height of the ground at a world position. */
@@ -814,6 +823,132 @@ function makeShadowTexture(): THREE.CanvasTexture {
   return t
 }
 
+/**
+ * Builds standard FAA / ICAO aircraft navigation and strobe lights:
+ * - Port (left) wingtip: Steady Red
+ * - Starboard (right) wingtip: Steady Green
+ * - Tail cone: Steady White
+ * - Wingtip strobes: High-intensity double-flashing White
+ * - Vertical stabilizer & belly beacons: Flashing Red
+ */
+function buildAircraftLights(
+  model: THREE.Object3D,
+  span: number,
+): {
+  lightsRoot: THREE.Group
+  strobes: THREE.Mesh[]
+  beacons: THREE.Mesh[]
+  geoms: THREE.BufferGeometry[]
+  mats: THREE.Material[]
+} {
+  const lightsRoot = new THREE.Group()
+  lightsRoot.name = "aircraftLights"
+  const strobes: THREE.Mesh[] = []
+  const beacons: THREE.Mesh[] = []
+  const geoms: THREE.BufferGeometry[] = []
+  const mats: THREE.Material[] = []
+
+  let minX = Infinity
+  let maxX = -Infinity
+  let minZ = Infinity
+  let maxY = -Infinity
+  let minY = Infinity
+  const leftTip = new THREE.Vector3()
+  const rightTip = new THREE.Vector3()
+  const tailTip = new THREE.Vector3()
+  const topFin = new THREE.Vector3()
+  const tempV = new THREE.Vector3()
+
+  model.updateMatrixWorld(true)
+  model.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || !mesh.geometry) return
+    const pos = mesh.geometry.attributes.position
+    if (!pos) return
+    const step = pos.count > 5000 ? Math.ceil(pos.count / 2000) : 1
+    for (let i = 0; i < pos.count; i += step) {
+      tempV.fromBufferAttribute(pos, i)
+      tempV.applyMatrix4(mesh.matrixWorld)
+      if (tempV.x < minX) {
+        minX = tempV.x
+        leftTip.copy(tempV)
+      }
+      if (tempV.x > maxX) {
+        maxX = tempV.x
+        rightTip.copy(tempV)
+      }
+      if (tempV.z < minZ) {
+        minZ = tempV.z
+        tailTip.copy(tempV)
+      }
+      if (tempV.y > maxY) {
+        maxY = tempV.y
+        topFin.copy(tempV)
+      }
+      if (tempV.y < minY) {
+        minY = tempV.y
+      }
+    }
+  })
+
+  // Dimensions scaled so lights remain visible and crisp across flight altitudes
+  const navRadius = Math.max(0.35, span * 0.016)
+  const strobeRadius = navRadius * 1.35
+  const beaconRadius = navRadius * 1.45
+
+  const navGeo = new THREE.SphereGeometry(navRadius, 8, 8)
+  const strobeGeo = new THREE.SphereGeometry(strobeRadius, 8, 8)
+  const beaconGeo = new THREE.SphereGeometry(beaconRadius, 8, 8)
+  geoms.push(navGeo, strobeGeo, beaconGeo)
+
+  // toneMapped: false ensures maximum emissive output in HDR tone mapping
+  const redMat = new THREE.MeshBasicMaterial({ color: 0xff1818, toneMapped: false })
+  const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, toneMapped: false })
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
+  const strobeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff2800, toneMapped: false })
+  mats.push(redMat, greenMat, whiteMat, strobeMat, beaconMat)
+
+  // 1. Port wingtip steady Red
+  const portNav = new THREE.Mesh(navGeo, redMat)
+  portNav.position.copy(leftTip)
+  lightsRoot.add(portNav)
+
+  // 2. Starboard wingtip steady Green
+  const stbdNav = new THREE.Mesh(navGeo, greenMat)
+  stbdNav.position.copy(rightTip)
+  lightsRoot.add(stbdNav)
+
+  // 3. Tail cone steady White
+  const tailNav = new THREE.Mesh(navGeo, whiteMat)
+  tailNav.position.copy(tailTip)
+  lightsRoot.add(tailNav)
+
+  // 4. Wingtip flashing White strobes
+  const portStrobe = new THREE.Mesh(strobeGeo, strobeMat)
+  portStrobe.position.set(leftTip.x * 1.01, leftTip.y, leftTip.z - 0.1)
+  lightsRoot.add(portStrobe)
+  strobes.push(portStrobe)
+
+  const stbdStrobe = new THREE.Mesh(strobeGeo, strobeMat)
+  stbdStrobe.position.set(rightTip.x * 1.01, rightTip.y, rightTip.z - 0.1)
+  lightsRoot.add(stbdStrobe)
+  strobes.push(stbdStrobe)
+
+  // 5. Flashing Red beacons (top fin & fuselage belly)
+  const topBeacon = new THREE.Mesh(beaconGeo, beaconMat)
+  topBeacon.position.copy(topFin)
+  lightsRoot.add(topBeacon)
+  beacons.push(topBeacon)
+
+  const bellyBeacon = new THREE.Mesh(beaconGeo, beaconMat)
+  bellyBeacon.position.set(0, minY + 0.15, (leftTip.z + tailTip.z) * 0.45)
+  lightsRoot.add(bellyBeacon)
+  beacons.push(bellyBeacon)
+
+  return { lightsRoot, strobes, beacons, geoms, mats }
+}
+
 export class AirplaneFlyby {
   /** Reports the height of the ground, used to keep the path off hills. */
   private terrainAt: TerrainAt
@@ -830,6 +965,7 @@ export class AirplaneFlyby {
   private nextIn = 0
   private ready = false
   private disposed = false
+  private isLowLight = false
 
   constructor(terrainAt: TerrainAt) {
     this.terrainAt = terrainAt
@@ -875,6 +1011,17 @@ export class AirplaneFlyby {
         root.add(body)
         root.visible = false
         scene.add(root)
+
+        const {
+          lightsRoot,
+          strobes,
+          beacons,
+          geoms: lightGeoms,
+          mats: lightMats,
+        } = buildAircraftLights(model, span)
+        lightsRoot.visible = this.isLowLight
+        body.add(lightsRoot)
+
         this.aircraft.push({
           spec,
           root,
@@ -885,6 +1032,11 @@ export class AirplaneFlyby {
           // The belly of the aircraft hangs half its height below the
           // centre line, plus a little for the wingtips.
           clearance: height / 2 + 1,
+          lightsRoot,
+          strobes,
+          beacons,
+          lightGeoms,
+          lightMats,
         })
       } catch (e) {
         console.warn(`${spec.file} failed to load, no flyby for it`, e)
@@ -995,6 +1147,23 @@ export class AirplaneFlyby {
       )
     }
 
+    if (this.isLowLight) {
+      // Wingtip strobes: distinctive FAA double-flash every 1.0s
+      const strobeCycle = f.age % 1.0
+      const strobeActive =
+        strobeCycle < 0.08 || (strobeCycle > 0.16 && strobeCycle < 0.24)
+      for (let i = 0; i < ac.strobes.length; i++) {
+        ac.strobes[i].visible = strobeActive
+      }
+
+      // Red beacons: pulse every 1.2s
+      const beaconCycle = (f.age + 0.3) % 1.2
+      const beaconActive = beaconCycle < 0.14
+      for (let i = 0; i < ac.beacons.length; i++) {
+        ac.beacons[i].visible = beaconActive
+      }
+    }
+
     if (f.traveled >= f.path.length + EXIT_LEN) this.endFlight()
   }
 
@@ -1085,6 +1254,13 @@ export class AirplaneFlyby {
     this.nextIn = MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP)
   }
 
+  setTimeOfDay(mode: TimeOfDayMode) {
+    this.isLowLight = isLowLight(mode)
+    for (const ac of this.aircraft) {
+      ac.lightsRoot.visible = this.isLowLight
+    }
+  }
+
   dispose() {
     this.disposed = true
     for (const ac of this.aircraft) {
@@ -1092,6 +1268,13 @@ export class AirplaneFlyby {
       for (const m of ac.mats) m.dispose()
       ac.mats.length = 0
       ac.props.length = 0
+      ac.lightsRoot.removeFromParent()
+      for (const g of ac.lightGeoms) g.dispose()
+      for (const m of ac.lightMats) m.dispose()
+      ac.lightGeoms.length = 0
+      ac.lightMats.length = 0
+      ac.strobes.length = 0
+      ac.beacons.length = 0
     }
     this.aircraft.length = 0
     this.shadowRoot.removeFromParent()

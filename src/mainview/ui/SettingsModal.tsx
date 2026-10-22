@@ -13,7 +13,13 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Sun,
 } from "lucide-react"
+import {
+  type TimeOfDayMode,
+  TIME_OF_DAY_MODES,
+  TIME_OF_DAY_LABELS,
+} from "../constants/timeOfDay"
 import {
   type AppSettings,
   type ResolutionId,
@@ -172,6 +178,13 @@ export function SettingsModal({
     onUpdateSettings({
       ...settings,
       shadows: !settings.shadows,
+    })
+  }
+
+  const handleSelectTimeOfDay = (mode: TimeOfDayMode) => {
+    onUpdateSettings({
+      ...settings,
+      timeOfDay: mode,
     })
   }
 
@@ -432,6 +445,41 @@ export function SettingsModal({
                 }`}
               />
             </button>
+          </div>
+
+          {/* Time of Day */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Sun size={14} className="text-[#51a7d5]" />
+                Time of Day
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Select atmosphere (headlights turn on automatically at evening & night)
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {TIME_OF_DAY_MODES.map((mode) => {
+                const active = (settings.timeOfDay ?? "day") === mode
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleSelectTimeOfDay(mode)}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    <span>{TIME_OF_DAY_LABELS[mode]}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Upscaling Tech Info Accordion (MetalFX / DLSS / FSR) */}

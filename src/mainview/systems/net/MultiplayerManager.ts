@@ -204,6 +204,12 @@ export class MultiplayerManager {
     this.activeRapier = null
   }
 
+  setHeadlights(on: boolean) {
+    for (const car of this.remoteCars.values()) {
+      car.setHeadlights(on)
+    }
+  }
+
   join(
     target: string,
     mode: MultiplayerMode = "p2p",

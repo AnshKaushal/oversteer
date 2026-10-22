@@ -13,6 +13,11 @@ import { PaintPicker } from "./PaintPicker"
 import { EASE, Screen, usePop } from "./anim"
 import { roadGapM } from "../systems/WorldManager"
 import {
+  type TimeOfDayMode,
+  TIME_OF_DAY_MODES,
+  TIME_OF_DAY_LABELS,
+} from "../constants/timeOfDay"
+import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
@@ -55,6 +60,8 @@ export function RaceMenu({
   onStartRace,
   onOpenMultiplayer,
   onOpenSettings,
+  timeOfDay,
+  onTimeOfDay,
 }: {
   open: boolean
   rivals: number
@@ -75,6 +82,8 @@ export function RaceMenu({
   onStartRace: () => void
   onOpenMultiplayer?: () => void
   onOpenSettings?: () => void
+  timeOfDay?: TimeOfDayMode
+  onTimeOfDay?: (tod: TimeOfDayMode) => void
 }) {
   const idx = Math.max(
     0,
@@ -270,6 +279,25 @@ export function RaceMenu({
               {traffic === "off"
                 ? "Empty roads when free roaming."
                 : `${trafficCountFor(traffic)} AI cruisers share the road in free roam.`}
+            </div>
+
+            <div className="mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
+              TIME OF DAY
+            </div>
+            <div className="mt-2 flex gap-1.5">
+              {TIME_OF_DAY_MODES.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => onTimeOfDay?.(m)}
+                  className={`flex-1 border border-[#51a7d5] py-2 text-[13px] font-semibold transition ${
+                    (timeOfDay ?? "day") === m
+                      ? "bg-white text-[#0b0e14]"
+                      : "bg-[#51a7d5]/15 text-gray-300 hover:bg-[#51a7d5]/25"
+                  }`}
+                >
+                  {TIME_OF_DAY_LABELS[m]}
+                </button>
+              ))}
             </div>
           </div>
 

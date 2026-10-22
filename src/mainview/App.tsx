@@ -22,6 +22,11 @@ import {
   roadDirYaw,
   roadYaw,
 } from "./systems/WorldManager"
+import {
+  type TimeOfDayMode,
+  TIME_OF_DAY_MODES,
+  isLowLight,
+} from "./constants/timeOfDay"
 import { CarVisual } from "./systems/CarVisual"
 import { AirplaneFlyby } from "./systems/AirplaneFlyby"
 import { TireSmoke } from "./systems/TireSmoke"
@@ -140,6 +145,38 @@ export default function App() {
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDayMode>(
+    () => settings.timeOfDay ?? "day",
+  )
+  const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
+  timeOfDayRef.current = timeOfDay
+  const wmRef = useRef<WorldManager | null>(null)
+  const flybyRef = useRef<AirplaneFlyby | null>(null)
+  const playerVisualRef = useRef<CarVisual | null>(null)
+  const activeRivalsRef = useRef<{ visual: CarVisual }[]>([])
+  const activeTrafficRef = useRef<{ visual: CarVisual }[]>([])
+
+  const applyTimeOfDay = (mode: TimeOfDayMode) => {
+    setTimeOfDay(mode)
+    timeOfDayRef.current = mode
+    setSettings((prev) => {
+      const next = { ...prev, timeOfDay: mode }
+      saveSettings(next)
+      return next
+    })
+    wmRef.current?.setTimeOfDay(mode)
+    flybyRef.current?.setTimeOfDay(mode)
+    const lowLight = isLowLight(mode)
+    playerVisualRef.current?.setHeadlights(lowLight)
+    for (const r of activeRivalsRef.current) {
+      r.visual.setHeadlights(lowLight)
+    }
+    for (const t of activeTrafficRef.current) {
+      t.visual.setHeadlights(lowLight)
+    }
+    multiplayerRef.current?.setHeadlights(lowLight)
+  }
+
   const handleUpdateSettings = (next: AppSettings) => {
     setSettings(next)
     saveSettings(next)
@@ -150,6 +187,9 @@ export default function App() {
         mountRef.current,
         next,
       )
+    }
+    if (next.timeOfDay && next.timeOfDay !== timeOfDayRef.current) {
+      applyTimeOfDay(next.timeOfDay)
     }
   }
 
@@ -529,9 +569,11 @@ export default function App() {
         const world = createWorld()
 
         const wm = new WorldManager()
+        wmRef.current = wm
         const base = import.meta.env.BASE_URL || "./"
         const baseUrl = base.endsWith("/") ? base : base + "/"
         await wm.init(scene, baseUrl)
+        wm.setTimeOfDay(timeOfDayRef.current)
         if (disposed) {
           try {
             world.free()
@@ -541,6 +583,8 @@ export default function App() {
         const groundBody = wm.createPhysicsGround(R, world)
 
         const flyby = new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
+        flybyRef.current = flyby
+        flyby.setTimeOfDay(timeOfDayRef.current)
         await flyby.init(scene, baseUrl)
 
         const net = multiplayerRef.current
@@ -741,6 +785,7 @@ export default function App() {
           } catch (e) {
             console.warn("rival model failed", e)
           }
+          vis.setHeadlights(isLowLight(timeOfDayRef.current))
           scene.add(vis.group)
           rivals.push({
             car: rc,
@@ -759,6 +804,7 @@ export default function App() {
             hi: true,
           })
         }
+        activeRivalsRef.current = rivals
         const trafficCars: Rival[] = []
         const trafficTarget =
           startedRef.current && !raceActiveInit
@@ -833,6 +879,7 @@ export default function App() {
           } catch (e) {
             console.warn("traffic model failed", e)
           }
+          tvis.setHeadlights(isLowLight(timeOfDayRef.current))
           scene.add(tvis.group)
           trafficCars.push({
             car: tc,
@@ -851,6 +898,7 @@ export default function App() {
             hi: true,
           })
         }
+        activeTrafficRef.current = trafficCars
         if (disposed) {
           try {
             world.free()
@@ -891,6 +939,7 @@ export default function App() {
         ]
 
         let visual = new CarVisual()
+        playerVisualRef.current = visual
         const playerPaint = (id: string): number | undefined => {
           if (net?.roomId) return net.localColor
           return paintFor(id)
@@ -904,6 +953,7 @@ export default function App() {
             wheelRadius: playerDef.physics.wheels.radius,
             paintMatch: playerDef.paintMatch,
             paintTexture: playerDef.paintTexture,
+            isPlayer: true,
           })
         } catch (e) {
           console.warn(
@@ -911,6 +961,7 @@ export default function App() {
             e,
           )
         }
+        visual.setHeadlights(isLowLight(timeOfDayRef.current))
         if (disposed) {
           try {
             world.free()
@@ -935,11 +986,14 @@ export default function App() {
                   wheelRadius: def.physics.wheels.radius,
                   paintMatch: def.paintMatch,
                   paintTexture: def.paintTexture,
+                  isPlayer: true,
                 })
                 .then(() => {
                   if (my !== showToken || disposed || startedRef.current) return
                   scene.remove(visual.group)
                   visual = next
+                  playerVisualRef.current = next
+                  next.setHeadlights(isLowLight(timeOfDayRef.current))
                   scene.add(visual.group)
                 })
                 .catch((e) => {
@@ -1175,6 +1229,18 @@ export default function App() {
           }
           if (pausedRef.current && inp.startPressed) resumeFnRef.current()
           if (inp.toggleCameraPressed) chaseFar = !chaseFar
+          if (inp.toggleTimeOfDayPressed) {
+            const cur = timeOfDayRef.current
+            const nextIdx =
+              (TIME_OF_DAY_MODES.indexOf(cur) + 1) % TIME_OF_DAY_MODES.length
+            applyTimeOfDay(TIME_OF_DAY_MODES[nextIdx])
+          }
+          if (inp.toggleHeadlightsPressed) {
+            const vis = playerVisualRef.current
+            if (vis) {
+              vis.setHeadlights(!vis.hasHeadlights())
+            }
+          }
           const doReset = inp.resetPressed || resetRef.current
           const fellOut = body.translation().y < -3
           const bq0 = body.rotation()
@@ -1864,6 +1930,7 @@ export default function App() {
           document.removeEventListener("pointerlockerror", onForceHide)
           document.removeEventListener("pointerlockchange", onLockChange)
           input.detach()
+          flybyRef.current = null
           try {
             flyby.dispose()
           } catch (e) {
@@ -2032,6 +2099,8 @@ export default function App() {
           onStartRace={startRace}
           onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
           onOpenSettings={() => setShowSettings(true)}
+          timeOfDay={timeOfDay}
+          onTimeOfDay={applyTimeOfDay}
         />
       )}
       <SettingsModal

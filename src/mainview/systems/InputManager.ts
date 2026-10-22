@@ -24,6 +24,8 @@ export interface DriveInput {
   cruiseSetPressed: boolean
   cruiseUpPressed: boolean
   cruiseTogglePressed: boolean
+  toggleTimeOfDayPressed: boolean
+  toggleHeadlightsPressed: boolean
 }
 
 export class InputManager {
@@ -75,6 +77,8 @@ export class InputManager {
       c === "KeyO" ||
       c === "KeyR" ||
       c === "KeyC" ||
+      c === "KeyT" ||
+      c === "KeyH" ||
       c === "BracketLeft" ||
       c === "BracketRight" ||
       c === "Semicolon" ||
@@ -175,6 +179,8 @@ export class InputManager {
       cruiseSetPressed: edge("BracketLeft") || ccRepeatEdge("BracketLeft"),
       cruiseUpPressed: edge("BracketRight") || ccRepeatEdge("BracketRight"),
       cruiseTogglePressed: edge("Semicolon"),
+      toggleTimeOfDayPressed: edge("KeyT"),
+      toggleHeadlightsPressed: edge("KeyH"),
     }
 
     this.edgeQueue.clear()

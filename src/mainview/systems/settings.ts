@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import type { TimeOfDayMode } from "../constants/timeOfDay"
 
 export type ResolutionId =
   | "native"
@@ -81,12 +82,14 @@ export interface AppSettings {
   resolution: ResolutionId
   renderScale: number // 50 to 100
   shadows: boolean
+  timeOfDay?: TimeOfDayMode
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   resolution: "1080p",
   renderScale: 100,
   shadows: true,
+  timeOfDay: "day",
 }
 
 const SETTINGS_KEY = "oversteer_settings"

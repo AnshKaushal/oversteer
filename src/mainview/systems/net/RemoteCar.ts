@@ -286,6 +286,10 @@ export class RemoteCar {
     }
   }
 
+  setHeadlights(on: boolean) {
+    this.visual.setHeadlights(on)
+  }
+
   drive(dt: number) {
     const b = this.colliderBody
     if (!b || !this.hasReceivedPacket || dt <= 0) return

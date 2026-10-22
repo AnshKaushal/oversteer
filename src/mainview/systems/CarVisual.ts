@@ -23,6 +23,7 @@ export interface CarVisualOptions {
   wheelRadius?: number
   paintMatch?: string[]
   paintTexture?: PaintTextureRule
+  isPlayer?: boolean
 }
 
 export const MIN_PIVOT_FRAC = 0.025
@@ -94,6 +95,79 @@ export function pivotMatches(
   return new RegExp(pivots?.pattern ?? DEFAULT_PIVOT_PATTERN, "i").test(name)
 }
 
+let sharedBeamGeo: THREE.PlaneGeometry | null = null
+let sharedBeamMat: THREE.MeshBasicMaterial | null = null
+
+function getSharedBeamMesh(): THREE.Mesh {
+  if (!sharedBeamGeo) {
+    sharedBeamGeo = new THREE.PlaneGeometry(4.2, 22)
+    sharedBeamGeo.rotateX(-Math.PI / 2)
+  }
+  if (!sharedBeamMat) {
+    const canvas = document.createElement("canvas")
+    canvas.width = 256
+    canvas.height = 512
+    const ctx = canvas.getContext("2d")!
+    const imgData = ctx.createImageData(256, 512)
+    const data = imgData.data
+
+    for (let py = 0; py < 512; py++) {
+      // v runs from 0 (bumper, py=511) to 1 (far distance, py=0)
+      const v = (511 - py) / 511
+
+      let longAtten = 0
+      if (v < 0.05) {
+        longAtten = v / 0.05
+      } else {
+        longAtten = Math.pow(1 - (v - 0.05) / 0.95, 1.8)
+      }
+
+      const leftCenter = 0.38 - v * 0.12
+      const rightCenter = 0.62 + v * 0.12
+      const beamRadius = 0.18 + v * 0.22
+
+      for (let px = 0; px < 256; px++) {
+        const u = px / 255
+        const dLeft = Math.abs(u - leftCenter) / beamRadius
+        const dRight = Math.abs(u - rightCenter) / beamRadius
+
+        const attenLeft = dLeft < 1 ? Math.cos(dLeft * Math.PI * 0.5) : 0
+        const attenRight = dRight < 1 ? Math.cos(dRight * Math.PI * 0.5) : 0
+
+        const latAtten = Math.min(
+          1,
+          Math.pow(attenLeft, 1.5) + Math.pow(attenRight, 1.5),
+        )
+        const brightness = Math.max(0, Math.min(1, longAtten * latAtten))
+
+        const idx = (py * 256 + px) * 4
+        data[idx] = Math.round(255 * brightness)
+        data[idx + 1] = Math.round(248 * brightness)
+        data[idx + 2] = Math.round(225 * brightness)
+        data[idx + 3] = Math.round(255 * brightness)
+      }
+    }
+    ctx.putImageData(imgData, 0, 0)
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.wrapS = THREE.ClampToEdgeWrapping
+    tex.wrapT = THREE.ClampToEdgeWrapping
+    tex.needsUpdate = true
+
+    sharedBeamMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      toneMapped: false,
+      opacity: 0.82,
+    })
+  }
+
+  return new THREE.Mesh(sharedBeamGeo, sharedBeamMat)
+}
+
 export class CarVisual {
   group = new THREE.Group()
   wheels: {
@@ -113,6 +187,14 @@ export class CarVisual {
   private hiMerged: THREE.Object3D[] = []
   private brakeLights: BrakeLight[] = []
   private brakeLevel = 0
+  private headlightsOn = false
+  private headlightsWanted = false
+  private headlightGroup: THREE.Group | null = null
+  private headlightMeshes: THREE.Object3D[] = []
+  private headlightSpots: THREE.SpotLight[] = []
+  private headlightMats: { mat: THREE.MeshStandardMaterial; origIntensity: number }[] = []
+  private isPlayerCar = false
+  private headlightsConfigured = false
 
   async load(
     baseUrl: string,
@@ -257,6 +339,10 @@ export class CarVisual {
         ((b.front ? 0 : 2) + (b.left ? 0 : 1)),
     )
     this.mergeStatic()
+    this.setupHeadlights(opts?.isPlayer ?? false)
+    if (this.headlightsWanted) {
+      this.setHeadlights(this.headlightsWanted)
+    }
   }
 
   private buildImposter(
@@ -404,6 +490,289 @@ export class CarVisual {
     if (want === this.brakeLevel) return
     this.brakeLevel = want
     for (const l of this.brakeLights) applyBrakeHeat(l, want)
+  }
+
+  setupHeadlights(isPlayer: boolean = false) {
+    if (this.headlightsConfigured) {
+      if (isPlayer && !this.isPlayerCar) {
+        this.isPlayerCar = true
+        if (this.headlightGroup) {
+          const existingBeam = this.headlightGroup.getObjectByName("groundBeam")
+          if (existingBeam) {
+            this.headlightGroup.remove(existingBeam)
+          }
+        }
+        if (this.headlightGroup && this.headlightSpots.length === 0) {
+          const box = new THREE.Box3().setFromObject(this.hiBody ?? this.group)
+          const size = box.getSize(new THREE.Vector3())
+          const halfLen = size.z > 0 ? size.z / 2 : 2.35
+          const halfWidth = size.x > 0 ? size.x / 2 : 0.92
+          const headlightSpacing = Math.max(0.55, Math.min(0.78, halfWidth * 0.70))
+          const headlightY = Math.max(0.55, Math.min(0.72, size.y * 0.48))
+          const frontZ = -halfLen * 0.90
+
+          const leftSpot = new THREE.SpotLight(
+            0xfffaee,
+            this.headlightsOn ? 28 : 0,
+            65,
+            Math.PI / 4.2,
+            0.85,
+            1.1,
+          )
+          leftSpot.position.set(-headlightSpacing, headlightY, frontZ)
+          leftSpot.castShadow = false
+          leftSpot.target.position.set(-headlightSpacing * 0.75, 0, frontZ - 18)
+          leftSpot.visible = this.headlightsOn
+
+          const rightSpot = new THREE.SpotLight(
+            0xfffaee,
+            this.headlightsOn ? 28 : 0,
+            65,
+            Math.PI / 4.2,
+            0.85,
+            1.1,
+          )
+          rightSpot.position.set(headlightSpacing, headlightY, frontZ)
+          rightSpot.castShadow = false
+          rightSpot.target.position.set(headlightSpacing * 0.75, 0, frontZ - 18)
+          rightSpot.visible = this.headlightsOn
+
+          this.headlightGroup.add(leftSpot.target, rightSpot.target)
+          this.headlightGroup.add(leftSpot, rightSpot)
+          this.headlightSpots = [leftSpot, rightSpot]
+        }
+      }
+      return
+    }
+    this.headlightsConfigured = true
+    this.isPlayerCar = isPlayer
+
+    const box = new THREE.Box3().setFromObject(this.hiBody ?? this.group)
+    const size = box.getSize(new THREE.Vector3())
+    const halfLen = size.z > 0 ? size.z / 2 : 2.35
+    const halfWidth = size.x > 0 ? size.x / 2 : 0.92
+
+    let headlightSpacing = Math.max(0.55, Math.min(0.78, halfWidth * 0.70))
+    let headlightY = Math.max(0.55, Math.min(0.72, size.y * 0.48))
+    let frontZ = -halfLen * 0.90
+
+    if (this.hiBody) {
+      const foundY: number[] = []
+      const foundZ: number[] = []
+      const foundX: number[] = []
+      this.hiBody.traverse((o: any) => {
+        if (!o.isMesh) return
+        const name = (o.name + " " + (o.material?.name || "")).toLowerCase()
+        if (
+          name.includes("headlight") ||
+          name.includes("head_light") ||
+          name.includes("front_light") ||
+          name.includes("material.019")
+        ) {
+          const mbox = new THREE.Box3().setFromObject(o)
+          const c = mbox.getCenter(new THREE.Vector3())
+          this.group.worldToLocal(c)
+          if (c.z < -0.5) {
+            foundY.push(c.y)
+            foundZ.push(c.z)
+            if (Math.abs(c.x) > 0.3) foundX.push(Math.abs(c.x))
+          }
+        }
+      })
+      if (foundY.length > 0) {
+        headlightY = foundY.reduce((a, b) => a + b, 0) / foundY.length
+        frontZ = Math.min(...foundZ)
+      }
+      if (foundX.length > 0) {
+        headlightSpacing = foundX.reduce((a, b) => a + b, 0) / foundX.length
+      }
+    }
+
+    const group = new THREE.Group()
+    this.headlightGroup = group
+
+    // Scan for actual headlight meshes / materials on the car model
+    if (this.hiBody) {
+      this.hiBody.traverse((o: any) => {
+        if (!o.isMesh || !o.material) return
+        const mats = Array.isArray(o.material) ? o.material : [o.material]
+        for (const m of mats) {
+          const std = m as THREE.MeshStandardMaterial
+          if (!std || !std.isMeshStandardMaterial) continue
+
+          // NEVER illuminate car body paint or materials in tintedMats
+          if (this.tintedMats.includes(std)) continue
+
+          const matName = (std.name || "").toLowerCase()
+          const meshName = (o.name || "").toLowerCase()
+
+          // Exclude body panels, chassis, interior, wheels, calipers, glass
+          const isExcludedMat =
+            matName.includes("paint") ||
+            matName.includes("body") ||
+            matName.includes("chassis") ||
+            matName.includes("caliper") ||
+            matName.includes("tire") ||
+            matName.includes("wheel") ||
+            matName.includes("rim") ||
+            matName.includes("interior") ||
+            matName.includes("plastic") ||
+            matName.includes("carbon") ||
+            matName.includes("bottom") ||
+            matName.includes("licenseplate") ||
+            matName.includes("badge") ||
+            matName.includes("logo")
+          if (isExcludedMat) continue
+
+          const isExcludedMesh =
+            meshName.includes("body") ||
+            meshName.includes("carbody") ||
+            meshName.includes("chassis") ||
+            meshName.includes("panel") ||
+            meshName.includes("bumper") ||
+            meshName.includes("hood") ||
+            meshName.includes("trunk") ||
+            meshName.includes("door") ||
+            meshName.includes("caliper") ||
+            meshName.includes("tire") ||
+            meshName.includes("wheel") ||
+            meshName.includes("rim") ||
+            meshName.includes("window") ||
+            meshName.includes("windshield") ||
+            meshName.includes("mirror") ||
+            meshName.includes("interior") ||
+            meshName.includes("steering") ||
+            meshName.includes("bottom") ||
+            meshName.includes("suspension")
+          if (isExcludedMesh) continue
+
+          // Exclude red taillights and brakelights
+          const isRed =
+            (std.emissive &&
+              std.emissive.r > 0.12 &&
+              std.emissive.r > std.emissive.g * 1.6 &&
+              std.emissive.r > std.emissive.b * 1.6) ||
+            matName.includes("rear") ||
+            matName.includes("tail") ||
+            matName.includes("brake") ||
+            meshName.includes("rear") ||
+            meshName.includes("tail") ||
+            meshName.includes("brake")
+          if (isRed) continue
+
+          const isHeadlightName =
+            matName.includes("headlight") ||
+            matName.includes("front_light") ||
+            matName.includes("frontlight") ||
+            matName.includes("light_d") ||
+            matName === "material.019" ||
+            meshName.includes("headlight") ||
+            meshName.includes("front_light") ||
+            meshName.includes("frontlight")
+
+          const hasNativeWhiteEmissive =
+            std.emissive &&
+            std.emissive.r + std.emissive.g + std.emissive.b > 0.5 &&
+            Math.abs(std.emissive.r - std.emissive.g) < 0.2 &&
+            Math.abs(std.emissive.r - std.emissive.b) < 0.2
+
+          if (isHeadlightName || hasNativeWhiteEmissive) {
+            // Clone material on the specific mesh to isolate it from non-light meshes sharing this material
+            let targetMat = std
+            if (!o.userData.__headlightCloned) {
+              targetMat = std.clone()
+              if (Array.isArray(o.material)) {
+                o.material = o.material.map((mat: any) =>
+                  mat === std ? targetMat : mat,
+                )
+              } else {
+                o.material = targetMat
+              }
+              o.userData.__headlightCloned = true
+            }
+
+            if (!this.headlightMats.some((h) => h.mat === targetMat)) {
+              if (
+                !targetMat.emissive ||
+                (targetMat.emissive.r === 0 &&
+                  targetMat.emissive.g === 0 &&
+                  targetMat.emissive.b === 0)
+              ) {
+                targetMat.emissive = new THREE.Color(0xfffaea)
+              }
+              this.headlightMats.push({
+                mat: targetMat,
+                origIntensity: targetMat.emissiveIntensity ?? 1,
+              })
+            }
+          }
+        }
+      })
+    }
+
+    // Ground light beam throw mesh for NPC cars ONLY
+    // Projects a soft dual-beam pool on the road in front of the car with 0 dynamic lights and 0 FPS drop
+    if (!isPlayer) {
+      const groundBeam = getSharedBeamMesh()
+      groundBeam.name = "groundBeam"
+      groundBeam.position.set(0, 0.04, frontZ - 11)
+      group.add(groundBeam)
+    }
+
+    // ONLY the player car gets real-time dynamic SpotLights for 3D obstacles ahead
+    if (isPlayer) {
+      const leftSpot = new THREE.SpotLight(
+        0xfffaee,
+        this.headlightsOn ? 28 : 0,
+        65,
+        Math.PI / 4.2,
+        0.85,
+        1.1,
+      )
+      leftSpot.position.set(-headlightSpacing, headlightY, frontZ)
+      leftSpot.castShadow = false
+      leftSpot.target.position.set(-headlightSpacing * 0.75, 0, frontZ - 18)
+      leftSpot.visible = this.headlightsOn
+
+      const rightSpot = new THREE.SpotLight(
+        0xfffaee,
+        this.headlightsOn ? 28 : 0,
+        65,
+        Math.PI / 4.2,
+        0.85,
+        1.1,
+      )
+      rightSpot.position.set(headlightSpacing, headlightY, frontZ)
+      rightSpot.castShadow = false
+      rightSpot.target.position.set(headlightSpacing * 0.75, 0, frontZ - 18)
+      rightSpot.visible = this.headlightsOn
+
+      group.add(leftSpot.target, rightSpot.target)
+      group.add(leftSpot, rightSpot)
+      this.headlightSpots = [leftSpot, rightSpot]
+    }
+
+    group.visible = this.headlightsOn
+    this.group.add(group)
+  }
+
+  setHeadlights(on: boolean) {
+    this.headlightsWanted = on
+    this.headlightsOn = on
+    if (this.headlightGroup) {
+      this.headlightGroup.visible = on
+    }
+    for (const spot of this.headlightSpots) {
+      spot.visible = on
+      spot.intensity = on ? (spot.distance < 30 ? 64 : 72) : 0
+    }
+    for (const h of this.headlightMats) {
+      h.mat.emissiveIntensity = on ? Math.max(h.origIntensity * 4, 8.0) : 0.0
+    }
+  }
+
+  hasHeadlights(): boolean {
+    return this.headlightsOn
   }
 
   setCastShadow(on: boolean) {
