@@ -823,6 +823,31 @@ function makeShadowTexture(): THREE.CanvasTexture {
   return t
 }
 
+let sharedGlowTexture: THREE.CanvasTexture | null = null
+
+function getAirplaneLightGlowTexture(): THREE.CanvasTexture {
+  if (sharedGlowTexture) return sharedGlowTexture
+
+  const canvas = document.createElement("canvas")
+  canvas.width = 128
+  canvas.height = 128
+  const ctx = canvas.getContext("2d")!
+
+  const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+  grad.addColorStop(0, "rgba(255, 255, 255, 1.0)")
+  grad.addColorStop(0.18, "rgba(255, 255, 255, 0.95)")
+  grad.addColorStop(0.45, "rgba(255, 255, 255, 0.45)")
+  grad.addColorStop(0.75, "rgba(255, 255, 255, 0.12)")
+  grad.addColorStop(1, "rgba(255, 255, 255, 0.0)")
+
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, 128, 128)
+
+  sharedGlowTexture = new THREE.CanvasTexture(canvas)
+  sharedGlowTexture.needsUpdate = true
+  return sharedGlowTexture
+}
+
 /**
  * Builds standard FAA / ICAO aircraft navigation and strobe lights:
  * - Port (left) wingtip: Steady Red
@@ -830,6 +855,9 @@ function makeShadowTexture(): THREE.CanvasTexture {
  * - Tail cone: Steady White
  * - Wingtip strobes: High-intensity double-flashing White
  * - Vertical stabilizer & belly beacons: Flashing Red
+ *
+ * Equipped with far-distance additive glow sprites and un-fogged materials
+ * so lights remain piercingly visible from all flight distances and in all times of day.
  */
 function buildAircraftLights(
   model: THREE.Object3D,
@@ -891,7 +919,7 @@ function buildAircraftLights(
     }
   })
 
-  // Dimensions scaled so lights remain visible and crisp across flight altitudes
+  // Dimensions scaled so lights remain visible and crisp across all flight altitudes
   const navRadius = Math.max(0.35, span * 0.016)
   const strobeRadius = navRadius * 1.35
   const beaconRadius = navRadius * 1.45
@@ -901,48 +929,113 @@ function buildAircraftLights(
   const beaconGeo = new THREE.SphereGeometry(beaconRadius, 8, 8)
   geoms.push(navGeo, strobeGeo, beaconGeo)
 
-  // toneMapped: false ensures maximum emissive output in HDR tone mapping
-  const redMat = new THREE.MeshBasicMaterial({ color: 0xff1818, toneMapped: false })
-  const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, toneMapped: false })
-  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
-  const strobeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
-  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff2800, toneMapped: false })
+  // toneMapped: false and fog: false ensure maximum emissive output that is never dimmed by fog
+  const redMat = new THREE.MeshBasicMaterial({ color: 0xff1818, toneMapped: false, fog: false })
+  const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, toneMapped: false, fog: false })
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false })
+  const strobeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false })
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff2800, toneMapped: false, fog: false })
   mats.push(redMat, greenMat, whiteMat, strobeMat, beaconMat)
+
+  // Far-distance glow billboard sprites so lights sparkle clearly across miles in all daylight and night conditions
+  const glowTex = getAirplaneLightGlowTexture()
+  const redGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: 0xff2020,
+    toneMapped: false,
+    fog: false,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  const greenGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: 0x00ff66,
+    toneMapped: false,
+    fog: false,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  const whiteGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: 0xffffff,
+    toneMapped: false,
+    fog: false,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  const beaconGlowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: 0xff2200,
+    toneMapped: false,
+    fog: false,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  mats.push(redGlowMat, greenGlowMat, whiteGlowMat, beaconGlowMat)
+
+  const navGlowScale = Math.max(2.4, span * 0.08)
+  const strobeGlowScale = Math.max(4.2, span * 0.14)
+  const beaconGlowScale = Math.max(3.8, span * 0.12)
 
   // 1. Port wingtip steady Red
   const portNav = new THREE.Mesh(navGeo, redMat)
   portNav.position.copy(leftTip)
+  const portNavGlow = new THREE.Sprite(redGlowMat)
+  portNavGlow.scale.set(navGlowScale, navGlowScale, 1)
+  portNav.add(portNavGlow)
   lightsRoot.add(portNav)
 
   // 2. Starboard wingtip steady Green
   const stbdNav = new THREE.Mesh(navGeo, greenMat)
   stbdNav.position.copy(rightTip)
+  const stbdNavGlow = new THREE.Sprite(greenGlowMat)
+  stbdNavGlow.scale.set(navGlowScale, navGlowScale, 1)
+  stbdNav.add(stbdNavGlow)
   lightsRoot.add(stbdNav)
 
   // 3. Tail cone steady White
   const tailNav = new THREE.Mesh(navGeo, whiteMat)
   tailNav.position.copy(tailTip)
+  const tailNavGlow = new THREE.Sprite(whiteGlowMat)
+  tailNavGlow.scale.set(navGlowScale, navGlowScale, 1)
+  tailNav.add(tailNavGlow)
   lightsRoot.add(tailNav)
 
   // 4. Wingtip flashing White strobes
   const portStrobe = new THREE.Mesh(strobeGeo, strobeMat)
   portStrobe.position.set(leftTip.x * 1.01, leftTip.y, leftTip.z - 0.1)
+  const portStrobeGlow = new THREE.Sprite(whiteGlowMat)
+  portStrobeGlow.scale.set(strobeGlowScale, strobeGlowScale, 1)
+  portStrobe.add(portStrobeGlow)
   lightsRoot.add(portStrobe)
   strobes.push(portStrobe)
 
   const stbdStrobe = new THREE.Mesh(strobeGeo, strobeMat)
   stbdStrobe.position.set(rightTip.x * 1.01, rightTip.y, rightTip.z - 0.1)
+  const stbdStrobeGlow = new THREE.Sprite(whiteGlowMat)
+  stbdStrobeGlow.scale.set(strobeGlowScale, strobeGlowScale, 1)
+  stbdStrobe.add(stbdStrobeGlow)
   lightsRoot.add(stbdStrobe)
   strobes.push(stbdStrobe)
 
   // 5. Flashing Red beacons (top fin & fuselage belly)
   const topBeacon = new THREE.Mesh(beaconGeo, beaconMat)
   topBeacon.position.copy(topFin)
+  const topBeaconGlow = new THREE.Sprite(beaconGlowMat)
+  topBeaconGlow.scale.set(beaconGlowScale, beaconGlowScale, 1)
+  topBeacon.add(topBeaconGlow)
   lightsRoot.add(topBeacon)
   beacons.push(topBeacon)
 
   const bellyBeacon = new THREE.Mesh(beaconGeo, beaconMat)
   bellyBeacon.position.set(0, minY + 0.15, (leftTip.z + tailTip.z) * 0.45)
+  const bellyBeaconGlow = new THREE.Sprite(beaconGlowMat)
+  bellyBeaconGlow.scale.set(beaconGlowScale, beaconGlowScale, 1)
+  bellyBeacon.add(bellyBeaconGlow)
   lightsRoot.add(bellyBeacon)
   beacons.push(bellyBeacon)
 
@@ -1019,7 +1112,7 @@ export class AirplaneFlyby {
           geoms: lightGeoms,
           mats: lightMats,
         } = buildAircraftLights(model, span)
-        lightsRoot.visible = this.isLowLight
+        lightsRoot.visible = true
         body.add(lightsRoot)
 
         this.aircraft.push({
@@ -1147,21 +1240,19 @@ export class AirplaneFlyby {
       )
     }
 
-    if (this.isLowLight) {
-      // Wingtip strobes: distinctive FAA double-flash every 1.0s
-      const strobeCycle = f.age % 1.0
-      const strobeActive =
-        strobeCycle < 0.08 || (strobeCycle > 0.16 && strobeCycle < 0.24)
-      for (let i = 0; i < ac.strobes.length; i++) {
-        ac.strobes[i].visible = strobeActive
-      }
+    // Wingtip strobes: distinctive FAA double-flash every 1.0s (active in all timings)
+    const strobeCycle = f.age % 1.0
+    const strobeActive =
+      strobeCycle < 0.08 || (strobeCycle > 0.16 && strobeCycle < 0.24)
+    for (let i = 0; i < ac.strobes.length; i++) {
+      ac.strobes[i].visible = strobeActive
+    }
 
-      // Red beacons: pulse every 1.2s
-      const beaconCycle = (f.age + 0.3) % 1.2
-      const beaconActive = beaconCycle < 0.14
-      for (let i = 0; i < ac.beacons.length; i++) {
-        ac.beacons[i].visible = beaconActive
-      }
+    // Red beacons: pulse every 1.2s (active in all timings)
+    const beaconCycle = (f.age + 0.3) % 1.2
+    const beaconActive = beaconCycle < 0.14
+    for (let i = 0; i < ac.beacons.length; i++) {
+      ac.beacons[i].visible = beaconActive
     }
 
     if (f.traveled >= f.path.length + EXIT_LEN) this.endFlight()
@@ -1257,7 +1348,7 @@ export class AirplaneFlyby {
   setTimeOfDay(mode: TimeOfDayMode) {
     this.isLowLight = isLowLight(mode)
     for (const ac of this.aircraft) {
-      ac.lightsRoot.visible = this.isLowLight
+      ac.lightsRoot.visible = true
     }
   }
 

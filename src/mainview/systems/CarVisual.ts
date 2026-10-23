@@ -195,6 +195,9 @@ export class CarVisual {
   private headlightMats: { mat: THREE.MeshStandardMaterial; origIntensity: number }[] = []
   private isPlayerCar = false
   private headlightsConfigured = false
+  private loHeadlights: THREE.Mesh[] = []
+  private groundBeam: THREE.Mesh | null = null
+  private groundBeamDistVisible = true
 
   async load(
     baseUrl: string,
@@ -380,6 +383,23 @@ export class CarVisual {
       w.position.set(x, wr, z)
       lo.add(w)
     }
+
+    // Imposter headlights: two glowing dots so distant cars still look active at night
+    const headGeo = new THREE.PlaneGeometry(0.24, 0.14)
+    headGeo.rotateY(Math.PI)
+    const headMat = new THREE.MeshBasicMaterial({
+      color: 0xfffaea,
+      toneMapped: false,
+    })
+    const leftHead = new THREE.Mesh(headGeo, headMat)
+    leftHead.position.set(-0.62, 0.58, -1.9)
+    const rightHead = new THREE.Mesh(headGeo, headMat)
+    rightHead.position.set(0.62, 0.58, -1.9)
+    leftHead.visible = this.headlightsOn
+    rightHead.visible = this.headlightsOn
+    lo.add(leftHead, rightHead)
+    this.loHeadlights = [leftHead, rightHead]
+
     lo.visible = false
     this.group.add(lo)
     this.loGroup = lo
@@ -716,7 +736,9 @@ export class CarVisual {
       const groundBeam = getSharedBeamMesh()
       groundBeam.name = "groundBeam"
       groundBeam.position.set(0, 0.04, frontZ - 11)
+      groundBeam.visible = this.headlightsOn && this.groundBeamDistVisible
       group.add(groundBeam)
+      this.groundBeam = groundBeam
     }
 
     // ONLY the player car gets real-time dynamic SpotLights for 3D obstacles ahead
@@ -756,11 +778,22 @@ export class CarVisual {
     this.group.add(group)
   }
 
+  setGroundBeamDistanceVisible(visible: boolean) {
+    if (this.groundBeamDistVisible === visible) return
+    this.groundBeamDistVisible = visible
+    if (this.groundBeam) {
+      this.groundBeam.visible = this.headlightsOn && visible
+    }
+  }
+
   setHeadlights(on: boolean) {
     this.headlightsWanted = on
     this.headlightsOn = on
     if (this.headlightGroup) {
       this.headlightGroup.visible = on
+    }
+    if (this.groundBeam) {
+      this.groundBeam.visible = on && this.groundBeamDistVisible
     }
     for (const spot of this.headlightSpots) {
       spot.visible = on
@@ -768,6 +801,9 @@ export class CarVisual {
     }
     for (const h of this.headlightMats) {
       h.mat.emissiveIntensity = on ? Math.max(h.origIntensity * 4, 8.0) : 0.0
+    }
+    for (const h of this.loHeadlights) {
+      h.visible = on
     }
   }
 
@@ -834,6 +870,8 @@ export class CarVisual {
       pos.y + _poseOff.y,
       pos.z + _poseOff.z,
     )
+
+    if (!this.hiDetail) return
 
     for (let i = 0; i < this.wheels.length; i++) {
       const w = this.wheels[i]

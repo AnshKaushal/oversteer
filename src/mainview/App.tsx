@@ -1326,18 +1326,21 @@ export default function App() {
                 const p = b.translation()
                 return { body: b, x: p.x, z: p.z }
               })
-              for (const tc of trafficCars) {
+              for (let ti = 0; ti < trafficCars.length; ti++) {
+                const tc = trafficCars[ti]
                 tc.car.autoShiftEnabled = true
-                tc.cached = tc.ai.drive(tc.car, tEntries, dt)
-                tc.edgeArmed = true
-                if (tc.ai.recovering) {
-                  tc.stride = 1
-                } else {
+                if (!tc.ai.recovering) {
                   const rp0 = tc.car.body.translation()
                   const dx0 = rp0.x - tpp.x
                   const dz0 = rp0.z - tpp.z
                   const d2 = dx0 * dx0 + dz0 * dz0
                   tc.stride = d2 < 6400 ? 1 : d2 < 40000 ? 2 : 4
+                } else {
+                  tc.stride = 1
+                }
+                if (tc.ai.recovering || (substepTick + ti) % tc.stride === 0) {
+                  tc.cached = tc.ai.drive(tc.car, tEntries, dt)
+                  tc.edgeArmed = true
                 }
               }
             }
@@ -1708,18 +1711,21 @@ export default function App() {
                   true,
                 )
                 tc.ai = new AIDriver(ntprof)
+                tc.visual.group.visible = true
               }
-              tc.visual.syncFromBody(
-                tc.car.body,
-                tc.car.steerAngle,
-                tc.car.getWheelOmegas(),
-                dt,
-                tc.car.getWheelCompressions(),
-              )
-              tc.visual.setBrake(tc.brake)
+              if (tc.visual.group.visible) {
+                tc.visual.syncFromBody(
+                  tc.car.body,
+                  tc.car.steerAngle,
+                  tc.car.getWheelOmegas(),
+                  dt,
+                  tc.car.getWheelCompressions(),
+                )
+                tc.visual.setBrake(tc.brake)
+              }
             }
             trafficShadowAcc += dt
-            if (trafficShadowAcc > 0.5) {
+            if (trafficShadowAcc > 0.25) {
               trafficShadowAcc = 0
               const tranked = trafficCars
                 .map((r, i) => {
@@ -1730,9 +1736,23 @@ export default function App() {
                 })
                 .sort((a, b) => a.d - b.d)
               const tnear = new Set(tranked.slice(0, 3).map((o) => o.i))
-              trafficCars.forEach((r, i) =>
-                r.visual.setCastShadow(tnear.has(i)),
-              )
+              for (const { i, d } of tranked) {
+                const tc = trafficCars[i]
+                tc.visual.setCastShadow(tnear.has(i))
+                tc.visual.setGroundBeamDistanceVisible(d < 9025) // <95m
+
+                if (d > 193600) {
+                  // >440m completely culled (beyond fog range)
+                  tc.visual.group.visible = false
+                } else {
+                  tc.visual.group.visible = true
+                  const shouldBeHi = d < 36100 // 190m
+                  if (tc.hi !== shouldBeHi) {
+                    tc.hi = shouldBeHi
+                    tc.visual.setDetail(shouldBeHi)
+                  }
+                }
+              }
             }
           }
           wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))
