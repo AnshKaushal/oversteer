@@ -150,7 +150,8 @@ export class SuspensionSystem {
 
       const bump = 1 + Math.max(0, compression - BUMP_START) * BUMP_GAIN
       const springF = k * bump * Math.max(0, compression)
-      const damperF = -c * pointVel.dot(up)
+      const bumpDamp = compression > BUMP_START ? 2.5 : 1.0
+      const damperF = -c * bumpDamp * pointVel.dot(up)
 
       const contact = origin.clone().addScaledVector(dir, toi)
       st.grounded = true

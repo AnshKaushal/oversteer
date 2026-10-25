@@ -1040,6 +1040,127 @@ const cheetah: CarDefinition = {
   tested: { zeroToHundredS: 6.0, topSpeedKmh: 260 },
 }
 
+const charger69: CarDefinition = {
+  id: "dodge-charger-69",
+  name: "1969 Dodge Charger 426 HEMI",
+  shortName: "Charger '69",
+  modelFile: "models/dodge_charger_69.glb",
+  physics: createPhysicsConfig({
+    mass: { chassis: 1550, frontWheel: 25, rearWheel: 25, total: 1650 },
+    dimensions: {
+      width: 1.96,
+      height: 1.38,
+      length: 5.28,
+      wheelbase: 2.96,
+      trackWidth: 1.57,
+      groundClearance: 0.12,
+      centerOfMassHeight: 0.46,
+    },
+    engine: {
+      ...CAR_PHYSICS.engine,
+      maxPowerHP: 500,
+      maxTorqueNm: 750,
+      maxPowerRPM: 6200,
+      maxTorqueRPM: 4200,
+      redlineRPM: 6800,
+      revLimiterRPM: 6800,
+      idleRPM: 800,
+      // 426 HEMI 7.0L V8: deep low-end rumble and broad muscular torque plateau
+      torqueCurve: [
+        [0, 0.40],
+        [800, 0.60],
+        [1500, 0.78],
+        [2500, 0.90],
+        [3500, 0.97],
+        [4200, 1.0],
+        [5000, 0.98],
+        [5800, 0.95],
+        [6200, 0.91],
+        [6800, 0.75],
+        [7000, 0.0],
+      ],
+      frictionTorqueBase: 22,
+      frictionTorqueRPMFactor: 0.005,
+    },
+    transmission: {
+      ...CAR_PHYSICS.transmission,
+      // Bowler Tremec T-56 Magnum 6-speed manual
+      gearRatios: [2.66, 1.78, 1.30, 1.00, 0.80, 0.68],
+      finalDriveRatio: 3.73,
+      reverseRatio: 2.90,
+      launchControlRPM: 3200,
+      autoUpshiftRPM: 6500,
+      autoDownshiftRPM: 2600,
+      torqueConverter: {
+        ...CAR_PHYSICS.transmission.torqueConverter,
+        creepForce: 1400,
+      },
+    },
+    differential: {
+      ...CAR_PHYSICS.differential,
+      lsdAccelLock: 0.65,
+      lsdDecelLock: 0.35,
+      preloadTorque: 50,
+    },
+    drivetrain: {
+      type: "rwd",
+      frontTorqueSplit: 0,
+      torqueCapGear1: 2200,
+      torqueCapGear2: 3200,
+    },
+    wheels: {
+      ...CAR_PHYSICS.wheels,
+      radius: 0.32,
+      width: 0.28,
+      frictionMu: 1.55,
+      referenceLoad: 4047, // 1650 * 9.81 / 4
+      suspension: {
+        ...CAR_PHYSICS.wheels.suspension,
+        springRate: 72000,
+        damperRate: 5600,
+        travel: 0.12,
+        antiRollBarFront: 18000,
+        antiRollBarRear: 14000,
+      },
+      brakeForce: { front: 2800, rear: 1800 },
+      handbrakeForce: 4500,
+      steering: {
+        ...CAR_PHYSICS.wheels.steering,
+        maxAngle: 0.65,
+        speedFalloffKmh: 200,
+        minAngleAtSpeed: 0.08,
+      },
+    },
+    aero: {
+      ...CAR_PHYSICS.aero,
+      dragCoefficient: 0.36,
+      frontalArea: 2.15,
+      downforceAt100kmh: 160,
+    },
+    assists: {
+      ...CAR_PHYSICS.assists,
+      tractionControl: 0.25,
+      countersteerAssist: 5200,
+      stabilityControl: 0.20,
+      speedFeel: {
+        ...CAR_PHYSICS.assists.speedFeel,
+        fovAtMaxSpeedKmh: 320,
+      },
+    },
+  }),
+  wheels: [
+    { x: -0.785, z: -1.647, front: true, left: true },
+    { x: 0.785, z: -1.647, front: true, left: false },
+    { x: -0.785, z: 1.312, front: false, left: true },
+    { x: 0.785, z: 1.312, front: false, left: false },
+  ],
+  pivots: { pattern: "^Wheel_[FLR][LR]$" },
+  dash: { maxRpm: 8000, redFromRpm: 6800, maxKmh: 340 },
+  defaultTint: null,
+  paintMatch: ["Duke69_bodymat"],
+  tested: { zeroToHundredS: 4.1, topSpeedKmh: 308 },
+}
+
 export const CARS: CarDefinition[] = [
   m3,
   r8,
@@ -1051,6 +1172,7 @@ export const CARS: CarDefinition[] = [
   challenger,
   f1,
   cheetah,
+  charger69,
 ]
 
 export const DEFAULT_CAR_ID = "bmw-m3"

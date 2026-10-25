@@ -1161,15 +1161,32 @@ export class CarController {
       const fyFinal = lag.fy
       this.lastWheelLong[wi] = fxFinal
 
-      const Fx = res.t.x * fxFinal + res.l.x * fyFinal
-      const Fy = res.t.y * fxFinal + res.l.y * fyFinal
-      const Fz = res.t.z * fxFinal + res.l.z * fyFinal
+      const FxLat = res.l.x * fyFinal
+      const FyLat = res.l.y * fyFinal
+      const FzLat = res.l.z * fyFinal
+
+      const FxLong = res.t.x * fxFinal
+      const FyLong = res.t.y * fxFinal
+      const FzLong = res.t.z * fxFinal
+
       const applyY = s.contactY + (s.anchor.y - s.contactY) * 0.5
-      this.body.applyImpulseAtPoint(
-        { x: Fx * dt, y: Fy * dt, z: Fz * dt },
-        { x: s.anchor.x, y: applyY, z: s.anchor.z },
-        true,
-      )
+      // Lateral forces at roll-center height for realistic cornering body roll
+      if (Math.abs(fyFinal) > 0.01) {
+        this.body.applyImpulseAtPoint(
+          { x: FxLat * dt, y: FyLat * dt, z: FzLat * dt },
+          { x: s.anchor.x, y: applyY, z: s.anchor.z },
+          true,
+        )
+      }
+      // Longitudinal drive/brake forces applied through chassis height (anti-squat / anti-dive)
+      // preventing massive pitch torque from launching high-power cars at speed
+      if (Math.abs(fxFinal) > 0.01) {
+        this.body.applyImpulseAtPoint(
+          { x: FxLong * dt, y: FyLong * dt, z: FzLong * dt },
+          { x: s.anchor.x, y: bodyPos.y, z: s.anchor.z },
+          true,
+        )
+      }
     }
 
     this.slipRatioAvg +=
@@ -1191,8 +1208,10 @@ export class CarController {
         P.aero.frontalArea *
         vMag *
         vMag
-      const downF =
+      const rawDownF =
         (P.aero.downforceAt100kmh / Math.pow(27.78, 2)) * vMag * vMag
+      const maxDownF = Math.min(2200, (P.mass?.total ?? 1600) * 9.81 * 0.22)
+      const downF = maxDownF * Math.tanh(rawDownF / maxDownF)
       const drag = vVec.clone().normalize().multiplyScalar(-dragF)
       this.body.applyImpulse(
         { x: drag.x * dt, y: -downF * dt, z: drag.z * dt },

@@ -161,8 +161,8 @@ export function tintCar(
         }
       } else {
         if (clone.metalness !== undefined) {
-          clone.metalness = Math.max(clone.metalness, 0.45)
-          clone.roughness = Math.min(clone.roughness ?? 0.4, 0.45)
+          clone.metalness = 0.25
+          clone.roughness = 0.32
         }
         clone.map = null
         clone.emissiveMap = null

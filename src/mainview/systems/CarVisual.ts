@@ -113,6 +113,7 @@ export class CarVisual {
   private lastTint: number | undefined = undefined
   private hiMerged: THREE.Object3D[] = []
   private brakeLights: BrakeLight[] = []
+  private brakeMeshes: THREE.Object3D[] = []
   private brakeLevel = 0
   private headlightsOn = false
   private headlightsWanted = false
@@ -142,7 +143,35 @@ export class CarVisual {
           })
         : []
     whitenRims(model)
+    model.traverse((o: any) => {
+      if (o.isMesh && o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material]
+        for (const m of mats) {
+          if (m && m.isMeshStandardMaterial && m.metalness > 0.6) {
+            const name = `${m.name} ${o.name}`.toLowerCase()
+            if (
+              name.includes("body") ||
+              name.includes("paint") ||
+              (opts?.paintMatch &&
+                opts.paintMatch.some((p) => new RegExp(p, "i").test(m.name)))
+            ) {
+              m.metalness = 0.25
+              m.roughness = 0.32
+            }
+          }
+        }
+      }
+    })
     this.brakeLights = collectBrakeLights(model)
+    this.brakeMeshes = []
+    model.traverse((o: any) => {
+      if (o.isMesh && o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material]
+        if (mats.some((m: any) => this.brakeLights.some((b) => b.mat === m))) {
+          this.brakeMeshes.push(o)
+        }
+      }
+    })
     model.traverse((o: any) => {
       if (o.isMesh) {
         o.castShadow = this.castShadow
@@ -366,6 +395,9 @@ export class CarVisual {
     for (const m of this.headlightMeshes) {
       skip.add(m)
     }
+    for (const m of this.brakeMeshes) {
+      skip.add(m)
+    }
     this.mergeInto([this.hiBody], this.group, null, skip)
     for (const w of this.wheels) {
       const inv = w.mesh.matrixWorld.clone().invert()
@@ -452,7 +484,7 @@ export class CarVisual {
     const want = Math.max(0, Math.min(1, level))
     if (want === this.brakeLevel) return
     this.brakeLevel = want
-    for (const l of this.brakeLights) applyBrakeHeat(l, want)
+    for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn)
   }
 
   setupHeadlights(isPlayer: boolean = false) {
@@ -601,11 +633,17 @@ export class CarVisual {
           const isCheetahHeadlight =
             meshName.includes("cheetah84_headlights")
 
+          // 5. Dodge Charger '69 check:
+          // Front grille dual round headlights & headlight glass
+          const isChargerHeadlight =
+            meshName.includes("duke69_headlight")
+
           const isSpecificHeadlight =
             isGWagonHeadlight ||
             isAventadorHeadlight ||
             isDodgeHeadlight ||
-            isCheetahHeadlight
+            isCheetahHeadlight ||
+            isChargerHeadlight
 
           if (isSpecificHeadlight) {
             let targetMat = std
@@ -816,6 +854,9 @@ export class CarVisual {
     }
     for (const h of this.loHeadlights) {
       h.visible = on
+    }
+    for (const l of this.brakeLights) {
+      applyBrakeHeat(l, this.brakeLevel, on)
     }
   }
 

@@ -13,8 +13,14 @@ const LAMP_IDLE = 0.5
 const LAMP_BRAKE = 3.4
 const HEAT_MIX = 1.8
 
-export function applyBrakeHeat(l: BrakeLight, heat: number) {
-  l.mat.emissiveIntensity = l.idle * (1 + LAMP_BRAKE * heat)
+export function applyBrakeHeat(
+  l: BrakeLight,
+  heat: number,
+  headlightsOn: boolean = false,
+) {
+  const base = headlightsOn ? 1.0 : 0.0
+  const brakeGain = 9.0
+  l.mat.emissiveIntensity = base + brakeGain * heat
   l.mat.emissive.copy(l.glow).lerp(BRAKE_HEAT, heat * HEAT_MIX)
 }
 
@@ -53,9 +59,8 @@ export function collectBrakeLights(root: THREE.Object3D): BrakeLight[] {
       let entry = bySource.get(key)
       if (!entry) {
         const clone = (mat as THREE.MeshStandardMaterial).clone()
-        const idle = (clone.emissiveIntensity ?? 1) * LAMP_RANGE * LAMP_IDLE
-        clone.emissiveIntensity = idle
-        entry = { mat: clone, idle, glow: clone.emissive.clone() }
+        clone.emissiveIntensity = 0.0
+        entry = { mat: clone, idle: 0.0, glow: clone.emissive.clone() }
         bySource.set(key, entry)
       }
       return entry.mat
