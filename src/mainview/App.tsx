@@ -107,6 +107,11 @@ const initialTele: CarTelemetry = {
   dash: DEFAULT_DASH,
 }
 
+const _qNpc = new THREE.Quaternion()
+const _vNpcFront = new THREE.Vector3()
+const _vNpcTarget = new THREE.Vector3()
+const _vNpcPos = new THREE.Vector3()
+
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null)
   const [tele, setTele] = useState<CarTelemetry>(initialTele)
@@ -549,7 +554,9 @@ export default function App() {
           failIfMajorPerformanceCaveat: false,
         })
         renderer.shadowMap.enabled = settingsRef.current.shadows
-        renderer.shadowMap.type = THREE.PCFShadowMap
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap
+        renderer.toneMapping = THREE.ACESFilmicToneMapping
+        renderer.toneMappingExposure = 1.0
         mount.appendChild(renderer.domElement)
         rendererRef.current = renderer
 
@@ -771,7 +778,7 @@ export default function App() {
           )
           const color = rivalColor(i)
           const vis = new CarVisual()
-          vis.castShadow = i < 2
+          vis.castShadow = true
           try {
             await vis.load(baseUrl, color, {
               modelFile: rivalDef.modelFile,
@@ -865,7 +872,7 @@ export default function App() {
           )
           const tcolor = rivalColor((Math.random() * 64) | 0)
           const tvis = new CarVisual()
-          tvis.castShadow = i < 2
+          tvis.castShadow = true
           try {
             await tvis.load(baseUrl, tcolor, {
               modelFile: def.modelFile,
@@ -1042,6 +1049,16 @@ export default function App() {
         scene.add(smoke.points)
         const smokeSpots: THREE.Vector3[] = []
         let smokeAcc = 0
+
+        const npcSpotPool: THREE.SpotLight[] = []
+        for (let sIdx = 0; sIdx < 4; sIdx++) {
+          const s = new THREE.SpotLight(0xfffaee, 0, 85, Math.PI / 3.0, 0.9, 1.2)
+          s.castShadow = false
+          s.visible = true
+          scene.add(s.target)
+          scene.add(s)
+          npcSpotPool.push(s)
+        }
 
         const input = new InputManager()
         input.attach()
@@ -1554,7 +1571,7 @@ export default function App() {
               }
             }
             shadowAcc += dt
-            if (shadowAcc > 0.5) {
+            if (shadowAcc > 0.25) {
               shadowAcc = 0
               const ranked = rivals
                 .map((r, i) => {
@@ -1564,8 +1581,9 @@ export default function App() {
                   return { i, d: dx * dx + dz * dz }
                 })
                 .sort((a, b) => a.d - b.d)
-              const nearSet = new Set(ranked.slice(0, 3).map((o) => o.i))
-              rivals.forEach((r, i) => r.visual.setCastShadow(nearSet.has(i)))
+              for (const { i, d } of ranked) {
+                rivals[i].visual.setCastShadow(d < 7225)
+              }
               let upgrades = 0
               for (const { i, d } of ranked) {
                 const r = rivals[i]
@@ -1735,11 +1753,9 @@ export default function App() {
                   return { i, d: dx * dx + dz * dz }
                 })
                 .sort((a, b) => a.d - b.d)
-              const tnear = new Set(tranked.slice(0, 3).map((o) => o.i))
               for (const { i, d } of tranked) {
                 const tc = trafficCars[i]
-                tc.visual.setCastShadow(tnear.has(i))
-                tc.visual.setGroundBeamDistanceVisible(d < 9025) // <95m
+                tc.visual.setCastShadow(d < 7225)
 
                 if (d > 193600) {
                   // >440m completely culled (beyond fog range)
@@ -1753,6 +1769,63 @@ export default function App() {
                   }
                 }
               }
+            }
+          }
+
+          const lowLightNow = isLowLight(timeOfDayRef.current)
+          if (lowLightNow && npcSpotPool.length > 0) {
+            const nearCandidates: { body: RAPIER.RigidBody; d: number }[] = []
+            for (const r of rivals) {
+              const rp = r.car.body.translation()
+              const dx = rp.x - bp.x
+              const dz = rp.z - bp.z
+              const d = dx * dx + dz * dz
+              if (d < 36100) {
+                nearCandidates.push({ body: r.car.body, d })
+              }
+            }
+            for (const t of trafficCars) {
+              if (!t.visual.group.visible) continue
+              const rp = t.car.body.translation()
+              const dx = rp.x - bp.x
+              const dz = rp.z - bp.z
+              const d = dx * dx + dz * dz
+              if (d < 36100) {
+                nearCandidates.push({ body: t.car.body, d })
+              }
+            }
+            nearCandidates.sort((a, b) => a.d - b.d)
+
+            for (let sIdx = 0; sIdx < npcSpotPool.length; sIdx++) {
+              const spot = npcSpotPool[sIdx]
+              const cand = nearCandidates[sIdx]
+              if (cand) {
+                const dist = Math.sqrt(cand.d)
+                const scale = dist > 180 ? 0 : dist < 90 ? 1 : (180 - dist) / 90
+                const targetIntensity = 54 * scale
+                if (targetIntensity > 0.05) {
+                  const bpos = cand.body.translation()
+                  const bquat = cand.body.rotation()
+                  _qNpc.set(bquat.x, bquat.y, bquat.z, bquat.w)
+                  _vNpcPos.set(bpos.x, bpos.y, bpos.z)
+
+                  _vNpcFront.set(0, -0.07, -2.4).applyQuaternion(_qNpc).add(_vNpcPos)
+                  _vNpcTarget.set(0, -0.27, -30.0).applyQuaternion(_qNpc).add(_vNpcPos)
+
+                  spot.position.copy(_vNpcFront)
+                  spot.target.position.copy(_vNpcTarget)
+                  spot.target.updateMatrixWorld(true)
+                  spot.intensity = targetIntensity
+                } else {
+                  spot.intensity = 0
+                }
+              } else {
+                spot.intensity = 0
+              }
+            }
+          } else {
+            for (const spot of npcSpotPool) {
+              if (spot.intensity > 0) spot.intensity = 0
             }
           }
           wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))

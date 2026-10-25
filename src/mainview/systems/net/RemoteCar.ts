@@ -290,6 +290,10 @@ export class RemoteCar {
     this.visual.setHeadlights(on)
   }
 
+  setNpcLightActive(active: boolean, intensityScale: number = 1.0) {
+    this.visual.setNpcLightActive(active, intensityScale)
+  }
+
   drive(dt: number) {
     const b = this.colliderBody
     if (!b || !this.hasReceivedPacket || dt <= 0) return

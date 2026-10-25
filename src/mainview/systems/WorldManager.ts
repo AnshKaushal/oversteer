@@ -398,6 +398,8 @@ export class WorldManager {
     sun.position.set(120, 180, 60)
     sun.castShadow = true
     sun.shadow.mapSize.set(1024, 1024)
+    sun.shadow.bias = -0.0004
+    sun.shadow.normalBias = 0.02
     sun.shadow.camera.left = -80
     sun.shadow.camera.right = 80
     sun.shadow.camera.top = 80
@@ -480,7 +482,8 @@ export class WorldManager {
     const count = W.road.segmentsAhead + W.road.segmentsBehind
     const roadMat = new THREE.MeshStandardMaterial({
       map: tex.clone(),
-      roughness: 0.95,
+      roughness: 1.0,
+      metalness: 0.0,
     })
     this.roadSegs = []
     for (let i = 0; i < count; i++) {
@@ -534,7 +537,7 @@ export class WorldManager {
           const im = bakeInstanced(node, maxInstances, targetH, opts)
           if (im) {
             im.castShadow = category !== "cloud" && category !== "grass"
-            im.receiveShadow = category === "grass"
+            im.receiveShadow = category !== "cloud"
             im.frustumCulled = false
             if (category === "tree") this.applyShadowFade(im)
             this.group.add(im)
@@ -572,7 +575,7 @@ export class WorldManager {
       ) => {
         if (!im) return
         im.castShadow = shadow
-        im.receiveShadow = category === "grass"
+        im.receiveShadow = category !== "cloud"
         im.frustumCulled = false
         if (category !== "grass") this.applyShadowFade(im)
         this.group.add(im)
@@ -1058,7 +1061,7 @@ export class WorldManager {
         pv.im.material as THREE.Material | THREE.Material[],
       )
       m.castShadow = pv.im.castShadow
-      m.receiveShadow = false
+      m.receiveShadow = pv.category !== "cloud"
       q.setFromUnitVectors(yAxis, s.nrm)
       qy.setFromAxisAngle(yAxis, this.rand(seed + k * 43) * Math.PI * 2)
       q.premultiply(qy)
