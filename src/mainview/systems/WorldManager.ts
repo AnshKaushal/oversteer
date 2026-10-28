@@ -237,6 +237,7 @@ export class WorldManager {
   private timeOfDay: TimeOfDayMode = "day"
   private sunLight: THREE.DirectionalLight | null = null
   private hemiLight: THREE.HemisphereLight | null = null
+  private sunVisual: THREE.Mesh | null = null
   private sunOffset = new THREE.Vector3(120, 180, 60)
   private sceneRef: THREE.Scene | null = null
   private starsPoints: THREE.Points | null = null
@@ -274,6 +275,17 @@ export class WorldManager {
       this.hemiLight.color.setHex(preset.hemiSkyColor)
       this.hemiLight.groundColor.setHex(preset.hemiGroundColor)
       this.hemiLight.intensity = preset.hemiIntensity
+    }
+
+    if (this.sunVisual) {
+      const mat = this.sunVisual.material as THREE.MeshBasicMaterial
+      if (mode === "night") {
+        mat.color.setHex(0xdde6ff)
+        this.sunVisual.scale.setScalar(0.55)
+      } else {
+        mat.color.setHex(preset.sunColor)
+        this.sunVisual.scale.setScalar(1)
+      }
     }
 
     if (this.sceneRef) {
@@ -412,6 +424,19 @@ export class WorldManager {
     this.group.add(hemi)
     this.hemiLight = hemi
     ;(this.group as any)._sun = sun
+
+    // Visible sun / moon disk so the light source is apparent in the sky.
+    const sunGeo = new THREE.SphereGeometry(14, 24, 24)
+    const sunMat = new THREE.MeshBasicMaterial({
+      color: W.environment.sunColor,
+      fog: false,
+      depthWrite: false,
+    })
+    const sunVisual = new THREE.Mesh(sunGeo, sunMat)
+    sunVisual.frustumCulled = false
+    sunVisual.renderOrder = -1
+    this.group.add(sunVisual)
+    this.sunVisual = sunVisual
 
     // Night starry sky dome (single-draw-call, zero FPS impact)
     const starGeo = new THREE.BufferGeometry()
@@ -1332,6 +1357,13 @@ export class WorldManager {
       )
       sun.target.position.set(carPos.x, 0, carPos.z)
       sun.target.updateMatrixWorld()
+    }
+    if (this.sunVisual) {
+      this.sunVisual.position.set(
+        carPos.x + this.sunOffset.x,
+        this.sunOffset.y,
+        carPos.z + this.sunOffset.z,
+      )
     }
     if (this.starsPoints && this.starsPoints.visible) {
       this.starsPoints.position.set(carPos.x, 0, carPos.z)

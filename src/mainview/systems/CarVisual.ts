@@ -120,7 +120,12 @@ export class CarVisual {
   private headlightGroup: THREE.Group | null = null
   private headlightMeshes: THREE.Object3D[] = []
   private headlightSpots: THREE.SpotLight[] = []
-  private headlightMats: { mat: THREE.MeshStandardMaterial; origIntensity: number }[] = []
+  private headlightMats: {
+    mat: THREE.MeshStandardMaterial
+    origIntensity: number
+    origTransparent: boolean
+    origOpacity: number
+  }[] = []
   private isPlayerCar = false
   private headlightsConfigured = false
   private loHeadlights: THREE.Mesh[] = []
@@ -343,8 +348,10 @@ export class CarVisual {
     const headGeo = new THREE.PlaneGeometry(0.28, 0.16)
     headGeo.rotateY(Math.PI)
     const headMat = new THREE.MeshBasicMaterial({
-      color: 0xfffaea,
+      color: 0xfff0cc,
       toneMapped: false,
+      transparent: true,
+      opacity: 0.85,
     })
     const leftHead = new THREE.Mesh(headGeo, headMat)
     leftHead.position.set(-0.62, 0.58, -2.36)
@@ -501,7 +508,7 @@ export class CarVisual {
           const frontZ = -halfLen * 0.90
 
           const leftSpot = new THREE.SpotLight(
-            0xfffaee,
+            0xfff0cc,
             this.headlightsOn ? 75 : 0,
             75,
             Math.PI / 3.0,
@@ -519,7 +526,7 @@ export class CarVisual {
           leftSpot.visible = true
 
           const rightSpot = new THREE.SpotLight(
-            0xfffaee,
+            0xfff0cc,
             this.headlightsOn ? 75 : 0,
             75,
             Math.PI / 3.0,
@@ -667,11 +674,21 @@ export class CarVisual {
                   targetMat.emissive.g === 0 &&
                   targetMat.emissive.b === 0)
               ) {
-                targetMat.emissive = new THREE.Color(0xfffaea)
+                // Warm white headlight glass instead of flat plain white.
+                targetMat.emissive = new THREE.Color(0xfff0cc)
               }
+              // Make the headlight lens slightly transparent so it reads as
+              // glass rather than an opaque white disc.
+              const wasTransparent = targetMat.transparent
+              const wasOpacity = targetMat.opacity
+              targetMat.transparent = true
+              targetMat.opacity = Math.min(wasOpacity, 0.7)
+              targetMat.depthWrite = false
               this.headlightMats.push({
                 mat: targetMat,
                 origIntensity: targetMat.emissiveIntensity ?? 1,
+                origTransparent: wasTransparent,
+                origOpacity: wasOpacity,
               })
             }
             if (!this.headlightMeshes.includes(o)) {
@@ -775,11 +792,21 @@ export class CarVisual {
                   targetMat.emissive.g === 0 &&
                   targetMat.emissive.b === 0)
               ) {
-                targetMat.emissive = new THREE.Color(0xfffaea)
+                // Warm white headlight glass instead of flat plain white.
+                targetMat.emissive = new THREE.Color(0xfff0cc)
               }
+              // Make the headlight lens slightly transparent so it reads as
+              // glass rather than an opaque white disc.
+              const wasTransparent = targetMat.transparent
+              const wasOpacity = targetMat.opacity
+              targetMat.transparent = true
+              targetMat.opacity = Math.min(wasOpacity, 0.7)
+              targetMat.depthWrite = false
               this.headlightMats.push({
                 mat: targetMat,
                 origIntensity: targetMat.emissiveIntensity ?? 1,
+                origTransparent: wasTransparent,
+                origOpacity: wasOpacity,
               })
             }
             if (!this.headlightMeshes.includes(o)) {
@@ -793,7 +820,7 @@ export class CarVisual {
     // Player car gets dual long-range driving projectors with real-time shadow casting
     if (isPlayer) {
       const leftSpot = new THREE.SpotLight(
-        0xfffaee,
+        0xfff0cc,
         this.headlightsOn ? 75 : 0,
         75,
         Math.PI / 3.0,
@@ -811,7 +838,7 @@ export class CarVisual {
       leftSpot.visible = true
 
       const rightSpot = new THREE.SpotLight(
-        0xfffaee,
+        0xfff0cc,
         this.headlightsOn ? 75 : 0,
         75,
         Math.PI / 3.0,
