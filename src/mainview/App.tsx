@@ -64,6 +64,7 @@ import {
 } from "./systems/settings"
 import { SpeedLines } from "./ui/SpeedLines"
 import { MultiplayerManager } from "./systems/net/MultiplayerManager"
+import { RemoteCar } from "./systems/net/RemoteCar"
 import { MultiplayerLobby, MultiplayerHudBadge } from "./ui/MultiplayerLobby"
 import { NetDiagPanel } from "./ui/NetDiagPanel"
 import {
@@ -71,6 +72,7 @@ import {
   netDiagPhysicsTick,
 } from "./systems/net/NetDiagnostics"
 import type { PeerPlayer } from "./systems/net/types"
+import { AudioEngine, type CarEngineSound } from "./systems/AudioEngine"
 import { CAR_PHYSICS } from "./constants/physics"
 import { CARS, DEFAULT_CAR_ID, getCar } from "./constants/cars"
 import { WORLD_CONFIG } from "./constants/world"
@@ -145,10 +147,45 @@ export default function App() {
   const pausedRef = useRef(false)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const audioRef = useRef<AudioEngine | null>(null)
+
+  // Lazily create + preload the singleton audio engine right away so sounds
+  // are decoded before the first session builds.
+  if (!audioRef.current) {
+    audioRef.current = new AudioEngine()
+    void audioRef.current.load()
+  }
+  const getAudio = () => audioRef.current!
+
+  // WebAudio starts suspended until a user gesture resumes it; UI clicks are
+  // picked up from every button in the app via a single delegated listener.
+  useEffect(() => {
+    const audio = getAudio()
+    const unlock = () => audio.unlock()
+    const uiClick = (e: PointerEvent) => {
+      audio.unlock()
+      const el = e.target as HTMLElement | null
+      if (el?.closest?.("button, a, [role=button]")) audio.uiClick()
+    }
+    window.addEventListener("pointerdown", unlock, { capture: true })
+    window.addEventListener("keydown", unlock, { capture: true })
+    window.addEventListener("pointerdown", uiClick, { capture: true })
+    return () => {
+      window.removeEventListener("pointerdown", unlock, { capture: true })
+      window.removeEventListener("keydown", unlock, { capture: true })
+      window.removeEventListener("pointerdown", uiClick, { capture: true })
+    }
+  }, [])
+
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  // Live volume from settings.
+  useEffect(() => {
+    audioRef.current?.setVolume(settings.volume ?? 1)
+  }, [settings.volume])
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDayMode>(
     () => settings.timeOfDay ?? "day",
@@ -310,8 +347,10 @@ export default function App() {
     label: string
     red: boolean
   } | null>(null)
-  const fireWipe = (label: string, red = false) =>
+  const fireWipe = (label: string, red = false) => {
+    audioRef.current?.uiWhoosh(red)
     setWipe((w) => ({ token: (w?.token ?? 0) + 1, label, red }))
+  }
   const sessionTimer = useRef(0)
   const rebuildSession = (delay = 300) => {
     window.clearTimeout(sessionTimer.current)
@@ -570,10 +609,18 @@ export default function App() {
         )
         cameraRef.current = camera
 
+        const audio = getAudio()
+        camera.add(audio.listener)
+        // Make sure buffers are decoded before cars (which spawn positional
+        // engines) start building.
+        await audio.load()
+
         applyRendererResolution(renderer, camera, mount, settingsRef.current)
 
         const R = await initPhysics()
         const world = createWorld()
+        // Collision events feed the impact sounds (see the loop below).
+        const eventQueue = new R.EventQueue(false)
 
         const wm = new WorldManager()
         wmRef.current = wm
@@ -694,6 +741,11 @@ export default function App() {
           new THREE.Euler(0, yaw0, 0),
         )
         body.setRotation({ x: q0.x, y: q0.y, z: q0.z, w: q0.w }, true)
+        // Collision events are only generated if a collider opts in; only the
+        // player needs them (for impact sounds).
+        for (let ci = 0; ci < body.numColliders(); ci++) {
+          body.collider(ci).setActiveEvents(R.ActiveEvents.COLLISION_EVENTS)
+        }
         const car = new CarController(
           world,
           body,
@@ -718,6 +770,7 @@ export default function App() {
           edgeArmed: boolean
           brake: number
           hi: boolean
+          engine: CarEngineSound | null
         }
         const rivals: Rival[] = []
         const useSharedField = isNetRace && setup?.seed != null
@@ -809,6 +862,11 @@ export default function App() {
             edgeArmed: false,
             brake: 0,
             hi: true,
+            engine: audio.addCarEngine(
+              vis.group,
+              rivalDef.physics.engine.idleRPM,
+              rivalDef.physics.engine.redlineRPM,
+            ),
           })
         }
         activeRivalsRef.current = rivals
@@ -903,6 +961,11 @@ export default function App() {
             edgeArmed: false,
             brake: 0,
             hi: true,
+            engine: audio.addCarEngine(
+              tvis.group,
+              def.physics.engine.idleRPM,
+              def.physics.engine.redlineRPM,
+            ),
           })
         }
         activeTrafficRef.current = trafficCars
@@ -1082,6 +1145,7 @@ export default function App() {
         let chaseFar = false
         let last = performance.now()
         let buriedTimer = 0
+        let lastGear = 0
         let buriedFrames = 0
         const stepper = createFixedStepper()
         let substepTick = 0
@@ -1288,6 +1352,7 @@ export default function App() {
             stepper.acc = 0
             setSpeedLines(0)
             smoke.update(dt)
+            audio.update(dt, { started: startedRef.current, paused: true })
             pausedTick = (pausedTick + 1) % 3
             if (pausedTick !== 0) return
             renderer!.render(scene, camera)
@@ -1426,7 +1491,7 @@ export default function App() {
                 tc.brake = Math.max(tt.brake, tt.parkingBrake ? 1 : 0)
               }
               if (net && net.roomId) net.driveRemoteBodies(FIXED_DT)
-              world.step()
+              world.step(eventQueue)
               if (preGreen && lockT && lockR && lockLv && lockAv) {
                 body.setTranslation(lockT, true)
                 body.setRotation(lockR, true)
@@ -1438,6 +1503,29 @@ export default function App() {
             if (stepper.droppedTotal > 0) {
               ;(window as any).__physicsDroppedTotal = stepper.droppedTotal
             }
+            // Collision events → impact sounds. Only player contacts matter;
+            // strength comes from the relative speed at the moment of contact.
+            eventQueue.drainCollisionEvents((h1, h2, started) => {
+              if (!started) return
+              const bh = body.handle
+              if (h1 !== bh && h2 !== bh) return
+              let otherV = { x: 0, y: 0, z: 0 }
+              try {
+                const other = world.getRigidBody(h1 === bh ? h2 : h1)
+                if (other && other.isDynamic()) otherV = other.linvel()
+              } catch {}
+              const v = body.linvel()
+              const rel = Math.hypot(
+                v.x - otherV.x,
+                v.y - otherV.y,
+                v.z - otherV.z,
+              )
+              if (rel < 3) return
+              audio.impactHit(
+                clamp((rel - 3) / 18, 0.15, 1),
+                0.8 + Math.min(0.6, rel / 40),
+              )
+            })
           }
 
           const bp = body.translation()
@@ -1483,6 +1571,17 @@ export default function App() {
             playerProgress = carProgress(body)
             if (t) net.broadcastLocalState(car, t, playerProgress)
             net.updateRemoteCars(dt, smoke)
+            // Remote players' engine sounds — rpm arrives in state packets.
+            for (const rc of net.remoteCars.values()) {
+              if (!rc.engine) {
+                rc.engine = audio.addCarEngine(
+                  rc.visual.group,
+                  RemoteCar.DEFAULT_IDLE_RPM,
+                  RemoteCar.DEFAULT_REDLINE_RPM,
+                )
+              }
+              rc.engine?.update(rc.rpm)
+            }
           }
           if (raceActive) {
             playerProgress = carProgress(body)
@@ -1532,6 +1631,7 @@ export default function App() {
                 rival.car.getWheelCompressions(),
               )
               rival.visual.setBrake(rival.brake)
+              rival.engine?.update(rival.car.rpm)
             }
             if (!raceFinished) {
               const netOrders = Array.from(net?.remoteCars.values() ?? []).map(
@@ -1740,6 +1840,7 @@ export default function App() {
                   tc.car.getWheelCompressions(),
                 )
                 tc.visual.setBrake(tc.brake)
+                tc.engine?.update(tc.car.rpm)
               }
             }
             trafficShadowAcc += dt
@@ -1856,6 +1957,33 @@ export default function App() {
             }
           }
           smoke.update(dt)
+
+          // Audio: player engine/pitch, wind/road, skid (same intensity as
+          // tire smoke), gear-shift blips, ambience + pause ducking.
+          {
+            const skidIntensity = startedRef.current
+              ? Math.max(
+                  car.slipRatioAvg,
+                  car.drifting ? 0.55 : 0,
+                  car.launching ? 0.7 : 0,
+                )
+              : 0
+            audio.update(dt, {
+              started: startedRef.current,
+              paused: false,
+              rpm: t?.rpm,
+              idleRpm: playerDef.physics.engine.idleRPM,
+              redlineRpm: playerDef.physics.engine.redlineRPM,
+              throttle: t?.throttle,
+              kmh: kmhNow,
+              skid: skidIntensity,
+            })
+            const gearNow = startedRef.current ? (t?.gear ?? 0) : 0
+            if (gearNow !== 0 && lastGear !== 0 && gearNow !== lastGear) {
+              audio.shiftBlip()
+            }
+            lastGear = gearNow
+          }
 
           const nowS = now / 1000
           const bq = body.rotation()
@@ -2055,6 +2183,8 @@ export default function App() {
             console.warn("[Teardown] world.free failed:", e)
           }
         }
+        // Stop session-bound sounds (positioned car engines, tire skid, ...).
+        audio.resetSession()
       } catch (e: any) {
         console.error(e)
         if (!disposed) {
@@ -2072,6 +2202,7 @@ export default function App() {
       cancelAnimationFrame(raf)
       const mount: any = mountRef.current
       mount?._cleanup?.()
+      audioRef.current?.resetSession()
       if (renderer) {
         renderer.dispose()
         renderer.domElement.remove()
@@ -2119,7 +2250,7 @@ export default function App() {
           to={{ duration: 0.6, delay: 0.12 }}
           exit={{ duration: 0.26, ease: EASE.in }}
         >
-          <Dashboard tele={tele} />
+          <Dashboard tele={tele} dashStyle={settings.dashStyle ?? "modern"} />
         </Screen>
       )}
       {hudVisible && (

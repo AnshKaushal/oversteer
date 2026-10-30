@@ -13,7 +13,9 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Volume2,
   Sun,
+  Gauge,
 } from "lucide-react"
 import {
   type TimeOfDayMode,
@@ -160,6 +162,13 @@ export function SettingsModal({
     Math.max(0, (1 - currentPixels / nativePixels) * 100),
   )
 
+  const handleVolumeChange = (pct: number) => {
+    onUpdateSettings({
+      ...settings,
+      volume: pct / 100,
+    })
+  }
+
   const handleSelectPreset = (id: ResolutionId) => {
     onUpdateSettings({
       ...settings,
@@ -185,6 +194,13 @@ export function SettingsModal({
     onUpdateSettings({
       ...settings,
       timeOfDay: mode,
+    })
+  }
+
+  const handleSelectDashStyle = (style: "modern" | "classic") => {
+    onUpdateSettings({
+      ...settings,
+      dashStyle: style,
     })
   }
 
@@ -418,6 +434,38 @@ export function SettingsModal({
             </div>
           </div>
 
+          {/* Audio: Master Volume */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                  <Volume2 size={14} className="text-[#51a7d5]" />
+                  Master Volume
+                </label>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Engine, skid, ambience and interface sounds
+                </p>
+              </div>
+              <span className="text-base font-bold text-[#6ec2f0] tabular-nums">
+                {Math.round((settings.volume ?? 1) * 100)}%
+              </span>
+            </div>
+
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round((settings.volume ?? 1) * 100)}
+              onChange={(e) => handleVolumeChange(Number(e.target.value))}
+              aria-label="Master Volume Percentage"
+              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#51a7d5]"
+            />
+          </div>
+
           {/* Graphics Quality: Shadows */}
           <div
             data-anim-item
@@ -476,6 +524,61 @@ export function SettingsModal({
                     }`}
                   >
                     <span>{TIME_OF_DAY_LABELS[mode]}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Cluster Style */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Gauge size={14} className="text-[#51a7d5]" />
+                Dashboard Cluster Style
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Pick the instrument cluster look — twin half-dials or the classic
+                circular gauges
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  {
+                    id: "modern" as const,
+                    name: "Modern Cluster",
+                    desc: "Twin half-circle dials hugging the corners",
+                  },
+                  {
+                    id: "classic" as const,
+                    name: "Classic Cluster",
+                    desc: "Circular chrome gauges with red needles",
+                  },
+                ]
+              ).map((opt) => {
+                const active = (settings.dashStyle ?? "modern") === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleSelectDashStyle(opt.id)}
+                    className={`relative flex flex-col items-start gap-0.5 p-3 rounded border text-left transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white ring-1 ring-[#51a7d5]"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">{opt.name}</span>
+                    <span className="text-[11px] opacity-80">{opt.desc}</span>
+                    {active && (
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#51a7d5] text-[#0b0e14] absolute top-2.5 right-2.5">
+                        <Check size={13} strokeWidth={3} />
+                      </div>
+                    )}
                   </button>
                 )
               })}

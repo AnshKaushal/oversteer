@@ -5,6 +5,7 @@ import { createCabinCollider } from "../PhysicsSystem"
 import { CAR_PHYSICS } from "../../constants/physics"
 import type { TireSmoke } from "../TireSmoke"
 import type { ValidatedState } from "./stateProtocol"
+import type { CarEngineSound } from "../AudioEngine"
 import type { PaintTextureRule } from "../carTint"
 import {
   CORRECTION_ACCEL_MAX,
@@ -56,6 +57,10 @@ const _quat = new THREE.Quaternion()
 const _cn = { x: 0, y: 0, z: 0 }
 
 export class RemoteCar {
+  /** Fallback rpm range for remote players' engine sounds. */
+  static DEFAULT_IDLE_RPM = 800
+  static DEFAULT_REDLINE_RPM = 7500
+
   id: string
   name: string
   color: number
@@ -76,6 +81,10 @@ export class RemoteCar {
   steerAngle = 0
   wheelOmega = 0
   speed = 0
+  /** Latest engine rpm from state packets, for the positional engine sound. */
+  rpm = 800
+  /** Positional engine handled by AudioEngine (attached in App). */
+  engine: CarEngineSound | null = null
   private brakeTarget = 0
   smoke = false
   drift = false
@@ -203,6 +212,8 @@ export class RemoteCar {
     try {
       this.scene?.remove(this.visual.group)
     } catch {}
+    this.engine?.dispose()
+    this.engine = null
     this.visual = new CarVisual()
     this.visual.castShadow = true
     this.loadVisual()
@@ -215,6 +226,7 @@ export class RemoteCar {
     if (state.speed < this.speed - 0.3) this.brakeTarget = 1
     else if (state.speed > this.speed + 0.05) this.brakeTarget = 0
     this.speed = state.speed
+    this.rpm = state.rpm
     this.smoke = state.smoke
     this.drift = state.drift
     this.progress = state.progress
@@ -551,6 +563,8 @@ export class RemoteCar {
 
   dispose(scene: THREE.Scene, world?: RAPIER.World) {
     scene.remove(this.visual.group)
+    this.engine?.dispose()
+    this.engine = null
     const w = this.world ?? world ?? null
     if (this.colliderBody && w) {
       try {

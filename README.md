@@ -126,11 +126,12 @@ Versions come from git tags only; the stamped config is a CI artefact and is not
 
 ## Physics reference
 
-`GAME_OVERVIEW.md` is the deep dive into the vehicle model: constants, torque curve, gearing, the per-frame force pipeline and where tuning belongs. It is a snapshot as of the `checkpoint` commit, so parts of it lag the current code.
+`CAR_PHYSICS_REPORT.md` is the current deep dive into the vehicle model: constants, torque curve, gearing, the per-frame force pipeline and where tuning belongs. `BEAMNG_COMPARISON_REPORT.md` compares it to BeamNG.drive (overall ~44% match, ~57% on the functional dynamics subset). `PHYSICS_IMPROVEMENT_PLAN.md` is the roadmap for wiring unused config, per-vehicle structure, driveline/RPM coupling, tyres, LSD, aero and performance. `GAME_OVERVIEW.md` is an older snapshot and may lag the code.
 
 Where to change things:
 
-- `src/mainview/constants/physics.ts` — the car's behaviour (single source of truth)
+- `src/mainview/constants/physics.ts` — shared vehicle tunables (single source of truth)
+- `src/mainview/constants/cars.ts` — per-car overrides (11 cars)
 - `src/mainview/systems/CarController.ts` — per-wheel / per-frame force work
 - `src/mainview/systems/road.ts` — centreline, elevation, banking
 - `scripts/drift-matrix.ts` — regression net after handling changes

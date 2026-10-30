@@ -83,6 +83,9 @@ export interface AppSettings {
   renderScale: number // 50 to 100
   shadows: boolean
   timeOfDay?: TimeOfDayMode
+  dashStyle?: "modern" | "classic"
+  /** 0..1 master audio volume. */
+  volume?: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -90,6 +93,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 100,
   shadows: true,
   timeOfDay: "day",
+  dashStyle: "modern",
+  volume: 1,
 }
 
 const SETTINGS_KEY = "oversteer_settings"
