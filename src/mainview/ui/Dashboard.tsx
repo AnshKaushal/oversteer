@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react"
 import type { CarTelemetry } from "../systems/CarController"
+import DashboardClassic from "./DashboardLegacy"
 
 const RED_FROM_RPM = 6750
 const MAX_RPM = 8000
@@ -18,7 +19,7 @@ const R_HUB = 135
 const START = 6
 const END = 84
 const N_BASE = R_HUB - 20
-const N_SPLIT = R_TICK - 40
+const N_SPLIT = R_TICK - 70
 const N_END = R_TICK - 2
 
 const SANS = 'Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
@@ -72,6 +73,35 @@ function useDialRefs(): DialRefs {
   }
 }
 
+// Decluttering budgets. The dial sweeps 78° (START→END); whatever the
+// per-car max (260–380 km/h speedo, 7k–15k rpm tach), minor ticks stay
+// ≥ ~2.6° apart and labelled majors ≥ ~8.7° apart. Steps snap to nice
+// 1/2/4/5×10ⁿ values so tick marks and labels never pile up.
+const MAX_MINOR_TICKS = 30
+const MAX_MAJOR_LABELS = 9
+
+function smallestNiceStep(maxValue: number, maxCount: number) {
+  for (let e = 0; e <= 6; e++) {
+    for (const m of [1, 2, 4, 5]) {
+      const step = m * 10 ** e
+      if (Math.ceil(maxValue / step - 1e-9) <= maxCount) return step
+    }
+  }
+  return maxValue
+}
+
+// Subdivide the major step into the densest subdivision whose tick count
+// still fits the budget (½, ¼ or ⅕ subdivisions — classic gauge hierarchies).
+function subdivideStep(maxValue: number, major: number, maxTicks: number) {
+  for (const d of [4, 5, 2, 1]) {
+    const minor = major / d
+    // Keep tick marks on whole units for integer dial maxes (no 12.5 ticks).
+    if (Number.isInteger(maxValue) && !Number.isInteger(minor)) continue
+    if (Math.ceil(maxValue / minor - 1e-9) <= maxTicks) return minor
+  }
+  return major
+}
+
 function buildScale(
   side: Side,
   kind: Kind,
@@ -82,8 +112,10 @@ function buildScale(
   const out: React.ReactNode[] = []
   const isRpm = kind === "rpm"
   const unitMax = isRpm ? maxValue : maxValue
-  const major = isRpm ? 1000 : maxValue <= 100 ? 10 : maxValue <= 200 ? 20 : 40
-  const minor = isRpm ? 200 : major === 10 ? 5 : major / 4
+  // Scale is dial-geometry driven, not driven by arbitrary maxValue
+  // thresholds — see the decluttering budgets above.
+  const major = smallestNiceStep(unitMax, MAX_MAJOR_LABELS)
+  const minor = subdivideStep(unitMax, major, MAX_MINOR_TICKS)
   const n = Math.floor(unitMax / minor + 1e-6)
 
   for (let i = 0; i <= n; i++) {
@@ -232,7 +264,7 @@ function Dial({
       .join(" ")
 
   const body = bar(N_BASE, 3.5, N_SPLIT + 16, 1.5)
-  const tip = bar(N_SPLIT, 2.0, N_END + 1, 1.0)
+  const tip = bar(N_SPLIT, 18.0, N_END + 1, 1.0)
 
   const iconPos = { x: X(52) - 12, y: Y(86) - 12 }
 
@@ -304,7 +336,22 @@ function Dial({
         style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.7))" }}
       >
         <polygon points={body} fill="#eef1f5" />
-        <polygon points={tip} fill="#ff3b30" />
+        {}
+        <polygon
+          points={tip}
+          fill="none"
+          stroke="#0b0e14"
+          strokeWidth="3.5"
+          strokeLinejoin="round"
+          opacity="0.9"
+        />
+        <polygon
+          points={tip}
+          fill="none"
+          stroke="#ff3b30"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
       </g>
 
       {}
@@ -400,7 +447,20 @@ function paintTelltale(
   el.style.filter = on && lit ? `drop-shadow(0 0 4px ${color})` : "none"
 }
 
-export default function Dashboard({ tele }: { tele: CarTelemetry }) {
+export interface DashboardProps {
+  tele: CarTelemetry
+  dashStyle?: "modern" | "classic"
+}
+
+export default function Dashboard({ tele, dashStyle = "modern" }: DashboardProps) {
+  return dashStyle === "classic" ? (
+    <DashboardClassic tele={tele} />
+  ) : (
+    <TwinDialDashboard tele={tele} />
+  )
+}
+
+function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
   const teleRef = useRef(tele)
   teleRef.current = tele
 

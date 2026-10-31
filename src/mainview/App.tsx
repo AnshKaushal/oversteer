@@ -2119,7 +2119,7 @@ export default function App() {
           to={{ duration: 0.6, delay: 0.12 }}
           exit={{ duration: 0.26, ease: EASE.in }}
         >
-          <Dashboard tele={tele} />
+          <Dashboard tele={tele} dashStyle={settings.dashStyle ?? "modern"} />
         </Screen>
       )}
       {hudVisible && (
