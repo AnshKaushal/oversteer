@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react"
-import type { CarTelemetry } from "../systems/CarController"
+import type { CarTelemetry } from "../physics/vehicle/Vehicle"
 import DashboardClassic from "./DashboardLegacy"
 
 const RED_FROM_RPM = 6750
@@ -60,6 +60,10 @@ interface DialRefs {
   progress: { current: SVGPathElement | null }
   num: { current: SVGTextElement | null }
   icon: { current: SVGGElement | null }
+  icon2: { current: SVGGElement | null }
+  icon3: { current: SVGGElement | null }
+  icon4: { current: SVGGElement | null }
+  cruiseTxt: { current: SVGTextElement | null }
   rim: { current: SVGPathElement | null }
 }
 
@@ -69,6 +73,10 @@ function useDialRefs(): DialRefs {
     progress: useRef<SVGPathElement | null>(null),
     num: useRef<SVGTextElement | null>(null),
     icon: useRef<SVGGElement | null>(null),
+    icon2: useRef<SVGGElement | null>(null),
+    icon3: useRef<SVGGElement | null>(null),
+    icon4: useRef<SVGGElement | null>(null),
+    cruiseTxt: useRef<SVGTextElement | null>(null),
     rim: useRef<SVGPathElement | null>(null),
   }
 }
@@ -200,6 +208,21 @@ function ParkIcon() {
   )
 }
 
+/** rpm-dial telltale arc: icon size and spacing along the arc, in dial units. */
+const ICON_SIZE = 22
+const ICON_PITCH = 26
+
+/** Gauge with a needle: cruise control. */
+function CruiseIcon() {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 17a8.5 8.5 0 1 1 16 0" />
+      <path d="M12 17l4.2-5.4" />
+      <circle cx="12" cy="17" r="1.2" fill="currentColor" />
+    </g>
+  )
+}
+
 function DriftIcon() {
   return (
     <g
@@ -214,6 +237,34 @@ function DriftIcon() {
       <circle cx="16.6" cy="14.6" r="1.5" fill="currentColor" stroke="none" />
       <path d="M3 18.6c2-1.8 4 1.8 6 0s4 1.8 6 0 4 1.8 6 0" />
       <path d="M3 22c2-1.8 4 1.8 6 0s4 1.8 6 0 4 1.8 6 0" />
+    </g>
+  )
+}
+
+/** Circled text: traction control (TC) and ABS telltales. */
+function TextIcon({ label }: { label: string }) {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" />
+      <text x="12" y="15" textAnchor="middle" fontSize="8" fontWeight="700" fill="currentColor" stroke="none">
+        {label}
+      </text>
+    </g>
+  )
+}
+
+/** Shield with a tick: stability / traction control. */
+function SafetyIcon() {
+  return (
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l7 2.6v5.6c0 4.4-3 8-7 9.8-4-1.8-7-5.4-7-9.8V5.6z" />
+      <path d="M8.6 12l2.4 2.4 4.4-4.8" />
     </g>
   )
 }
@@ -399,12 +450,48 @@ function Dial({
         {caption}
       </text>
 
-      {}
-      <g transform={`translate(${iconPos.x} ${iconPos.y})`}>
-        <g ref={refs.icon} style={{ color: OFF, opacity: 0.85 }}>
-          {kind === "speed" ? <ParkIcon /> : <DriftIcon />}
-        </g>
-      </g>
+      {(kind === "speed"
+        ? ([
+            [refs.icon, <ParkIcon key="park" />],
+            [refs.icon2, <CruiseIcon key="cruise" />],
+          ] as const)
+        : ([
+            [refs.icon, <DriftIcon key="drift" />],
+            [refs.icon3, <TextIcon key="tc" label="TC" />],
+            [refs.icon4, <TextIcon key="abs" label="ABS" />],
+            [refs.icon2, <SafetyIcon key="safe" />],
+          ] as const)
+      ).map(([ref, icon], i, row) => {
+        // icons sit on an arc concentric with the dial, each turned to follow it
+        const r = Math.hypot(iconPos.x + 12 - cx, iconPos.y + 12 - S)
+        const a0 = Math.atan2(iconPos.y + 12 - S, iconPos.x + 12 - cx)
+        const a = a0 + ((i - (row.length - 1) / 2) * ICON_PITCH) / r
+        const x = cx + r * Math.cos(a)
+        const y = S + r * Math.sin(a)
+        const tilt = (a * 180) / Math.PI + 90
+        return (
+          <g
+            key={i}
+            transform={`translate(${x} ${y}) rotate(${tilt}) scale(${ICON_SIZE / 24}) translate(-12 -12)`}
+          >
+            <g ref={ref} style={{ color: OFF, opacity: 0.85 }}>
+              {icon}
+            </g>
+            {kind === "speed" && i === 1 && (
+              <text
+                ref={refs.cruiseTxt}
+                x="12"
+                y="-2"
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight={700}
+                fill={BLUE}
+                fontFamily={SANS}
+              />
+            )}
+          </g>
+        )
+      })}
     </svg>
   )
 }
@@ -537,7 +624,7 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
       if (rim) {
         rim.setAttribute(
           "stroke",
-          limiter ? `rgba(227,6,19,${flash})` : "url(#bmw-rpm-chrome)",
+          limiter ? `rgba(227,6,19,${flash})` : "url(#dial-rpm-chrome)",
         )
         rim.setAttribute(
           "stroke-width",
@@ -570,6 +657,16 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
 
       const blink = Math.floor(now / 170) % 2 === 0
       paintTelltale(spd.icon.current, booting || t.parkingBrake, RED, true)
+      // aids light steadily while on, blink while intervening, and go dark when switched off
+      // shield = stability control (G), TC = traction control (X); N switches both
+      paintTelltale(spd.icon2.current, booting || !!t.cruiseOn, BLUE, true)
+      if (spd.cruiseTxt.current) {
+        const ct = t.cruiseOn ? String(Math.round(t.cruiseTargetKmh ?? 0)) : ""
+        if (spd.cruiseTxt.current.textContent !== ct) spd.cruiseTxt.current.textContent = ct
+      }
+      paintTelltale(rpm.icon2.current, booting || t.stabilityControl !== false, AMBER, booting || !t.stabilityActive || blink)
+      paintTelltale(rpm.icon3.current, booting || t.tractionControl !== false, AMBER, booting || !t.tractionActive || blink)
+      paintTelltale(rpm.icon4.current, booting || t.absOn !== false, AMBER, booting || !t.absActive || blink)
       paintTelltale(
         rpm.icon.current,
         booting || !!t.drift,
@@ -600,26 +697,12 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
         </div>
       )}
 
-      {tele.cruiseOn && (
-        <div className="absolute top-8 right-6 flex items-center gap-2 rounded-lg border-2 border-[#7db8ec]/70 bg-[#0a141d]/90 px-3 py-1.5">
-          <span className="text-lg text-[#7db8ec]">◎</span>
-          <div className="leading-tight">
-            <div className="text-[10px] font-bold tracking-[0.25em] text-[#7db8ec]">
-              CRUISE
-            </div>
-            <div className="text-sm font-bold text-white">
-              {Math.round(tele.cruiseTargetKmh ?? 0)} KM/H
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between">
         <div className="w-[clamp(190px,25vw,340px)]">
           <Dial
             side="left"
             kind="speed"
-            id="bmw-spd"
+            id="dial-spd"
             maxValue={dashMaxKmh}
             caption="KM/H"
             captionColor="#8f99a8"
@@ -630,12 +713,12 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
           <Dial
             side="right"
             kind="rpm"
-            id="bmw-rpm"
+            id="dial-rpm"
             maxValue={dashMaxRpm}
             redFrom={dashRedFrom}
             yellowFrom={dashYellowFrom}
-            caption={tele.autoMode ? "AUTO" : "MANUAL"}
-            captionColor={tele.autoMode ? "#7db8ec" : "#cbd5e1"}
+            caption={!tele.engineOn ? "ENGINE OFF" : tele.autoMode ? "AUTO" : "MANUAL"}
+            captionColor={!tele.engineOn ? "#ff5a5a" : tele.autoMode ? "#7db8ec" : "#cbd5e1"}
             refs={rpm}
           />
         </div>

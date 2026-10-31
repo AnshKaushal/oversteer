@@ -1,5 +1,5 @@
 /**
- * Per-car physics gate. Every entry in the car registry (constants/cars)
+ * Per-car physics gate. Every entry in the car registry (data/cars)
  * must: settle on its suspension, launch from a standstill, pull to a
  * sane top speed, survive a handbrake slide + recovery, and expose
  * exactly 4 GLB wheel pivots (else the car silently gets cylinder
@@ -8,16 +8,16 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
   moveGroundBody,
   FIXED_DT,
   stepVehicleOnce,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
-import { CARS } from "../src/mainview/constants/cars"
+import { CARS } from "../src/mainview/data/cars"
 import { MIN_PIVOT_FRAC, pivotMatches } from "../src/mainview/systems/CarVisual"
 
 const RAPIER = await initPhysics()
@@ -112,10 +112,9 @@ for (const def of CARS) {
     0,
     0.72,
     0,
-    def.physics.dimensions,
-    def.physics.mass.chassis,
+    def.physics,
   )
-  const car = new CarController(
+  const car = new Vehicle(
     world,
     body,
     RAPIER,

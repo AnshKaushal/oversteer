@@ -1,16 +1,17 @@
+import { NET } from "../../data/net"
 export type CorrectionMode = "follow" | "contact" | "recover"
 
-export const CORRECTION_ACCEL_MAX = 25
+export const CORRECTION_ACCEL_MAX = NET.correction.accelMax
 
-export const CONTACT_GRACE_MS = 300
-export const HARD_IMPACT_GRACE_MS = 400
-export const IMPACT_IMPULSE_THRESHOLD = 2000
-export const RECOVER_RAMP_MS = 400
-export const RECOVER_FOLLOW_ERR_M = 0.65
-export const RECOVER_WARP_M = 30
+export const CONTACT_GRACE_MS = NET.correction.contactGraceMs
+export const HARD_IMPACT_GRACE_MS = NET.correction.hardImpactGraceMs
+export const IMPACT_IMPULSE_THRESHOLD = NET.correction.impactImpulse
+export const RECOVER_RAMP_MS = NET.correction.recoverRampMs
+export const RECOVER_FOLLOW_ERR_M = NET.correction.recoverFollowErrM
+export const RECOVER_WARP_M = NET.correction.recoverWarpM
 
-export const RECOVER_CORR_MAX = 3
-export const SUPPORT_DESCENT_DY = -0.5
+export const RECOVER_CORR_MAX = NET.correction.recoverCorrMax
+export const SUPPORT_DESCENT_DY = NET.correction.supportDescentDy
 
 export class CorrectionState {
   mode: CorrectionMode = "follow"

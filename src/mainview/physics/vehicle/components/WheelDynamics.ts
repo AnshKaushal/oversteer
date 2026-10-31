@@ -1,3 +1,4 @@
+import { WHEEL_COUNT } from "../../../data/world"
 export interface WheelSpinState {
   omega: number
   inertia: number
@@ -18,7 +19,12 @@ export class WheelDynamics {
   readonly wheels: WheelSpinState[] = []
   readonly slipDampRate: number
 
-  constructor(radius: number, inertia: number, slipDampRate = 0, count = 4) {
+  constructor(
+    radius: number,
+    inertia: number,
+    slipDampRate = 0,
+    count = WHEEL_COUNT,
+  ) {
     this.slipDampRate = slipDampRate
     for (let i = 0; i < count; i++) {
       this.wheels.push({
@@ -54,6 +60,10 @@ export class WheelDynamics {
     brakeTorqueMag: number,
     tireTorque: number,
     roadSpeed?: number,
+    /** Tire torque change per rad/s of wheel speed (N m s), treated implicitly. */
+    torqueSlope = 0,
+    /** Most torque the tire can push back with (N m); keeps the implicit term from out-gripping the tire. */
+    tireTorqueMax = Infinity,
   ): WheelSpinState {
     const w = this.wheels[wi]
     const brake = Math.max(0, brakeTorqueMag)
@@ -65,13 +75,25 @@ export class WheelDynamics {
       roadSpeed === undefined
         ? 0
         : (dt * this.slipDampRate * w.radius * w.radius) / w.inertia
+    const implicit = (torqueSlope * dt) / w.inertia
     let omega =
-      (w.omega +
+      (w.omega * (1 + implicit) +
         ((driveTorque - tireTorque) / w.inertia) * dt +
         (roadSpeed === undefined
           ? 0
           : ((dt * this.slipDampRate * w.radius) / w.inertia) * roadSpeed)) /
-      (1 + stiff)
+      (1 + stiff + implicit)
+    // The linear tire slope ignores saturation: past the tire's limit the wheel
+    // sees only the limit torque, so a strong drive can still spin it up
+    const predicted = tireTorque + torqueSlope * (omega - w.omega)
+    if (Math.abs(predicted) > tireTorqueMax) {
+      const sat = Math.sign(predicted) * tireTorqueMax
+      omega =
+        (w.omega +
+          ((driveTorque - sat) / w.inertia) * dt +
+          (roadSpeed === undefined ? 0 : ((dt * this.slipDampRate * w.radius) / w.inertia) * roadSpeed)) /
+        (1 + stiff)
+    }
     w.slipDampTorque =
       roadSpeed === undefined
         ? 0
@@ -88,11 +110,7 @@ export class WheelDynamics {
   }
 
   omegas(): [number, number, number, number] {
-    return [
-      this.wheels[0]?.omega ?? 0,
-      this.wheels[1]?.omega ?? 0,
-      this.wheels[2]?.omega ?? 0,
-      this.wheels[3]?.omega ?? 0,
-    ]
+    const [a, b, c, d] = this.wheels.map((w) => w.omega)
+    return [a ?? 0, b ?? 0, c ?? 0, d ?? 0]
   }
 }

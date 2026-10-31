@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import type { WeatherId } from "../data/surfaces"
 import type { TimeOfDayMode } from "../constants/timeOfDay"
 
 export type ResolutionId =
@@ -83,6 +84,7 @@ export interface AppSettings {
   renderScale: number // 50 to 100
   shadows: boolean
   timeOfDay?: TimeOfDayMode
+  weather?: WeatherId
   dashStyle?: "modern" | "classic"
 }
 
@@ -91,6 +93,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 100,
   shadows: true,
   timeOfDay: "day",
+  weather: "dry",
   dashStyle: "modern",
 }
 

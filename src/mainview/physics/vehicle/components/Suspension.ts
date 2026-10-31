@@ -1,6 +1,9 @@
+import { DEFAULT_SURFACE, type SurfaceId } from "../../../data/surfaces"
+import { surfaceOf } from "../../core/Surfaces"
 import * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
-import { CAR_PHYSICS } from "../constants/physics"
+import type { SuspensionSpec } from "../../../data/schema"
+import { WORLD } from "../../../data/world"
 
 export interface WheelDef {
   x: number
@@ -9,24 +12,8 @@ export interface WheelDef {
   left: boolean
 }
 
-export interface SuspensionParams {
-  springRate: number
-  damperRate: number
-  travel: number
-  antiRollBarFront: number
-  antiRollBarRear: number
-}
+export type SuspensionParams = SuspensionSpec
 
-function defaultSuspensionParams(): SuspensionParams {
-  const s = CAR_PHYSICS.wheels.suspension
-  return {
-    springRate: s.springRate,
-    damperRate: s.damperRate,
-    travel: s.travel,
-    antiRollBarFront: s.antiRollBarFront,
-    antiRollBarRear: s.antiRollBarRear,
-  }
-}
 export interface WheelSuspState {
   wi: number
   grounded: boolean
@@ -38,19 +25,11 @@ export interface WheelSuspState {
   force: number
   load: number
   contactY: number
+  surface: SurfaceId
   contactNormal: THREE.Vector3
   anchorWorld: THREE.Vector3
   pointVel: THREE.Vector3
 }
-
-const REST_LENGTH = 0.915
-const RAY_LIFT = 0.1
-const MAX_REACH = REST_LENGTH + 0.12
-const DROOP_LIMIT = -0.06
-const BUMP_START = 0.1
-const BUMP_GAIN = 12
-const ARB_FORCE_LIMIT = 4000
-const MAX_CORNER_FORCE = 30000
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
@@ -63,19 +42,33 @@ export class SuspensionSystem {
   private R: typeof RAPIER
   private wheels: WheelDef[]
   private params: SuspensionParams
+  /** Spring free length per wheel, from ride height plus the static squat. */
+  private readonly restLengths: number[]
 
   constructor(
     world: RAPIER.World,
     body: RAPIER.RigidBody,
     R: typeof RAPIER,
     wheels: WheelDef[],
-    params?: SuspensionParams,
+    params: SuspensionParams,
+    sprungMass: number,
   ) {
     this.world = world
     this.body = body
     this.R = R
     this.wheels = wheels
-    this.params = params ?? defaultSuspensionParams()
+    this.params = params
+    // Static load per wheel from where the wheels sit about the centre of mass
+    // (the body origin): rear share is the front lever over the wheelbase.
+    const zFront = wheels.find((w) => w.front)?.z ?? 0
+    const zRear = wheels.find((w) => !w.front)?.z ?? 0
+    const frontShare = zRear / (zRear - zFront)
+    this.restLengths = wheels.map((w) => {
+      const axle = w.front ? params.front : params.rear
+      const share = w.front ? frontShare : 1 - frontShare
+      const staticLoad = (sprungMass * WORLD.gravity * share) / 2
+      return axle.rideHeight + params.rayLift + staticLoad / axle.springRate
+    })
     wheels.forEach((_, wi) => {
       this.states.push({
         wi,
@@ -88,6 +81,7 @@ export class SuspensionSystem {
         force: 0,
         load: 0,
         contactY: 0,
+        surface: DEFAULT_SURFACE,
         contactNormal: new THREE.Vector3(0, 1, 0),
         anchorWorld: new THREE.Vector3(),
         pointVel: new THREE.Vector3(),
@@ -101,10 +95,10 @@ export class SuspensionSystem {
     bodyPos: THREE.Vector3,
     linvel: THREE.Vector3,
     angvel: THREE.Vector3,
+    com: THREE.Vector3,
   ): WheelSuspState[] {
-    const k = this.params.springRate
-    const c = this.params.damperRate
-    const travelLimit = this.params.travel + 0.06
+    const sp = this.params
+    const travelLimit = sp.travel + sp.travelMargin
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(quat)
 
     for (let wi = 0; wi < this.wheels.length; wi++) {
@@ -115,12 +109,12 @@ export class SuspensionSystem {
         .add(bodyPos)
       st.anchorWorld.copy(anchor)
 
-      const origin = anchor.clone().addScaledVector(up, RAY_LIFT)
+      const origin = anchor.clone().addScaledVector(up, sp.rayLift)
       const dir = up.clone().negate()
       const ray = new this.R.Ray(origin, dir)
       const hit = this.world.castRayAndGetNormal(
         ray,
-        MAX_REACH,
+        this.restLengths[wi] + sp.reachMargin,
         true,
         undefined,
         undefined,
@@ -128,11 +122,11 @@ export class SuspensionSystem {
         this.body,
       )
 
-      const r = new THREE.Vector3(anchor.x - bodyPos.x, 0, anchor.z - bodyPos.z)
+      const r = anchor.clone().sub(com)
       const pointVel = linvel.clone().add(angvel.clone().cross(r))
       st.pointVel.copy(pointVel)
 
-      if (!hit || hit.timeOfImpact < 0.05) {
+      if (!hit || hit.timeOfImpact < sp.minContactToi) {
         st.grounded = false
         st.compression = 0
         st.suspVel = 0
@@ -145,12 +139,14 @@ export class SuspensionSystem {
       }
 
       const toi = hit.timeOfImpact
-      const compression = clamp(REST_LENGTH - toi, DROOP_LIMIT, travelLimit)
+      const axle = w.front ? sp.front : sp.rear
+      const compression = clamp(this.restLengths[wi] - toi, sp.droopLimit, travelLimit)
       const suspVel = -pointVel.dot(up)
 
-      const bump = 1 + Math.max(0, compression - BUMP_START) * BUMP_GAIN
-      const springF = k * bump * Math.max(0, compression)
-      const damperF = -c * pointVel.dot(up)
+      const bump = 1 + Math.max(0, compression - sp.bumpStart) * sp.bumpGain
+      const springF = axle.springRate * bump * Math.max(0, compression)
+      const damping = suspVel > 0 ? axle.bumpDamping : axle.reboundDamping
+      const damperF = damping * suspVel
 
       const contact = origin.clone().addScaledVector(dir, toi)
       st.grounded = true
@@ -160,6 +156,7 @@ export class SuspensionSystem {
       st.damperF = damperF
       st.arbF = 0
       st.contactY = contact.y
+      st.surface = surfaceOf(this.world, (hit as { collider?: RAPIER.Collider }).collider, contact.x, contact.z)
       const n = (hit as { normal?: { x: number; y: number; z: number } }).normal
       if (n) st.contactNormal.set(n.x, n.y, n.z)
       else st.contactNormal.set(0, 1, 0)
@@ -180,8 +177,8 @@ export class SuspensionSystem {
         : this.params.antiRollBarRear
       const arb = clamp(
         (kArb * (left.compression - right.compression)) / 2,
-        -ARB_FORCE_LIMIT,
-        ARB_FORCE_LIMIT,
+        -sp.arbForceLimit,
+        sp.arbForceLimit,
       )
       left.arbF = arb
       right.arbF = -arb
@@ -189,14 +186,14 @@ export class SuspensionSystem {
 
     const upY = up.y
     for (const st of this.states) {
-      if (!st.grounded || upY < 0.25) {
+      if (!st.grounded || upY < sp.minUpY) {
         st.force = 0
         st.load = 0
         continue
       }
       const force = Math.max(
         0,
-        Math.min(MAX_CORNER_FORCE, st.springF + st.damperF + st.arbF),
+        Math.min(sp.maxCornerForce, st.springF + st.damperF + st.arbF),
       )
       st.force = force
       st.load = force

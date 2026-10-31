@@ -1,0 +1,15 @@
+{
+  "TireModel.ts": [
+    "1e-9",
+    "0.0001"
+  ],
+  "WheelDynamics.ts": [
+    "0.5"
+  ],
+  "Aero.ts": [
+    "0.5"
+  ],
+  "PhysicsSystem.ts": [
+    "12"
+  ]
+}

@@ -1,10 +1,11 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
   FIXED_DT,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
+import { activeCar } from "./lib/cars"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
 
 const RAPIER = await initPhysics()
@@ -35,15 +36,19 @@ async function bench(cars: number) {
       .setFriction(1.0),
     gb,
   )
-  const controllers: CarController[] = []
+  const controllers: Vehicle[] = []
   for (let i = 0; i < cars; i++) {
+    const def = activeCar()
     const body = createChassisBody(
       world,
       (i % 2) * 4 - 2,
       0.72,
       -Math.floor(i / 2) * 8,
+      def.physics,
     )
-    controllers.push(new CarController(world, body, RAPIER))
+    controllers.push(
+      new Vehicle(world, body, RAPIER, def.physics, def.wheels, def.dash),
+    )
   }
   // Warmup (settle suspension, JIT).
   for (let i = 0; i < 240; i++) {

@@ -1,3 +1,5 @@
+import { conditions } from "./physics/core/Conditions"
+import { DEFAULT_WEATHER } from "./data/surfaces"
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { Play, RotateCcw, LogOut, Loader2, Settings } from "lucide-react"
@@ -10,12 +12,15 @@ import {
   pushFrameTime,
   consumeSubstep,
   createFixedStepper,
-} from "./systems/PhysicsSystem"
+  stepperAlpha,
+  dropBacklog,
+} from "./physics/core/PhysicsSystem"
+import { PoseHistory } from "./physics/core/PoseHistory"
+import { FrameStats } from "./diagnostics/FrameStats"
 import {
-  CarController,
-  DEFAULT_DASH,
+  Vehicle,
   type CarTelemetry,
-} from "./systems/CarController"
+} from "./physics/vehicle/Vehicle"
 import {
   WorldManager,
   roadCenterX,
@@ -71,8 +76,9 @@ import {
   netDiagPhysicsTick,
 } from "./systems/net/NetDiagnostics"
 import type { PeerPlayer } from "./systems/net/types"
-import { CAR_PHYSICS } from "./constants/physics"
-import { CARS, DEFAULT_CAR_ID, getCar } from "./constants/cars"
+import type * as RAPIER from "@dimforge/rapier3d-compat"
+import { WORLD } from "./data/world"
+import { CARS, DEFAULT_CAR_ID, getCar } from "./data/cars"
 import { WORLD_CONFIG } from "./constants/world"
 
 const clamp = (v: number, lo: number, hi: number) =>
@@ -104,7 +110,16 @@ const initialTele: CarTelemetry = {
   cruiseTargetKmh: null,
   slipRatio: 0,
   drift: false,
-  dash: DEFAULT_DASH,
+  safetyAids: true,
+  tractionControl: true,
+  stabilityControl: true,
+  absOn: true,
+  tractionActive: false,
+  stabilityActive: false,
+  absActive: false,
+  steerFeedback: 0,
+  engineOn: true,
+  dash: getCar(DEFAULT_CAR_ID).dash,
 }
 
 const _qNpc = new THREE.Quaternion()
@@ -122,7 +137,7 @@ export default function App() {
   const [lockHint, setLockHint] = useState(false)
   const speedLinesRef = useRef<HTMLDivElement | null>(null)
   const speedLinesOn = useRef(false)
-  const setSpeedLines = (v: number) => {
+  const setSpeedLines = (v: number, strength: number) => {
     const el = speedLinesRef.current
     if (!el) return
     if (v <= 0.001) {
@@ -138,7 +153,7 @@ export default function App() {
       el.classList.remove("sl-off")
     }
     el.style.opacity = String(
-      Math.min(1, v) * CAR_PHYSICS.assists.speedFeel.linesStrength,
+      Math.min(1, v) * strength,
     )
   }
   const startedRef = useRef(false)
@@ -155,6 +170,8 @@ export default function App() {
   )
   const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
   timeOfDayRef.current = timeOfDay
+  conditions.weather = settings.weather ?? DEFAULT_WEATHER
+  conditions.timeOfDay = timeOfDay
   const wmRef = useRef<WorldManager | null>(null)
   const flybyRef = useRef<AirplaneFlyby | null>(null)
   const playerVisualRef = useRef<CarVisual | null>(null)
@@ -199,7 +216,6 @@ export default function App() {
   }
 
   const inputRef = useRef<InputManager | null>(null)
-  const resetRef = useRef(false)
   const pauseFnRef = useRef(() => {})
   const resumeFnRef = useRef(() => {})
   const raceSetupRef = useRef<RaceSetup | null>(null)
@@ -229,6 +245,7 @@ export default function App() {
       localStorage.setItem("oversteer_car", id)
     } catch {}
     multiplayerRef.current?.setLocalCarId(id)
+    pushNetColor()
     garageApiRef.current?.showCar(id)
   }
   const stepCar = (dir: 1 | -1) => {
@@ -252,6 +269,20 @@ export default function App() {
     if (picked !== undefined) return picked ?? undefined
     return getCar(id).defaultTint ?? undefined
   }
+  /** In a room your car shows its garage paint to everyone; unpainted cars keep the profile colour. */
+  const pushNetColor = () => {
+    const m = multiplayerRef.current
+    if (!m) return
+    const c = paintFor(carIdRef.current)
+    const paint = c ?? null
+    if (m.localPaint === paint) return
+    m.localPaint = paint
+    if (c !== undefined) {
+      m.localColor = c
+      m.localColorHex = colorHex(c)
+    }
+    m.announceIdentitySoon()
+  }
   const setPaintFor = (id: string, color: number | null) => {
     const next = { ...paintRef.current, [id]: color }
     paintRef.current = next
@@ -259,7 +290,10 @@ export default function App() {
     try {
       localStorage.setItem("oversteer_paint", JSON.stringify(next))
     } catch {}
-    if (id === carIdRef.current) garageApiRef.current?.paint(color)
+    if (id === carIdRef.current) {
+      garageApiRef.current?.paint(color)
+      pushNetColor()
+    }
   }
   const [pool, setPool] = useState<string[]>(() => {
     try {
@@ -504,6 +538,22 @@ export default function App() {
     rebuildSession()
   }
 
+  /** Back to the start: the grid and countdown in a race, the spawn point in free roam. */
+  const restart = () => {
+    if (raceSetupRef.current && lastRaceRef.current) {
+      raceAgain()
+    } else {
+      pausedRef.current = false
+      startedRef.current = true
+      setPaused(false)
+      setRace(emptyRace)
+      inputRef.current?.clear()
+      fireWipe("FREE ROAM")
+      rebuildSession()
+    }
+    lockCanvas()
+  }
+
   const quitToMenu = () => {
     const net = multiplayerRef.current
     if (net && net.roomId && net.localReady) net.setLocalReady(false)
@@ -687,14 +737,13 @@ export default function App() {
           playerX,
           0.72,
           playerZ,
-          playerDef.physics.dimensions,
-          playerDef.physics.mass.chassis,
+          playerDef.physics,
         )
         const q0 = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(0, yaw0, 0),
         )
         body.setRotation({ x: q0.x, y: q0.y, z: q0.z, w: q0.w }, true)
-        const car = new CarController(
+        const car = new Vehicle(
           world,
           body,
           R,
@@ -704,7 +753,7 @@ export default function App() {
         )
 
         interface Rival {
-          car: CarController
+          car: Vehicle
           visual: CarVisual
           ai: AIDriver
           name: string
@@ -761,14 +810,13 @@ export default function App() {
             roadCenterX(s0) + nx * g.lateral,
             0.72,
             -s0 + nz * g.lateral,
-            rivalDef.physics.dimensions,
-            rivalDef.physics.mass.chassis,
+            rivalDef.physics,
           )
           const q = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(0, yaw, 0),
           )
           rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-          const rc = new CarController(
+          const rc = new Vehicle(
             world,
             rb,
             R,
@@ -847,8 +895,7 @@ export default function App() {
             roadCenterX(ts0) + tnx * tprof.laneBias,
             0.72,
             -ts0 + tnz * tprof.laneBias,
-            def.physics.dimensions,
-            def.physics.mass.chassis,
+            def.physics,
           )
           const tq = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(0, tyaw, 0),
@@ -862,7 +909,7 @@ export default function App() {
             { x: tslope * tinv * tv0 * tdir, y: 0, z: -tinv * tv0 * tdir },
             true,
           )
-          const tc = new CarController(
+          const tc = new Vehicle(
             world,
             tb,
             R,
@@ -924,6 +971,12 @@ export default function App() {
             toggleModePressed: false,
             toggleLaunchPressed: false,
             toggleParkPressed: false,
+            toggleTractionPressed: false,
+            toggleStabilityPressed: false,
+            toggleSafetyPressed: false,
+            toggleIgnitionPressed: false,
+            toggleHandbrakePressed: false,
+            toggleAbsPressed: false,
             resetPressed: false,
             toggleCameraPressed: false,
             startPressed: false,
@@ -931,6 +984,8 @@ export default function App() {
             cruiseSetPressed: false,
             cruiseUpPressed: false,
             cruiseTogglePressed: false,
+            toggleTimeOfDayPressed: false,
+            toggleHeadlightsPressed: false,
           }
           const allCars = [car, ...rivals.map((r) => r.car)]
           for (let i = 0; i < 120; i++) {
@@ -948,8 +1003,7 @@ export default function App() {
         let visual = new CarVisual()
         playerVisualRef.current = visual
         const playerPaint = (id: string): number | undefined => {
-          if (net?.roomId) return net.localColor
-          return paintFor(id)
+          return paintFor(id) ?? (net?.roomId ? net.localColor : undefined)
         }
         try {
           await visual.load(baseUrl, playerPaint(playerDef.id), {
@@ -1085,6 +1139,58 @@ export default function App() {
         let buriedFrames = 0
         const stepper = createFixedStepper()
         let substepTick = 0
+        const stats = new FrameStats(WORLD.statsWindowMs)
+        const statsEl = document.createElement("pre")
+        statsEl.style.cssText =
+          "position:fixed;top:8px;left:8px;margin:0;padding:6px 8px;z-index:9999;" +
+          "font:11px/1.35 ui-monospace,monospace;color:#9fe;background:rgba(0,0,0,.6);" +
+          "pointer-events:none;display:none;white-space:pre"
+        document.body.appendChild(statsEl)
+        const onStatsKey = (e: KeyboardEvent) => {
+          if (e.code === "F3")
+            statsEl.style.display =
+              statsEl.style.display === "none" ? "block" : "none"
+        }
+        window.addEventListener("keydown", onStatsKey)
+        const poses = new WeakMap<object, PoseHistory>()
+        const poseOf = (c: Vehicle) => {
+          let h = poses.get(c)
+          if (!h) poses.set(c, (h = new PoseHistory()))
+          return h
+        }
+        const capturePose = (c: Vehicle) =>
+          poseOf(c).capture(
+            c.body.translation(),
+            c.body.rotation(),
+            c.getWheelCompressions(),
+          )
+        let renderAlpha = 0
+        const _bPos = new THREE.Vector3()
+        const _bRot = new THREE.Quaternion()
+        const _bComp: number[] = []
+        const syncVisual = (vis: CarVisual, c: Vehicle, dtv: number) => {
+          const h = poseOf(c)
+          if (!h.ready) {
+            vis.syncFromBody(
+              c.body,
+              c.steerAngle,
+              c.getWheelOmegas(),
+              dtv,
+              c.getWheelCompressions(),
+            )
+            return
+          }
+          vis.syncFromPose(
+            h.blendPos(renderAlpha, _bPos),
+            h.blendRot(renderAlpha, _bRot),
+            c.steerAngle,
+            c.getWheelOmegas(),
+            dtv,
+            h.blendCompressions(renderAlpha, _bComp),
+          )
+        }
+        let frameStepMs = 0
+        let frameSteps = 0
         const camPos = new THREE.Vector3(startX, 3, 8)
         const showDesired = new THREE.Vector3()
         const camLook = new THREE.Vector3()
@@ -1235,7 +1341,7 @@ export default function App() {
           raf = requestAnimationFrame(loop)
           let dt = (now - last) / 1000
           last = now
-          dt = Math.min(dt, CAR_PHYSICS.simulation.maxFrameDt)
+          dt = Math.min(dt, WORLD.maxFrameDt)
 
           const inp = input.update(dt)
           if (!startedRef.current && !showIntroRef.current && inp.startPressed)
@@ -1258,7 +1364,7 @@ export default function App() {
               vis.setHeadlights(!vis.hasHeadlights())
             }
           }
-          const doReset = inp.resetPressed || resetRef.current
+          const doReset = inp.resetPressed
           const fellOut = body.translation().y < -3
           const bq0 = body.rotation()
           const upY0 = 1 - 2 * (bq0.x * bq0.x + bq0.z * bq0.z)
@@ -1274,7 +1380,6 @@ export default function App() {
           }
           if (doReset || fellOut || buriedTimer > 5) {
             buriedTimer = 0
-            resetRef.current = false
             const p = body.translation()
             const s = -p.z
             car.reset(
@@ -1286,7 +1391,7 @@ export default function App() {
 
           if (pausedRef.current) {
             stepper.acc = 0
-            setSpeedLines(0)
+            setSpeedLines(0, 0)
             smoke.update(dt)
             pausedTick = (pausedTick + 1) % 3
             if (pausedTick !== 0) return
@@ -1312,6 +1417,7 @@ export default function App() {
               !raceActive || (released && headsUp <= 0 && countdown <= 0)
             if (raceActive && racing && !raceFinished) raceElapsed += dt
             const steps = pushFrameTime(stepper, dt)
+            if (steps === 0) input.requeue(inp)
             netDiagPhysicsTick(steps, stepper.droppedTotal)
             if (raceActive) {
               const pp = body.translation()
@@ -1361,7 +1467,14 @@ export default function App() {
                 }
               }
             }
+            const stepT0 = performance.now()
+            frameSteps = steps
             for (let i = 0; i < steps; i++) {
+              if (performance.now() - stepT0 > WORLD.stepBudgetMs) {
+                frameSteps = i
+                dropBacklog(stepper)
+                break
+              }
               substepTick++
               const subInp: DriveInput =
                 i === 0
@@ -1373,6 +1486,12 @@ export default function App() {
                       toggleModePressed: false,
                       toggleLaunchPressed: false,
                       toggleParkPressed: false,
+            toggleTractionPressed: false,
+            toggleStabilityPressed: false,
+            toggleSafetyPressed: false,
+            toggleIgnitionPressed: false,
+            toggleHandbrakePressed: false,
+            toggleAbsPressed: false,
                       resetPressed: false,
                       toggleCameraPressed: false,
                       startPressed: false,
@@ -1433,15 +1552,27 @@ export default function App() {
                 body.setLinvel(lockLv, true)
                 body.setAngvel(lockAv, true)
               }
+              if (net && net.roomId)
+                net.onPhysicsTick(car, t, () => carProgress(body))
               consumeSubstep(stepper)
+              capturePose(car)
+              if (raceActive) for (const rv of rivals) capturePose(rv.car)
+              for (const tcar of trafficCars)
+                if (tcar.visual.group.visible) capturePose(tcar.car)
             }
+            frameStepMs = performance.now() - stepT0
+            renderAlpha = stepperAlpha(stepper)
+            stats.dropped = stepper.droppedTotal
             if (stepper.droppedTotal > 0) {
               ;(window as any).__physicsDroppedTotal = stepper.droppedTotal
             }
           }
 
           const bp = body.translation()
-          const carPos = new THREE.Vector3(bp.x, bp.y, bp.z)
+          const hp = poseOf(car)
+          const carPos = hp.ready
+            ? hp.blendPos(renderAlpha, new THREE.Vector3())
+            : new THREE.Vector3(bp.x, bp.y, bp.z)
           moveGroundBody(groundBody, bp.x, bp.z)
           {
             const bray = new R.Ray(
@@ -1471,17 +1602,10 @@ export default function App() {
               body.setLinvel({ x: lv.x, y: Math.max(lv.y, 0), z: lv.z }, true)
             }
           }
-          visual.syncFromBody(
-            body,
-            car.steerAngle,
-            car.getWheelOmegas(),
-            dt,
-            car.getWheelCompressions(),
-          )
+          syncVisual(visual, car, dt)
           visual.setBrake(Math.max(t?.brake ?? 0, t?.parkingBrake ? 1 : 0))
           if (net && net.roomId) {
             playerProgress = carProgress(body)
-            if (t) net.broadcastLocalState(car, t, playerProgress)
             net.updateRemoteCars(dt, smoke)
           }
           if (raceActive) {
@@ -1524,13 +1648,7 @@ export default function App() {
                   roadDirYaw(rs),
                 )
               }
-              rival.visual.syncFromBody(
-                rival.car.body,
-                rival.car.steerAngle,
-                rival.car.getWheelOmegas(),
-                dt,
-                rival.car.getWheelCompressions(),
-              )
+              syncVisual(rival.visual, rival.car, dt)
               rival.visual.setBrake(rival.brake)
             }
             if (!raceFinished) {
@@ -1732,13 +1850,7 @@ export default function App() {
                 tc.visual.group.visible = true
               }
               if (tc.visual.group.visible) {
-                tc.visual.syncFromBody(
-                  tc.car.body,
-                  tc.car.steerAngle,
-                  tc.car.getWheelOmegas(),
-                  dt,
-                  tc.car.getWheelCompressions(),
-                )
+                syncVisual(tc.visual, tc.car, dt)
                 tc.visual.setBrake(tc.brake)
               }
             }
@@ -1859,7 +1971,9 @@ export default function App() {
 
           const nowS = now / 1000
           const bq = body.rotation()
-          const quat = new THREE.Quaternion(bq.x, bq.y, bq.z, bq.w)
+          const quat = hp.ready
+            ? hp.blendRot(renderAlpha, new THREE.Quaternion())
+            : new THREE.Quaternion(bq.x, bq.y, bq.z, bq.w)
           const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(quat)
           smoothFwd.lerp(fwd, 1 - Math.exp(-dt * 10)).normalize()
           if (!startedRef.current) {
@@ -1899,7 +2013,7 @@ export default function App() {
               camera.fov += (58 - camera.fov) * Math.min(1, dt * 2)
               camera.updateProjectionMatrix()
             }
-            setSpeedLines(0)
+            setSpeedLines(0, 0)
           } else {
             {
               const MAXD = 120
@@ -1951,7 +2065,7 @@ export default function App() {
             } else {
               camPos.copy(desired)
 
-              const SF = CAR_PHYSICS.assists.speedFeel
+              const SF = playerDef.physics.assists.speedFeel
               const vAbs = Math.abs(car.forwardSpeed) * 3.6
               const sfFov = Math.min(1, vAbs / SF.fovAtMaxSpeedKmh)
               const offAxis = clamp(Math.abs(camYaw) / (Math.PI / 2), 0, 1)
@@ -1971,6 +2085,7 @@ export default function App() {
                       (SF.fovAtMaxSpeedKmh - SF.linesFromKmh),
                   ),
                 ),
+                SF.linesStrength,
               )
 
               camLook.copy(carPos)
@@ -2004,6 +2119,10 @@ export default function App() {
           )
 
           renderer!.render(scene, camera)
+          stats.frame(now, dt * 1000, frameSteps, frameStepMs)
+          if (statsEl.style.display !== "none") statsEl.textContent = stats.text()
+          frameSteps = 0
+          frameStepMs = 0
 
           if (t && now - teleRef.last > 50) {
             teleRef.last = now
@@ -2014,6 +2133,8 @@ export default function App() {
         ;(mount as any)._cleanup = () => {
           garageApiRef.current = null
           window.removeEventListener("resize", onResize)
+          window.removeEventListener("keydown", onStatsKey)
+          statsEl.remove()
           window.removeEventListener("blur", onWinBlur)
           dom.removeEventListener("pointerdown", onPointerDown)
           dom.removeEventListener("pointermove", onPointerMove)
@@ -2225,12 +2346,13 @@ export default function App() {
           onJoinRoom={(target, mode, password) => {
             setJoinError(null)
             setNetRoomId(target)
+            pushNetColor()
             const ok =
               multiplayerRef.current?.join(
                 target,
                 mode,
                 driverName,
-                driverColor,
+                paintFor(carIdRef.current) ?? driverColor,
                 password,
               ) ?? false
             setNetConnected(ok)
@@ -2316,20 +2438,19 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    resetRef.current = true
-                    resumeGame()
+                    restart()
                   }}
                   className="w-full border border-[#51a7d5] bg-[#51a7d5]/15 px-6 py-3 text-[14px] font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/25 active:scale-[0.98] inline-flex items-center justify-center gap-2"
                 >
                   <RotateCcw size={16} />
-                  Put me back on the road
+                  Restart
                 </button>
                 <button
                   onClick={() => setShowSettings(true)}
                   className="w-full border border-[#51a7d5]/40 bg-[#51a7d5]/10 px-6 py-3 text-[14px] font-medium text-[#6ec2f0] transition hover:bg-[#51a7d5]/20 hover:text-white active:scale-[0.98] inline-flex items-center justify-center gap-2"
                 >
                   <Settings size={16} />
-                  Resolution & Graphics
+                  Settings
                 </button>
                 <button
                   onClick={quitToMenu}
@@ -2346,22 +2467,31 @@ export default function App() {
               {(
                 [
                   ["P", "Pause"],
+                  ["Space", "Handbrake (tap to latch)"],
                   ["L", "Launch control"],
                   ["E", "Shift up"],
                   ["Q", "Shift down"],
                   ["M", "Transmission mode"],
-                  ["O", "Parking brake"],
-                  ["R", "Reset car"],
+                  ["X", "Traction control"],
+                  ["G", "Stability control"],
+                  ["B", "ABS"],
+                  ["N", "Safety aids"],
+                  ["V", "Engine on / off"],
+                  [";", "Cruise control"],
+                  ["[ ]", "Cruise set / resume"],
+                  ["H", "Headlights"],
+                  ["T", "Time of day"],
+                  ["R", "Put car back on road"],
                   ["C", "Camera view"],
                 ] as const
               ).map(([key, label]) => (
                 <div
                   key={key}
                   data-pause-row
-                  className="grid h-10 grid-cols-[44px_1fr] items-center border-b border-white/5 bg-black/30"
+                  className="grid h-9 grid-cols-[52px_1fr] items-center border-b border-white/5 bg-black/30"
                 >
                   <div
-                    className={`grid h-full place-items-center border-r border-white/5 text-[13px] font-bold ${
+                    className={`grid h-full place-items-center border-r border-white/5 text-[12px] font-bold ${
                       key === "P"
                         ? "bg-[#51a7d5] text-[#0b0e14]"
                         : "bg-white/[0.04] text-gray-400"

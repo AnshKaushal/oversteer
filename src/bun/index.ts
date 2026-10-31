@@ -132,7 +132,8 @@ try {
       },
 
       message(ws, msg) {
-        const message = typeof msg === "string" ? msg : msg.toString()
+        // state packets are binary frames and pass through untouched
+        const message = msg
 
         for (const client of lanClients) {
           if (client === ws) continue
@@ -201,6 +202,11 @@ if (process.platform === "win32") {
           action: "toggle-fullscreen",
           accelerator: "CmdOrCtrl+F",
         },
+        {
+          label: "New Window (multiplayer test)",
+          action: "new-window",
+          accelerator: "CmdOrCtrl+N",
+        },
         { role: "quit" },
       ],
     },
@@ -221,6 +227,10 @@ if (process.platform === "win32") {
         {
           label: "Toggle Fullscreen",
           action: "toggle-fullscreen",
+        },
+        {
+          label: "New Window (multiplayer test)",
+          action: "new-window",
         },
       ],
     },
@@ -248,9 +258,9 @@ if (process.platform === "darwin") {
     let originalCancelOpFn: any = null
     macCancelOp = new JSCallback(
       (self: any, _cmd: any, sender: any) => {
-        try {
-          if (mainWindow.isFullScreen()) return
-        } catch {}
+        // Decide from our own flag: a synchronous window query from inside this AppKit
+        // callback can throw, and falling through to the original would leave fullscreen.
+        if (wantFullscreen) return
         if (originalCancelOpFn) originalCancelOpFn(self, _cmd, sender)
       },
       { args: ["ptr", "ptr", "ptr"], returns: "void", threadsafe: true },
@@ -275,6 +285,11 @@ if (process.platform === "darwin") {
 ApplicationMenu.on("application-menu-clicked", (event: any) => {
   const data = event?.data ?? event
 
+  if (data?.action === "new-window") {
+    // extra windows are always windowed so two can sit side by side
+    createWindow(url, true)
+    return
+  }
   if (data?.action !== "toggle-fullscreen") return
 
   wantFullscreen = !wantFullscreen
@@ -282,6 +297,11 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 })
 
 if (process.platform === "win32") {
+  try {
+    GlobalShortcut.register("CTRL+N", () => {
+      createWindow(url, true)
+    })
+  } catch {}
   try {
     GlobalShortcut.register("F11", () => {
       try {

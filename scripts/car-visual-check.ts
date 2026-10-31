@@ -12,7 +12,7 @@
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import { MIN_PIVOT_FRAC, pivotMatches } from "../src/mainview/systems/CarVisual"
-import { getCar } from "../src/mainview/constants/cars"
+import { getCar } from "../src/mainview/data/cars"
 
 const id = process.argv[2] ?? "porsche-997-gt2"
 const def = getCar(id)

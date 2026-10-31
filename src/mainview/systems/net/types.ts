@@ -20,6 +20,15 @@ export interface CarStatePacket {
   drift: boolean
   smoke: boolean
   progress: number
+  wx?: number
+  wy?: number
+  wz?: number
+  throttle?: number
+  brake?: number
+  handbrake?: boolean
+  wheelOmega?: number[]
+  compression?: number[]
+  smokeLevel?: number
 }
 
 export type NetworkEventType =
@@ -45,4 +54,8 @@ export interface PeerPlayer {
   progress: number
   finished: boolean
   finishTime: number | null
+  /** The peer's car data differs from ours, so its car feels different here. */
+  specMismatch?: boolean
+  /** Garage paint: a colour, null for the model's own, undefined when not announced yet. */
+  paint?: number | null
 }

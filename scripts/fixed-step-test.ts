@@ -1,5 +1,5 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
@@ -8,9 +8,14 @@ import {
   createFixedStepper,
   pushFrameTime,
   consumeSubstep,
+  stepperAlpha,
+  dropBacklog,
   stepVehicleOnce,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
+import { PoseHistory } from "../src/mainview/physics/core/PoseHistory"
+import { WORLD } from "../src/mainview/data/world"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
+import { activeCar, makeRig } from "./lib/cars"
 
 const RAPIER = await initPhysics()
 
@@ -30,11 +35,7 @@ const idle: DriveInput = {
 }
 
 function mk() {
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-  world.timestep = FIXED_DT
-  const body = createChassisBody(world, 0, 0.72, 0)
-  const car = new CarController(world, body, RAPIER)
-  return { world, body, car }
+  return makeRig(RAPIER, activeCar())
 }
 
 let fails = 0
@@ -162,6 +163,73 @@ function runFrame(
   const a = runSeq()
   const b = runSeq()
   check("identical frame sequences are deterministic", a === b, a)
+}
+
+// 5. Frame-rate independence: the same inputs, keyed to the step count,
+// give bit-identical state at the same step count at 30/60/144/240 fps.
+{
+  const STEPS = 6 * Math.round(1 / FIXED_DT)
+  const stateAt = (fps: number) => {
+    const s = mk()
+    const stepper = createFixedStepper()
+    let stepNo = 0
+    let out = ""
+    while (stepNo < STEPS) {
+      const n = pushFrameTime(stepper, 1 / fps)
+      for (let i = 0; i < n && stepNo < STEPS; i++) {
+        const inp = {
+          ...idle,
+          throttle: 1,
+          steer: stepNo > STEPS / 2 ? 0.3 : 0,
+        }
+        stepVehicleOnce(s.world, () => s.car.update(FIXED_DT, inp))
+        consumeSubstep(stepper)
+        stepNo++
+      }
+    }
+    const p = s.body.translation()
+    const q = s.body.rotation()
+    out = [p.x, p.y, p.z, q.x, q.y, q.z, q.w].map((v) => v.toFixed(9)).join(",")
+    return out
+  }
+  const ref = stateAt(60)
+  for (const fps of [30, 144, 240, 360]) {
+    const got = stateAt(fps)
+    check(`state identical at ${fps} fps vs 60 fps`, got === ref, got === ref ? "" : `${got} vs ${ref}`)
+  }
+}
+
+// 6. Render alpha: fraction of a step left in the accumulator.
+{
+  const stepper = createFixedStepper()
+  const n = pushFrameTime(stepper, FIXED_DT * 1.25)
+  for (let i = 0; i < n; i++) consumeSubstep(stepper)
+  check("alpha is the leftover fraction", Math.abs(stepperAlpha(stepper) - 0.25) < 1e-9, `alpha=${stepperAlpha(stepper)}`)
+  const none = createFixedStepper()
+  const k = pushFrameTime(none, FIXED_DT * 0.4)
+  check("high-refresh frame runs zero steps", k === 0 && Math.abs(stepperAlpha(none) - 0.4) < 1e-9, `k=${k}`)
+}
+
+// 7. Budget backlog drop keeps the sub-step remainder and counts the rest.
+{
+  const stepper = createFixedStepper()
+  pushFrameTime(stepper, FIXED_DT * 5.5)
+  dropBacklog(stepper)
+  check("dropBacklog keeps the fractional step", Math.abs(stepperAlpha(stepper) - 0.5) < 1e-9, `alpha=${stepperAlpha(stepper)}`)
+  check("dropBacklog counts dropped time", Math.abs(stepper.droppedTotal - FIXED_DT * 5) < 1e-9, `dropped=${stepper.droppedTotal}`)
+}
+
+// 8. PoseHistory: blends between steps and snaps on teleport.
+{
+  const h = new PoseHistory()
+  const id = { x: 0, y: 0, z: 0, w: 1 }
+  h.capture({ x: 0, y: 0, z: 0 }, id)
+  h.capture({ x: 2, y: 0, z: 0 }, id)
+  const v = h.blendPos(0.5, new (h.currPos.constructor as any)())
+  check("pose blends halfway", Math.abs(v.x - 1) < 1e-9, `x=${v.x}`)
+  h.capture({ x: 2 + WORLD.teleportDistance * 4, y: 0, z: 0 }, id)
+  const t = h.blendPos(0.5, new (h.currPos.constructor as any)())
+  check("teleport is not smeared", Math.abs(t.x - (2 + WORLD.teleportDistance * 4)) < 1e-9, `x=${t.x}`)
 }
 
 console.log(

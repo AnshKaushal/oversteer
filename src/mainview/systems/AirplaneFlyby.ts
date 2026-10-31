@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { roadCenterX, roadYaw } from "./WorldManager"
-import { type TimeOfDayMode, isLowLight } from "../constants/timeOfDay"
+import { type TimeOfDayMode } from "../constants/timeOfDay"
 
 /**
  * Set dressing: a twin-turboprop transport that periodically crosses the
@@ -1058,7 +1058,6 @@ export class AirplaneFlyby {
   private nextIn = 0
   private ready = false
   private disposed = false
-  private isLowLight = false
 
   constructor(terrainAt: TerrainAt) {
     this.terrainAt = terrainAt
@@ -1345,8 +1344,7 @@ export class AirplaneFlyby {
     this.nextIn = MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP)
   }
 
-  setTimeOfDay(mode: TimeOfDayMode) {
-    this.isLowLight = isLowLight(mode)
+  setTimeOfDay(_mode: TimeOfDayMode) {
     for (const ac of this.aircraft) {
       ac.lightsRoot.visible = true
     }

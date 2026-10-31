@@ -9,9 +9,13 @@ export interface SnapshotIn {
   vx: number
   vy: number
   vz: number
+  wx?: number
+  wy?: number
+  wz?: number
 }
 
 export interface Snapshot extends SnapshotIn {
+  /** Position on the receive timeline (sender time mapped to our clock), ms. */
   arrivalMs: number
   seq: number
 }
@@ -31,9 +35,12 @@ export interface InterpTarget {
 
 export type InterpMode = "empty" | "hold" | "interp" | "extrap"
 
-export const INTERP_DELAY_MS = 50
-export const EXTRAP_MAX_MS = 250
-export const SNAPSHOT_CAP = 32
+import { NET } from "../../data/net"
+
+/** Delay before the clock has measured the link. */
+export const INTERP_DELAY_MS = NET.interp.minDelayMs
+export const EXTRAP_MAX_MS = NET.interp.extrapMaxMs
+export const SNAPSHOT_CAP = NET.interp.snapshotCap
 
 export function newInterpTarget(): InterpTarget {
   return {
@@ -145,9 +152,19 @@ export class SnapshotBuffer {
       vx: s.vx,
       vy: s.vy,
       vz: s.vz,
+      wx: s.wx ?? 0,
+      wy: s.wy ?? 0,
+      wz: s.wz ?? 0,
       arrivalMs,
       seq,
     })
+    let i = this.snaps.length - 1
+    while (i > 0 && this.snaps[i - 1].arrivalMs > this.snaps[i].arrivalMs) {
+      const t = this.snaps[i]
+      this.snaps[i] = this.snaps[i - 1]
+      this.snaps[i - 1] = t
+      i--
+    }
     if (this.snaps.length > SNAPSHOT_CAP) {
       this.snaps.splice(0, this.snaps.length - SNAPSHOT_CAP)
     }
@@ -191,13 +208,33 @@ export class SnapshotBuffer {
         Math.min(EXTRAP_MAX_MS, renderTimeMs - newest.arrivalMs),
       )
       const dt = overMs / 1000
-      out.x = newest.x + newest.vx * dt
-      out.y = newest.y + newest.vy * dt
-      out.z = newest.z + newest.vz * dt
-      out.qx = newest.qx
-      out.qy = newest.qy
-      out.qz = newest.qz
-      out.qw = newest.qw
+      // velocity fades to zero over the window, so a lost run settles instead of overshooting
+      const reach = dt - (dt * dt) / (2 * (EXTRAP_MAX_MS / 1000))
+      out.x = newest.x + newest.vx * reach
+      out.y = newest.y + newest.vy * reach
+      out.z = newest.z + newest.vz * reach
+      const wx = newest.wx ?? 0
+      const wy = newest.wy ?? 0
+      const wz = newest.wz ?? 0
+      const wm = Math.hypot(wx, wy, wz)
+      if (wm > 1e-4) {
+        const half = (wm * reach) / 2
+        const k = Math.sin(half) / wm
+        const dx = wx * k
+        const dy = wy * k
+        const dz = wz * k
+        const dw = Math.cos(half)
+        // world-frame spin: q' = dq * q
+        out.qx = dw * newest.qx + dx * newest.qw + dy * newest.qz - dz * newest.qy
+        out.qy = dw * newest.qy - dx * newest.qz + dy * newest.qw + dz * newest.qx
+        out.qz = dw * newest.qz + dx * newest.qy - dy * newest.qx + dz * newest.qw
+        out.qw = dw * newest.qw - dx * newest.qx - dy * newest.qy - dz * newest.qz
+      } else {
+        out.qx = newest.qx
+        out.qy = newest.qy
+        out.qz = newest.qz
+        out.qw = newest.qw
+      }
       out.vx = newest.vx
       out.vy = newest.vy
       out.vz = newest.vz
@@ -214,17 +251,25 @@ export class SnapshotBuffer {
     const span = b.arrivalMs - a.arrivalMs
     const t = span > 0 ? (renderTimeMs - a.arrivalMs) / span : 1
     const tc = t < 0 ? 0 : t > 1 ? 1 : t
-    out.x = a.x + (b.x - a.x) * tc
-    out.y = a.y + (b.y - a.y) * tc
-    out.z = a.z + (b.z - a.z) * tc
+    // cubic Hermite through both snapshots using their velocities
+    const h = span / 1000
+    const t2 = tc * tc
+    const t3 = t2 * tc
+    const h00 = 2 * t3 - 3 * t2 + 1
+    const h10 = t3 - 2 * t2 + tc
+    const h01 = -2 * t3 + 3 * t2
+    const h11 = t3 - t2
+    out.x = h00 * a.x + h10 * h * a.vx + h01 * b.x + h11 * h * b.vx
+    out.y = h00 * a.y + h10 * h * a.vy + h01 * b.y + h11 * h * b.vy
+    out.z = h00 * a.z + h10 * h * a.vz + h01 * b.z + h11 * h * b.vz
     slerpQuat(a.qx, a.qy, a.qz, a.qw, b.qx, b.qy, b.qz, b.qw, tc, _q)
     out.qx = _q.x
     out.qy = _q.y
     out.qz = _q.z
     out.qw = _q.w
-    out.vx = b.vx
-    out.vy = b.vy
-    out.vz = b.vz
+    out.vx = a.vx + (b.vx - a.vx) * tc
+    out.vy = a.vy + (b.vy - a.vy) * tc
+    out.vz = a.vz + (b.vz - a.vz) * tc
     if (stats) {
       stats.mode = "interp"
       stats.extrapMs = 0

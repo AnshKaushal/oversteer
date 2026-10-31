@@ -26,14 +26,16 @@ jobs:
         with:
           fetch-depth: 0 # tags are needed to work out the next version
 
-      - name: Bump latest vX.Y.Z tag by one patch
+      # Versioning counts from v2.0.0: tags below v2 (the old v1.0.x line) are ignored,
+      # so the first release is v2.0.0 and each one after bumps the patch.
+      - name: Bump latest vX.Y.Z tag (v2 and up) by one patch
         id: bump
         run: |
-          latest="$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          latest="$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | awk -F'[v.]' '$2 >= 2' | head -n 1 || true)"
           if [ -n "$latest" ]; then
             next="$(echo "$latest" | awk -F. '{print $1 "." $2 "." $3+1}')"
           else
-            next="v1.0.0"
+            next="v2.0.0"
           fi
           echo "Latest tag: ${latest:-<none>}"
           echo "Next version: $next"

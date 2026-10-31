@@ -1,3 +1,5 @@
+import type { SurfaceId } from "../data/surfaces"
+import { registerSurface } from "../physics/core/Surfaces"
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
@@ -95,6 +97,14 @@ function makeRibbonGeometry(
   void len
   void width
   return geo
+}
+
+/** Flat-ground surface at a world point: the road and its shoulder are asphalt, the rest is grass. */
+export function groundSurfaceAt(x: number, z: number): SurfaceId {
+  const s = -z
+  const tx = (roadCenterX(s + 2) - roadCenterX(s - 2)) / 4
+  const across = Math.abs(x - roadCenterX(s)) / Math.hypot(tx, 1)
+  return across <= (WORLD_CONFIG.road.width + 2 * WORLD_CONFIG.road.shoulderWidth) / 2 ? "asphalt" : "grass"
 }
 
 function writeRibbon(
@@ -754,7 +764,7 @@ export class WorldManager {
       .setTranslation(0, -5.05, 0)
       .setFriction(1.0)
       .setRestitution(0)
-    world.createCollider(col, body)
+    registerSurface(world, world.createCollider(col, body), groundSurfaceAt)
     this.R = R
     this.physWorld = world
     for (const hill of this.hills) {
@@ -764,11 +774,15 @@ export class WorldManager {
       const verts = new Float32Array(hp.array)
       const hidx = hg.getIndex()!
       const indices = new Uint32Array(hidx.array as Uint32Array)
-      world.createCollider(
-        R.ColliderDesc.trimesh(verts, indices)
-          .setFriction(0.9)
-          .setRestitution(0),
-        hb,
+      registerSurface(
+        world,
+        world.createCollider(
+          R.ColliderDesc.trimesh(verts, indices)
+            .setFriction(0.9)
+            .setRestitution(0),
+          hb,
+        ),
+        "grass",
       )
       hill.body = hb
       this.syncHillBody(hill)
@@ -805,6 +819,8 @@ export class WorldManager {
         world.createCollider(col, hb)
       }
     }
+    // Props generated before the physics world existed have no colliders yet
+    this.syncPropColliders()
     return body
   }
 

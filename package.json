@@ -1,6 +1,6 @@
 {
   "name": "oversteer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Electrobun app with React, Tailwind CSS, and Vite HMR",
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",

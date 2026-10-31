@@ -1,11 +1,12 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
   moveGroundBody,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
+import { activeCar, makeRig } from "./lib/cars"
 
 const RAPIER = await initPhysics()
 const idle: DriveInput = {
@@ -24,18 +25,7 @@ const idle: DriveInput = {
 } as DriveInput
 
 function mk() {
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-  world.timestep = 1 / 120
-  const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
-  world.createCollider(
-    RAPIER.ColliderDesc.cuboid(3000, 0.5, 3000)
-      .setTranslation(0, -0.55, 0)
-      .setFriction(1.0),
-    gb,
-  )
-  const body = createChassisBody(world, 0, 0.72, 0)
-  const car: any = new CarController(world, body, RAPIER)
-  return { world, gb, body, car }
+  return makeRig(RAPIER, activeCar())
 }
 function betaOf(body: any) {
   const v = body.linvel()

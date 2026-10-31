@@ -2,8 +2,7 @@ import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
-import { CAR_PHYSICS } from "../constants/physics"
-import type { WheelDef } from "./Suspension"
+import type { WheelDef } from "../physics/vehicle/components/Suspension"
 import { tintCar, whitenRims, type PaintTextureRule } from "./carTint"
 import {
   applyBrakeHeat,
@@ -17,10 +16,10 @@ export const SUSP_VISUAL_REF = 0.074
 
 export interface CarVisualOptions {
   modelFile?: string
-  targetLength?: number
+  targetLength: number
   pivots?: { pattern?: string; names?: string[] }
   wheelSpots?: readonly WheelDef[]
-  wheelRadius?: number
+  wheelRadius: number
   paintMatch?: string[]
   paintTexture?: PaintTextureRule
   isPlayer?: boolean
@@ -132,10 +131,10 @@ export class CarVisual {
 
   async load(
     baseUrl: string,
-    tint?: number,
-    opts?: CarVisualOptions,
+    tint: number | undefined,
+    opts: CarVisualOptions,
   ): Promise<void> {
-    const modelFile = opts?.modelFile ?? DEFAULT_MODEL
+    const modelFile = opts.modelFile ?? DEFAULT_MODEL
     const source = await loadSharedModel(baseUrl, modelFile)
     if (!source) throw new Error("Model not loaded")
     const effective = this.lastTint ?? tint
@@ -186,7 +185,7 @@ export class CarVisual {
 
     const box = new THREE.Box3().setFromObject(model)
     const size = box.getSize(new THREE.Vector3())
-    const targetLen = opts?.targetLength ?? CAR_PHYSICS.dimensions.length
+    const targetLen = opts.targetLength
     const longest = Math.max(size.x, size.y, size.z)
     const s = longest > 0 ? targetLen / longest : 1
     model.scale.multiplyScalar(s)
@@ -206,7 +205,7 @@ export class CarVisual {
     this.buildImposter(
       this.lastTint ?? tint,
       opts?.wheelSpots,
-      opts?.wheelRadius ?? CAR_PHYSICS.wheels.radius,
+      opts.wheelRadius,
     )
 
     this.group.updateMatrixWorld(true)
@@ -257,7 +256,7 @@ export class CarVisual {
 
     if (this.wheels.length !== 4) {
       this.wheels = []
-      const wr = opts?.wheelRadius ?? CAR_PHYSICS.wheels.radius
+      const wr = opts.wheelRadius
       const geo = new THREE.CylinderGeometry(wr, wr, 0.26, 18)
       geo.rotateZ(Math.PI / 2)
       const mat = new THREE.MeshStandardMaterial({
@@ -309,11 +308,11 @@ export class CarVisual {
   }
 
   private buildImposter(
-    tint?: number,
-    wheelSpots?: readonly WheelDef[],
-    wheelRadius?: number,
+    tint: number | undefined,
+    wheelSpots: readonly WheelDef[] | undefined,
+    wheelRadius: number,
   ) {
-    const wr = wheelRadius ?? CAR_PHYSICS.wheels.radius
+    const wr = wheelRadius
     const g = loGeos(wr)
     const lo = new THREE.Group()
     const paint = new THREE.MeshStandardMaterial({

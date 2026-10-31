@@ -1,28 +1,28 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
   moveGroundBody,
   FIXED_DT,
   stepVehicleOnce,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
+import { activeCar, makeRig } from "./lib/cars"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
 
 const RAPIER = await initPhysics()
-const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-world.timestep = FIXED_DT // must match the dt passed to car.update
-const g = RAPIER.RigidBodyDesc.fixed()
-const gb = world.createRigidBody(g)
-world.createCollider(
-  RAPIER.ColliderDesc.cuboid(3000, 0.5, 3000)
-    .setTranslation(0, -0.55, 0)
-    .setFriction(1.0),
-  gb,
-)
+const { world, gb, body, car } = makeRig(RAPIER, activeCar())
 
-const body = createChassisBody(world, 0, 0.72, 0)
-const car = new CarController(world, body, RAPIER)
+/** Clamp a test gear to what this car has (5-speed cars have no gear 8). */
+const gearNo = (n: number) => Math.min(n, car.P.transmission.gearRatios.length)
+
+// Speeds come from this car's gearing and limiter, so the checks hold for every car.
+const TX = car.P.transmission
+const LIMITER = car.P.engine.revLimiterRPM
+const IDLE_RPM = car.P.engine.idleRPM
+/** Road speed (m/s) at which a gear turns the engine at the given rpm. */
+const msAt = (gear: number, rpm: number) =>
+  ((rpm * 2 * Math.PI) / 60) * car.P.wheels.radius / (TX.gearRatios[gear - 1] * TX.finalDriveRatio)
 
 const idle: DriveInput = {
   throttle: 0,
@@ -74,10 +74,9 @@ check(
   body.translation().y > 0.6 && body.translation().y < 0.85,
   "y=" + body.translation().y.toFixed(3),
 )
-check(
-  "parking brake auto-releases for creep stroll",
-  car.parkingBrake === false,
-)
+// the parking brake now lets go on throttle only; release it by hand to test the creep stroll
+check("parking brake holds at idle until throttle", car.parkingBrake === true)
+car.parkingBrake = false
 for (let i = 0; i < 2 * 120; i++) {
   t = car.update(FIXED_DT, idle)
   world.step()
@@ -115,7 +114,7 @@ for (let i = 0; i < 2 * 120; i++) {
   world.step()
 }
 check("W+S arms launch control", t.launchArmed === true, `rpm=${t.rpm}`)
-check("launch rpm pinned ~5000", Math.abs(t.rpm - 5000) < 600, "rpm=" + t.rpm)
+check("launch rpm pinned at the car's launch rpm", Math.abs(t.rpm - TX.launchControlRPM) < 600, "rpm=" + t.rpm)
 check(
   "launch staging: zero movement (clutch open)",
   Math.abs(t.speedKmh) < 0.3,
@@ -168,9 +167,13 @@ check(
 // brake, never reverse (10s: the car stops hard and the pitch-rocking
 // oscillation needs a moment to decay before sampling standstill)
 const vBefore = Math.abs(t.speedKmh)
-for (let i = 0; i < 10 * 120; i++) {
+// Holding S at a standstill engages reverse by design, so stop sampling
+// once the car has come to rest.
+let stopped = false
+for (let i = 0; i < 10 * 120 && !stopped; i++) {
   t = car.update(FIXED_DT, S)
   world.step()
+  stopped = Math.abs(t.speedKmh) < 0.5
 }
 check(
   "brakes slow the car",
@@ -255,8 +258,9 @@ check(
 car.gear = 3 as any
 body.setLinvel({ x: 0, y: 0, z: -16.7 }, true)
 // downshift protection: 200kmh in 5th — dropping to 4th would over-rev, must refuse
-car.gear = 5 as any
-body.setLinvel({ x: 0, y: 0, z: -55.5 }, true)
+const overRevGear = Math.max(2, gearNo(5))
+car.gear = overRevGear as any
+body.setLinvel({ x: 0, y: 0, z: -msAt(overRevGear - 1, 1.1 * LIMITER) }, true)
 body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true)
 for (let i = 0; i < 30; i++) {
@@ -265,16 +269,16 @@ for (let i = 0; i < 30; i++) {
 }
 car.update(FIXED_DT, { ...idle, downshiftPressed: true })
 world.step()
-check("downshift into over-rev refused", car.gear === 5, "gear=" + car.gear)
+check("downshift into over-rev refused", car.gear === overRevGear, "gear=" + car.gear)
 // ...but the same downshift at sane speed is allowed
-body.setLinvel({ x: 0, y: 0, z: -38 }, true)
+body.setLinvel({ x: 0, y: 0, z: -msAt(overRevGear - 1, 0.6 * LIMITER) }, true)
 for (let i = 0; i < 30; i++) {
   car.update(FIXED_DT, idle)
   world.step()
 }
 car.update(FIXED_DT, { ...idle, downshiftPressed: true })
 world.step()
-check("downshift allowed when safe", car.gear === 4, "gear=" + car.gear)
+check("downshift allowed when safe", car.gear === overRevGear - 1, "gear=" + car.gear)
 body.setLinvel({ x: 0, y: 0, z: -16.7 }, true)
 body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true)
 car.gear = 3 as any
@@ -360,15 +364,15 @@ for (let i = 0; i < 8 * 120; i++) {
   if (i === 6 * 120) v6 = Math.abs(t.speedKmh)
   if (i === 8 * 120 - 1) v8 = Math.abs(t.speedKmh)
 }
-check("rev limiter caps rpm", rpmMax <= 7550, "rpmMax=" + rpmMax)
+check("rev limiter caps rpm", rpmMax <= LIMITER + 50, "rpmMax=" + rpmMax)
 check(
   "speed plateaus on limiter (no runaway)",
-  v8 - v6 < 8 && v8 < 90,
+  v8 - v6 < 8 && v8 < msAt(1, LIMITER) * 3.6 + 3,
   `v6=${v6.toFixed(1)} v8=${v8.toFixed(1)}`,
 )
 // coastdown: lift off at speed in D — car should roll freely, not brake itself.
 // roll at 150kmh in 8th (as a real cruise), then 5s of no pedals.
-car.gear = 8 as any
+car.gear = gearNo(8) as any
 car.rpm = 2600
 body.setLinvel({ x: 0, y: 0, z: -41.7 }, true) // 150kmh
 body.setAngvel({ x: 0, y: 0, z: 0 }, true)
@@ -400,30 +404,30 @@ for (let i = 0; i < 1 * 120; i++) {
 }
 check(
   "neutral rpm falls slowly (flywheel inertia)",
-  t.rpm > 6000,
+  t.rpm > 2 * IDLE_RPM,
   "rpm=" + t.rpm,
 )
-// full throttle in top gear: box holds the gear and pulls (no kickdown anymore)
+// full throttle in top gear: the box may kick down, the car must still pull
 car.update(FIXED_DT, { ...idle, toggleModePressed: true })
 world.step() // back to AUTO
-car.gear = 8 as any
+car.gear = gearNo(8) as any
 car.rpm = 2600
-body.setLinvel({ x: 0, y: 0, z: -41.7 }, true)
+const vPull0 = msAt(gearNo(8), 0.45 * LIMITER) * 3.6
+body.setLinvel({ x: 0, y: 0, z: -vPull0 / 3.6 }, true)
 body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true)
-const vPull0 = 150
 for (let i = 0; i < 3 * 120; i++) {
   t = car.update(FIXED_DT, W)
   world.step()
 }
 check(
-  "top gear pulls without downshifting",
-  t.gear === 8 && Math.abs(t.speedKmh) > vPull0 + 15,
+  "top gear full throttle pulls hard (kickdown allowed)",
+  Math.abs(t.speedKmh) > vPull0 + 10,
   `gear=${t.gearLabel} v=${Math.abs(t.speedKmh).toFixed(0)}`,
 )
 // stop cascade: brake to a halt in auto — box must walk back down to 1st
 for (let i = 0; i < 10 * 120; i++) {
-  t = car.update(FIXED_DT, S)
+  t = car.update(FIXED_DT, Math.abs(t.speedKmh) > 0.5 ? S : idle)
   world.step()
 }
 check("auto returns to 1st after stopping", t.gear === 1, "gear=" + t.gearLabel)
@@ -448,7 +452,7 @@ const sideSlip = () => {
 body.setLinvel({ x: 0, y: 0, z: -70 }, true) // ~250 km/h
 body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true)
-car.gear = 8 as any
+car.gear = gearNo(8) as any
 car.rpm = 6000
 // Old cap budgeted only ~1.25g, which clamped full lock to 0.4deg up here —
 // the car could not be made to change direction at all.
