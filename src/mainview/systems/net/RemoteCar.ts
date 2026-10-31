@@ -1,8 +1,8 @@
 import * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
-import { CarVisual } from "../CarVisual"
-import { createCabinCollider } from "../PhysicsSystem"
-import { CAR_PHYSICS } from "../../constants/physics"
+import { CarVisual, type CarVisualOptions } from "../CarVisual"
+import { createCabinCollider } from "../../physics/core/PhysicsSystem"
+import type { CarPhysicsConfig } from "../../data/schema"
 import type { TireSmoke } from "../TireSmoke"
 import type { ValidatedState } from "./stateProtocol"
 import type { PaintTextureRule } from "../carTint"
@@ -15,8 +15,8 @@ import {
   SUPPORT_DESCENT_DY,
   clampCorrectionDelta,
 } from "./correction"
+import { NET } from "../../data/net"
 import {
-  INTERP_DELAY_MS,
   SnapshotBuffer,
   newInterpTarget,
   type InterpMode,
@@ -31,21 +31,33 @@ import {
 } from "./NetDiagnostics"
 
 export interface RemoteCarOptions {
-  modelFile?: string
-  dims?: { width: number; height: number; length: number }
-  mass?: number
+  modelFile: string
+  physics: CarPhysicsConfig
   paintMatch?: string[]
   paintTexture?: PaintTextureRule
+  pivots?: CarVisualOptions["pivots"]
+  wheelSpots?: CarVisualOptions["wheelSpots"]
+  /** Start already placed, with collisions on (tests that stage the body by hand). */
+  startPlaced?: boolean
+  /** Show the model's own paint instead of a tint (the peer's car is unpainted). */
+  stock?: boolean
 }
 
+/** The car's whole mass (wheels included) times the data's grip allowance: a ghost has no tyres or driver to hold its line. */
+function ghostMass(p: CarPhysicsConfig): number {
+  const m = p.mass
+  return (m.chassis + 2 * (m.frontWheel + m.rearWheel)) * NET.remote.massScale
+}
+
+const SOLID_GROUPS = 0xffffffff
+/** Member of group 1, collides with nothing. */
+const GHOST_GROUPS = 0x00010000
 const REMOTE_DEFAULT_MODEL = "models/bmw_m3.glb"
-const TIRE_RADIUS = 0.33
-const DRIVE_EXTRAPOLATION_S = 0.15
-const POS_GAIN = 4.5
-const CORRECTION_MAX = 10
-const MAX_DRIVE_SPEED = 120
-const MAX_DRIVE_ANGVEL = 8
-const WARP_DIST_SQ = 15 * 15
+const POS_GAIN = NET.remote.posGain
+const CORRECTION_MAX = NET.remote.correctionMax
+const MAX_DRIVE_SPEED = NET.remote.maxDriveSpeed
+const MAX_DRIVE_ANGVEL = NET.remote.maxDriveAngVel
+const WARP_DIST_SQ = NET.remote.warpDist ** 2
 
 const _goal = new THREE.Vector3()
 const _q = new THREE.Quaternion()
@@ -63,6 +75,12 @@ export class RemoteCar {
   colliderBody: RAPIER.RigidBody | null = null
   private world: RAPIER.World | null = null
   private collider: RAPIER.Collider | null = null
+  private cabinCollider: RAPIER.Collider | null = null
+  /** False until the body has been put on its first target. */
+  private placed = false
+  /** Collisions are off while the ghost overlaps another body, so a peer appearing inside you shoves nobody. */
+  private solid = false
+  private rapier: typeof RAPIER | null = null
 
   public nowOverride: number | null = null
   private now() {
@@ -102,8 +120,13 @@ export class RemoteCar {
   private scene: THREE.Scene | null = null
   private baseUrl = ""
   private modelFile: string
+  private wheelRadius: number
+  private targetLength: number
   private paintMatch: string[] | undefined
   private paintTexture: PaintTextureRule | undefined
+  private pivots: CarVisualOptions["pivots"]
+  private wheelSpots: CarVisualOptions["wheelSpots"]
+  private stock = false
 
   constructor(
     id: string,
@@ -111,18 +134,25 @@ export class RemoteCar {
     color: number,
     scene: THREE.Scene,
     baseUrl: string,
-    world?: RAPIER.World,
-    rapier?: typeof RAPIER,
-    opts?: RemoteCarOptions,
+    world: RAPIER.World | undefined,
+    rapier: typeof RAPIER | undefined,
+    opts: RemoteCarOptions,
   ) {
+    this.wheelRadius = opts.physics.wheels.radius
+    this.targetLength = opts.physics.dimensions.length
     this.id = id
     this.name = name
     this.color = color
     this.scene = scene
     this.baseUrl = baseUrl
-    this.modelFile = opts?.modelFile ?? REMOTE_DEFAULT_MODEL
-    this.paintMatch = opts?.paintMatch
-    this.paintTexture = opts?.paintTexture
+    this.modelFile = opts.modelFile
+    this.paintMatch = opts.paintMatch
+    this.paintTexture = opts.paintTexture
+    this.pivots = opts.pivots
+    this.wheelSpots = opts.wheelSpots
+    this.stock = opts.stock ?? false
+    this.placed = opts.startPlaced ?? false
+    this.solid = this.placed
 
     this.visual = new CarVisual()
     this.visual.castShadow = true
@@ -130,39 +160,22 @@ export class RemoteCar {
     this.loadVisual()
 
     this.world = world ?? null
+    this.rapier = rapier ?? null
     if (world && rapier) {
       try {
-        const P = CAR_PHYSICS
-        const dims = opts?.dims ?? P.dimensions
-        const mass = opts?.mass ?? P.mass.chassis
+        const phys = opts.physics
+        const rc = phys.chassis
         const bodyDesc = rapier.RigidBodyDesc.dynamic()
           .setTranslation(0, 0.72, 0)
           .setLinvel(0, 0, 0)
           .setAngvel({ x: 0, y: 0, z: 0 })
-          .setLinearDamping(0.001)
-          .setAngularDamping(0.55)
+          .setLinearDamping(rc.linearDamping)
+          .setAngularDamping(rc.angularDamping)
           .setGravityScale(0)
           .setCanSleep(false)
           .setCcdEnabled(true)
         this.colliderBody = world.createRigidBody(bodyDesc)
-        const colDesc = rapier.ColliderDesc.cuboid(
-          dims.width / 2,
-          0.32 * (dims.height / 1.43),
-          dims.length / 2,
-        )
-          .setTranslation(0, -0.1, 0)
-          .setMass(mass)
-          .setFriction(0.15)
-          .setFrictionCombineRule(rapier.CoefficientCombineRule.Min)
-          .setRestitution(0.2)
-        this.collider = world.createCollider(colDesc, this.colliderBody)
-        world.createCollider(
-          createCabinCollider(rapier, dims)
-            .setFriction(0.15)
-            .setFrictionCombineRule(rapier.CoefficientCombineRule.Min)
-            .setRestitution(0.2),
-          this.colliderBody,
-        )
+        this.attachColliders(phys)
       } catch (e) {
         console.warn(`[RemoteCar] Failed to create body for ${name}:`, e)
         this.colliderBody = null
@@ -170,12 +183,60 @@ export class RemoteCar {
     }
   }
 
+  /** The ghost's shape: the car's lower box and cabin, with its real mass. */
+  private attachColliders(phys: CarPhysicsConfig) {
+    const world = this.world
+    const body = this.colliderBody
+    if (!world || !body) return
+    const rapier = this.rapier
+    if (!rapier) return
+    const rc = phys.chassis
+    const d = phys.dimensions
+    const colDesc = rapier.ColliderDesc.cuboid(
+      d.width / 2,
+      d.height * rc.lower.halfHeightRatio,
+      d.length / 2,
+    )
+      .setTranslation(0, rc.lower.offsetY, 0)
+      .setMass(ghostMass(phys))
+      .setFriction(rc.remote.friction)
+      .setFrictionCombineRule(rapier.CoefficientCombineRule.Min)
+      .setRestitution(rc.remote.restitution)
+    this.collider = world.createCollider(colDesc, body)
+    this.collider.setCollisionGroups(this.solid ? SOLID_GROUPS : GHOST_GROUPS)
+    this.cabinCollider = world.createCollider(
+      createCabinCollider(rapier, phys)
+        .setDensity(0)
+        .setFriction(rc.remote.friction)
+        .setFrictionCombineRule(rapier.CoefficientCombineRule.Min)
+        .setRestitution(rc.remote.restitution),
+      body,
+    )
+    this.cabinCollider.setCollisionGroups(this.solid ? SOLID_GROUPS : GHOST_GROUPS)
+  }
+
+  private rebuildColliders(phys: CarPhysicsConfig) {
+    const world = this.world
+    if (!world) return
+    try {
+      if (this.collider) world.removeCollider(this.collider, false)
+      if (this.cabinCollider) world.removeCollider(this.cabinCollider, true)
+    } catch {}
+    this.collider = null
+    this.cabinCollider = null
+    this.attachColliders(phys)
+  }
+
   private loadVisual() {
     const scene = this.scene
     const visual = this.visual
     visual
-      .load(this.baseUrl, this.color, {
+      .load(this.baseUrl, this.stock ? undefined : this.color, {
         modelFile: this.modelFile,
+        targetLength: this.targetLength,
+        pivots: this.pivots,
+        wheelSpots: this.wheelSpots,
+        wheelRadius: this.wheelRadius,
         paintMatch: this.paintMatch,
         paintTexture: this.paintTexture,
       })
@@ -193,13 +254,28 @@ export class RemoteCar {
 
   setModel(
     modelFile: string | undefined | null,
-    ghost?: { paintMatch?: string[]; paintTexture?: PaintTextureRule },
+    ghost?: {
+      paintMatch?: string[]
+      paintTexture?: PaintTextureRule
+      pivots?: CarVisualOptions["pivots"]
+      wheelSpots?: CarVisualOptions["wheelSpots"]
+      physics?: CarPhysicsConfig
+    },
   ) {
     const next = modelFile || REMOTE_DEFAULT_MODEL
     if (next === this.modelFile) return
     this.modelFile = next
     this.paintMatch = ghost?.paintMatch
     this.paintTexture = ghost?.paintTexture
+    this.pivots = ghost?.pivots
+    this.wheelSpots = ghost?.wheelSpots
+    if (ghost?.physics) {
+      this.wheelRadius = ghost.physics.wheels.radius
+      this.targetLength = ghost.physics.dimensions.length
+      this.wheelOmegaIn = null
+      this.compressionIn = null
+      this.rebuildColliders(ghost.physics)
+    }
     try {
       this.scene?.remove(this.visual.group)
     } catch {}
@@ -208,20 +284,78 @@ export class RemoteCar {
     this.loadVisual()
   }
 
-  onPacket(state: ValidatedState, arrivalMs: number) {
+  private setUnplaced() {
+    this.placed = false
+    this.setSolid(false)
+  }
+
+  private setSolid(on: boolean) {
+    this.solid = on
+    const g = on ? SOLID_GROUPS : GHOST_GROUPS
+    this.collider?.setCollisionGroups(g)
+    this.cabinCollider?.setCollisionGroups(g)
+  }
+
+  /** True when the ghost's footprint, with a margin, touches another moving body. */
+  private overlapsOthers(): boolean {
+    const w = this.world
+    const b = this.colliderBody
+    const r = this.rapier
+    const c = this.collider
+    if (!w || !b || !r || !c) return false
+    let hit = false
+    try {
+      const he = (c.shape as RAPIER.Cuboid).halfExtents
+      const m = NET.remote.clearMargin
+      const shape = new r.Cuboid(he.x + m, he.y + m, he.z + m)
+      w.intersectionsWithShape(
+        c.translation(),
+        c.rotation(),
+        shape,
+        () => {
+          hit = true
+          return false
+        },
+        r.QueryFilterFlags.EXCLUDE_FIXED,
+        undefined,
+        undefined,
+        b,
+      )
+    } catch {}
+    return hit
+  }
+
+  /** Interpolation delay (ms) from the peer's clock sync. */
+  delayMs: number = NET.interp.minDelayMs
+  throttleIn = 0
+  smokeLevel = 0
+  private smokeAcc = 0
+  private wheelOmegaIn: number[] | null = null
+  private compressionIn: number[] | null = null
+
+  /** `timelineMs` is the packet's send time on our clock; `arrivalMs` is when it came. */
+  onPacket(
+    state: ValidatedState,
+    timelineMs: number,
+    arrivalMs: number = timelineMs,
+  ) {
     this.lastPacketTime = arrivalMs
-    this.interp.append(state, arrivalMs, state.seq)
+    this.interp.append(state, timelineMs, state.seq)
     this.steerAngle = state.steer
-    if (state.speed < this.speed - 0.3) this.brakeTarget = 1
-    else if (state.speed > this.speed + 0.05) this.brakeTarget = 0
+    this.brakeTarget = Math.max(state.brake, state.handbrake ? 1 : 0)
+    this.throttleIn = state.throttle
+    this.wheelOmegaIn = state.wheelOmega
+    this.compressionIn = state.compression
     this.speed = state.speed
     this.smoke = state.smoke
+    this.smokeLevel = state.smokeLevel
     this.drift = state.drift
     this.progress = state.progress
     this.hasReceivedPacket = true
   }
 
   resetInterpolation(reason: string) {
+    if (reason === "session-start") this.setUnplaced()
     this.interp.reset()
     this.corr.reset()
     this.prevCorrMode = "follow"
@@ -277,6 +411,23 @@ export class RemoteCar {
     netDiagContact(this.id, touching, impulse, this.corr.mode, support)
   }
 
+  /** The peer's paint: a colour, or null for the model's own. Switching between the two reloads the visual. */
+  setPaint(paint: number | null) {
+    const wantStock = paint === null
+    if (wantStock !== this.stock) {
+      this.stock = wantStock
+      if (paint !== null) this.color = paint
+      try {
+        this.scene?.remove(this.visual.group)
+      } catch {}
+      this.visual = new CarVisual()
+      this.visual.castShadow = true
+      this.loadVisual()
+      return
+    }
+    if (paint !== null) this.setColor(paint)
+  }
+
   setColor(color: number) {
     this.color = color
     try {
@@ -301,7 +452,7 @@ export class RemoteCar {
     const now = this.now()
     const mode = this.interp.sampleInto(
       this.interpOut,
-      now - INTERP_DELAY_MS,
+      now - this.delayMs,
       this.interpStats,
     )
     netDiagInterpSample(
@@ -321,9 +472,35 @@ export class RemoteCar {
     )
     this.targetVel.set(this.interpOut.vx, this.interpOut.vy, this.interpOut.vz)
 
+    if (!this.placed) {
+      // first sample: appear at the car's real place, never drift in from the origin through other cars
+      try {
+        b.setTranslation(
+          { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z },
+          true,
+        )
+        b.setRotation(
+          {
+            x: this.targetQuat.x,
+            y: this.targetQuat.y,
+            z: this.targetQuat.z,
+            w: this.targetQuat.w,
+          },
+          true,
+        )
+        b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        b.setAngvel({ x: 0, y: 0, z: 0 }, true)
+        this.placed = true
+        this.setSolid(false)
+      } catch {}
+      return
+    }
+
+    if (!this.solid && this.placed && !this.overlapsOthers()) this.setSolid(true)
+
     const ageS = Math.max(0, (now - this.lastPacketTime) / 1000)
-    const age = Math.min(DRIVE_EXTRAPOLATION_S, ageS)
-    _goal.copy(this.targetPos).addScaledVector(this.targetVel, age)
+    // the interpolated target is already at the right moment; no extra lead
+    _goal.copy(this.targetPos)
 
     const authority = ageS < 0.2 ? 1 : Math.max(0, 1 - (ageS - 0.2) / 0.3)
     const cruiseScale = ageS < 0.5 ? 1 : Math.max(0, 1 - (ageS - 0.5) / 1.0)
@@ -365,6 +542,7 @@ export class RemoteCar {
         this.lastCorr.y = 0
         this.lastCorr.z = 0
         b.setTranslation({ x: _goal.x, y: _goal.y, z: _goal.z }, true)
+        this.setSolid(false)
         b.setRotation(
           {
             x: this.targetQuat.x,
@@ -529,23 +707,44 @@ export class RemoteCar {
     _pos.set(bp.x, bp.y, bp.z)
     _quat.set(bq.x, bq.y, bq.z, bq.w)
 
-    const vms = Math.sqrt(bv.x * bv.x + bv.y * bv.y + bv.z * bv.z)
-    this.wheelOmega = vms / TIRE_RADIUS
-    const omegas = [
-      this.wheelOmega,
-      this.wheelOmega,
-      this.wheelOmega,
-      this.wheelOmega,
-    ]
+    // the sender's real wheel spin and suspension travel; rolling speed only for packets without them
+    let omegas: number[]
+    if (this.wheelOmegaIn) {
+      omegas = this.wheelOmegaIn
+      this.wheelOmega = (omegas[0] + omegas[1] + omegas[2] + omegas[3]) / 4
+    } else {
+      const vms = Math.sqrt(bv.x * bv.x + bv.y * bv.y + bv.z * bv.z)
+      this.wheelOmega = vms / this.wheelRadius
+      omegas = [this.wheelOmega, this.wheelOmega, this.wheelOmega, this.wheelOmega]
+    }
 
-    this.visual.syncFromPose(_pos, _quat, this.steerAngle, omegas, dt)
+    this.visual.syncFromPose(
+      _pos,
+      _quat,
+      this.steerAngle,
+      omegas,
+      dt,
+      this.compressionIn ?? undefined,
+    )
     this.visual.setBrake(this.brakeTarget)
 
-    if (smokeSystem && (this.smoke || this.drift) && this.speed > 5) {
-      this.visual.wheelContactPositions(false, this.smokePosBuf)
-      for (const p of this.smokePosBuf) {
-        smokeSystem.spawn(p, this.drift ? 0.9 : 0.6)
+    if (smokeSystem && this.smokeLevel > 0.28) {
+      this.visual.wheelContactPositions(this.drift, this.smokePosBuf)
+      if (this.smokePosBuf.length === 0) {
+        this.smokeAcc = 0
+      } else {
+        // same emission rate as the local car
+        this.smokeAcc += dt * this.smokeLevel * 90
+        while (this.smokeAcc >= 1) {
+          this.smokeAcc -= 1
+          smokeSystem.spawn(
+            this.smokePosBuf[(Math.random() * this.smokePosBuf.length) | 0],
+            this.smokeLevel,
+          )
+        }
       }
+    } else {
+      this.smokeAcc = 0
     }
   }
 

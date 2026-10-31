@@ -9,7 +9,7 @@
  */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
-import { CARS, getCar } from "../src/mainview/constants/cars"
+import { CARS, getCar } from "../src/mainview/data/cars"
 
 const arg = process.argv[2] ?? "bmw-m3"
 const file = arg.includes("/")

@@ -18,7 +18,7 @@ import {
 } from "../src/mainview/systems/carLights"
 import { CarVisual } from "../src/mainview/systems/CarVisual"
 import type { BrakeLight } from "../src/mainview/systems/carLights"
-import { CARS } from "../src/mainview/constants/cars"
+import { CARS } from "../src/mainview/data/cars"
 
 let failures = 0
 function check(ok: boolean, label: string, detail = "") {

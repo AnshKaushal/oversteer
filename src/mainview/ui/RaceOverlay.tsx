@@ -1,3 +1,4 @@
+import { enginePeaks } from "../physics/vehicle/components/Engine"
 import { useEffect, useRef, useState } from "react"
 import {
   RACE_COUNTS,
@@ -8,7 +9,7 @@ import {
   type RaceStanding,
   type TrafficLevel,
 } from "../systems/RaceTypes"
-import type { CarDefinition } from "../constants/cars"
+import type { CarDefinition } from "../data/schema"
 import { PaintPicker } from "./PaintPicker"
 import { EASE, Screen, usePop } from "./anim"
 import { roadGapM } from "../systems/WorldManager"
@@ -92,7 +93,10 @@ export function RaceMenu({
   const selected = cars[idx] ?? cars[0]
   const specRows: [string, string][] = selected
     ? [
-        ["POWER", `${selected.physics.engine.maxPowerHP} HP`],
+        [
+          "POWER",
+          `${Math.round(enginePeaks(selected.physics.engine).powerHP)} HP`,
+        ],
         ["TORQUE", `${selected.physics.engine.maxTorqueNm} Nm`],
         ["0–100 KM/H", `${selected.tested.zeroToHundredS.toFixed(1)} s`],
         ["TOP SPEED", `${selected.tested.topSpeedKmh} km/h`],
@@ -128,10 +132,9 @@ export function RaceMenu({
             data-fade
             onClick={onOpenSettings}
             title="Graphics & Resolution Settings"
-            className="pointer-events-auto absolute top-4 left-4 z-10 flex items-center gap-2 border border-[#51a7d5] bg-[#0b0e14]/85 px-3 py-2 text-xs font-semibold text-[#6ec2f0] backdrop-blur transition hover:bg-[#51a7d5]/25 hover:text-white active:scale-95"
+            className="pointer-events-auto absolute top-4 left-4 z-10 border border-[#51a7d5] bg-[#0b0e14]/85 px-3 py-2 text-xs font-semibold text-[#6ec2f0] backdrop-blur transition hover:bg-[#51a7d5]/25 hover:text-white active:scale-95"
           >
             <Settings size={15} />
-            <span>RESOLUTION / SETTINGS</span>
           </button>
         )}
         <button

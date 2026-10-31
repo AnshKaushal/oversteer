@@ -8,9 +8,6 @@ export interface BrakeLight {
 
 export const BRAKE_HEAT = new THREE.Color(0xff3d38)
 
-const LAMP_RANGE = 10
-const LAMP_IDLE = 0.5
-const LAMP_BRAKE = 3.4
 const HEAT_MIX = 1.8
 
 export function applyBrakeHeat(

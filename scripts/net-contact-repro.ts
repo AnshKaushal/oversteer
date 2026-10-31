@@ -34,10 +34,19 @@ import {
   createWorld,
   createChassisBody,
   FIXED_DT,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import { validateStatePacket } from "../src/mainview/systems/net/stateProtocol"
 import { getNetDiagSnapshot } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
+import { getCar } from "../src/mainview/data/cars"
+
+/** Net tests only need some real car; they do not depend on which. */
+const TEST_CAR = getCar("bmw-m3")
+const TEST_REMOTE_OPTS = {
+  modelFile: TEST_CAR.modelFile,
+  physics: TEST_CAR.physics,
+  startPlaced: true,
+}
 
 const GROUND_TOP = -0.05
 const BOTTOM_OFF = 0.42
@@ -202,9 +211,9 @@ function summarize(label: string, trace: StepRec[]) {
   // The wheel-less test striker would otherwise lose ~7 m/s to slab
   // friction before impact, confounding the car-car momentum split.
   const { world, scene } = makeWorld(0.0)
-  const striker = createChassisBody(world, 0, 0.72, 14)
+  const striker = createChassisBody(world, 0, 0.72, 14, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t1a", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t1a", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   const T = 10_000_000
   car.nowOverride = T
@@ -279,9 +288,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T1b bulldoze + return ---")
   const { world, scene } = makeWorld()
-  const striker = createChassisBody(world, 0, 0.72, 6)
+  const striker = createChassisBody(world, 0, 0.72, 6, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t1b", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t1b", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   const T = 11_000_000
   car.nowOverride = T
@@ -388,9 +397,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T2 crest + recover ---")
   const { world, scene } = makeWorld()
-  const wall = createChassisBody(world, 0, 0.72, -14)
+  const wall = createChassisBody(world, 0, 0.72, -14, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t2", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t2", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   let now = 20_000_000
   let seq = 0
@@ -466,9 +475,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T3 side-swipe + bounce ---")
   const { world, scene } = makeWorld()
-  const other = createChassisBody(world, 2.0, 0.72, -6)
+  const other = createChassisBody(world, 2.0, 0.72, -6, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t3", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t3", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   let now = 30_000_000
   let seq = 0
@@ -533,9 +542,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T4 recovery ---")
   const { world, scene } = makeWorld()
-  const block = createChassisBody(world, 0, 0.72, -8)
+  const block = createChassisBody(world, 0, 0.72, -8, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t4", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t4", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   const T = 40_000_000
   car.nowOverride = T
@@ -610,9 +619,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T5 high-speed + normals ---")
   const { world, scene } = makeWorld()
-  const parked = createChassisBody(world, 0, 0.72, 0)
+  const parked = createChassisBody(world, 0, 0.72, 0, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t5", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t5", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   // Ghost starts 40 m up-track; owner hurtles -z at 30 m/s (108 km/h).
   const T = 50_000_000
@@ -674,7 +683,7 @@ function summarize(label: string, trace: StepRec[]) {
   console.log("--- T6 support normals ---")
   const { world, scene } = makeWorld()
   for (let i = 0; i < 10; i++) world.step()
-  const car = new RemoteCar("r-t6", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t6", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   const T = 60_000_000
   car.nowOverride = T
@@ -762,9 +771,9 @@ function summarize(label: string, trace: StepRec[]) {
 {
   console.log("--- T7 pit-sustain, no warp ---")
   const { world, scene } = makeWorld()
-  const striker = createChassisBody(world, 8, 0.72, -8)
+  const striker = createChassisBody(world, 8, 0.72, -8, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
-  const car = new RemoteCar("r-t7", "t", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("r-t7", "t", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const col = ghostCollider(car)
   let now = 70_000_000
   let seq = 0
@@ -832,6 +841,59 @@ function summarize(label: string, trace: StepRec[]) {
     s.minB,
   )
   check("T7 state stays finite", s.finite)
+  car.dispose(scene, world)
+  world.free()
+}
+
+// ---------- T8. a ghost that appears beside a parked car must not shove it ----------
+{
+  console.log("--- T8 ghost appears near local car ---")
+  const { world, scene } = makeWorld(1.0)
+  const local = createChassisBody(world, 0, 0.72, 0, TEST_CAR.physics)
+  for (let i = 0; i < 120; i++) world.step()
+  const car = new RemoteCar("r-t8", "t", 0xffffff, scene, "./", world, R, { ...TEST_REMOTE_OPTS, startPlaced: false })
+  const T = 10_000_000
+  car.nowOverride = T
+  let peak = 0
+  for (let i = 0; i < 240; i++) {
+    if (i % 2 === 0) feed(car, i, 5, 0.72, 0, 0, 0, 0, T)
+    car.drive(FIXED_DT)
+    world.step()
+    const v = local.linvel()
+    peak = Math.max(peak, Math.hypot(v.x, v.z))
+  }
+  const gp = car.colliderBody!.translation()
+  check("T8 ghost placed at its real position", Math.abs(gp.x - 5) < 0.3, gp.x)
+  check("T8 parked car not shoved (<0.3 m/s)", peak < 0.3, peak)
+  car.dispose(scene, world)
+  world.free()
+}
+
+// ---------- T9. a ghost that appears inside the local car stays ghostly until clear ----------
+{
+  console.log("--- T9 ghost appears inside local car ---")
+  const { world, scene } = makeWorld(1.0)
+  const local = createChassisBody(world, 0, 0.72, 0, TEST_CAR.physics)
+  for (let i = 0; i < 120; i++) world.step()
+  const car = new RemoteCar("r-t9", "t", 0xffffff, scene, "./", world, R, { ...TEST_REMOTE_OPTS, startPlaced: false })
+  const col = ghostCollider(car)
+  const T = 10_000_000
+  car.nowOverride = T
+  let peak = 0
+  let solidWhileOverlapped = false
+  for (let i = 0; i < 480; i++) {
+    // same spot for 2 s, then the owner drives off to the side
+    const x = i < 240 ? 0.3 : 8
+    if (i % 2 === 0) feed(car, i, x, 0.72, 0, 0, 0, 0, T)
+    car.drive(FIXED_DT)
+    world.step()
+    if (i < 200 && col.collisionGroups() === 0xffffffff) solidWhileOverlapped = true
+    const v = local.linvel()
+    peak = Math.max(peak, Math.hypot(v.x, v.z))
+  }
+  check("T9 overlapping ghost is not solid", !solidWhileOverlapped)
+  check("T9 local car not shoved by an overlapping ghost (<0.3 m/s)", peak < 0.3, peak)
+  check("T9 ghost turns solid once clear", col.collisionGroups() === 0xffffffff, col.collisionGroups())
   car.dispose(scene, world)
   world.free()
 }

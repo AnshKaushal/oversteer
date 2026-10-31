@@ -9,7 +9,7 @@ import {
   initPhysics,
   createWorld,
   createChassisBody,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import {
   SnapshotBuffer,
   slerpQuat,
@@ -23,6 +23,15 @@ import { PeerSessionTracker } from "../src/mainview/systems/net/stateProtocol"
 import { getNetDiagSnapshot } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
 import { MultiplayerManager } from "../src/mainview/systems/net/MultiplayerManager"
+import { getCar } from "../src/mainview/data/cars"
+
+/** Net tests only need some real car; they do not depend on which. */
+const TEST_CAR = getCar("bmw-m3")
+const TEST_REMOTE_OPTS = {
+  modelFile: TEST_CAR.modelFile,
+  physics: TEST_CAR.physics,
+  startPlaced: true,
+}
 
 let failures = 0
 let passes = 0
@@ -161,7 +170,7 @@ function snap(
   const mode = b.sampleInto(out, 1000, stats)
   check(
     "6 clamped",
-    mode === "extrap" && approx(out.x, 2.5) && stats.extrapMs === EXTRAP_MAX_MS,
+    mode === "extrap" && approx(out.x, (10 * EXTRAP_MAX_MS) / 2000) && stats.extrapMs === EXTRAP_MAX_MS,
     { mode, out, stats },
   )
 }
@@ -244,7 +253,7 @@ function snap(
   const o2 = newInterpTarget()
   b.sampleInto(o1, 10_000)
   b.sampleInto(o2, 60_000)
-  check("11 frozen target", approx(o1.x, 2.5) && approx(o2.x, 2.5), {
+  check("11 frozen target", approx(o1.x, (10 * EXTRAP_MAX_MS) / 2000) && approx(o2.x, o1.x), {
     o1: o1.x,
     o2: o2.x,
   })
@@ -321,8 +330,10 @@ function snap(
     R.ColliderDesc.cuboid(500, 0.5, 500).setTranslation(0, -0.5, 0),
     groundBody,
   )
-  const local = createChassisBody(world, 0, 0.72, 0)
-  const remote = new RemoteCar("rp", "r", 0xffffff, scene, "./", world, R)
+  const local = createChassisBody(world, 0, 0.72, 0, TEST_CAR.physics)
+  const remote = new RemoteCar("rp", "r", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
+  // keep the ghost off the local car, which sits at the origin
+  remote.colliderBody?.setTranslation({ x: 20, y: 0.72, z: -50 }, true)
   // Settle suspension under gravity first: a fresh body drops a few cm on
   // the first steps, which is ordinary physics, not interpolation drift.
   for (let i = 0; i < 60; i++) world.step()
@@ -342,7 +353,7 @@ function snap(
       !!rb1 &&
       Math.abs(rb1.x - rb0.x) < 0.01 &&
       Math.abs(rb1.z - rb0.z) < 0.01,
-    { t0, t1 },
+    { t0, t1, rb0, rb1 },
   )
   // Feed accepted-style states, drive, step: local body must stay parked.
   const base = performance.now()
@@ -437,7 +448,7 @@ function snap(
     type: "HELLO",
     senderId: "qp",
     t: Date.now(),
-    payload: { name: "q", color: 1, session: "B" },
+    payload: { name: "q", color: 1, session: "B", proto: 2 },
   })
   H(pkt("B", 0, 500))
   car()?.drive(1 / 120)

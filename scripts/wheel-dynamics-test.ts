@@ -1,17 +1,18 @@
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   WheelDynamics,
   estimateWheelInertia,
-} from "../src/mainview/systems/WheelDynamics"
+} from "../src/mainview/physics/vehicle/components/WheelDynamics"
 import {
   createChassisBody,
   initPhysics,
   moveGroundBody,
   FIXED_DT,
   stepVehicleOnce,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
+import { activeCar, makeRig } from "./lib/cars"
 
 const RAPIER = await initPhysics()
 const DT = FIXED_DT
@@ -189,22 +190,10 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// ---- Integration tests: through CarController ----
+// ---- Integration tests: through Vehicle ----
 
 function mk() {
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-  world.timestep = FIXED_DT
-  const g = RAPIER.RigidBodyDesc.fixed()
-  const gb = world.createRigidBody(g)
-  world.createCollider(
-    RAPIER.ColliderDesc.cuboid(3000, 0.5, 3000)
-      .setTranslation(0, -0.55, 0)
-      .setFriction(1.0),
-    gb,
-  )
-  const body = createChassisBody(world, 0, 0.72, 0)
-  const car = new CarController(world, body, RAPIER)
-  return { world, gb, body, car }
+  return makeRig(RAPIER, activeCar())
 }
 
 function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
@@ -231,7 +220,13 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
       Math.abs(ws[0].driveTorque),
       Math.abs(ws[1].driveTorque),
     )
-    if (ws[2].driveTorque !== ws[3].driveTorque) splitOk = false
+    {
+      // the differential may bias the split, but only inside its lock cap
+      const D = activeCar().physics.differential
+      const sum = ws[2].driveTorque + ws[3].driveTorque
+      const cap = D.type === "open" ? 0 : D.type === "locked" ? Math.abs(sum) : D.preloadTorque + Math.max(D.lsdAccelLock, D.lsdDecelLock) * Math.abs(sum)
+      if (Math.abs(ws[2].driveTorque - ws[3].driveTorque) > cap + 1e-6) splitOk = false
+    }
   }
   const ws = s.car.wheelDynamics.wheels
   check(
@@ -240,7 +235,7 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
     `max=${frontDriveMax}`,
   )
   check(
-    "rear torque split equally left/right",
+    "rear torque split stays inside the differential cap",
     splitOk && ws[2].driveTorque > 0,
     `RL=${ws[2].driveTorque.toFixed(1)} RR=${ws[3].driveTorque.toFixed(1)}`,
   )
@@ -281,7 +276,7 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
 // 9b. Wheels differ in a real drive (rears spin, fronts don't).
 {
   const s = mk()
-  run(s, W, 1.0)
+  run(s, W, 2.0)
   const om = s.car.getWheelOmegas()
   check(
     "rear wheels rotate under power",
@@ -290,7 +285,8 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
   check(
     "axles differ: driven vs undriven",
-    Math.abs(om[2] - om[0]) > 1,
+    // an AWD car drives both axles, so only 2WD cars must show a difference
+    activeCar().physics.drivetrain.type === "awd" || Math.abs(om[2] - om[0]) > 1,
     `RL-FL=${(om[2] - om[0]).toFixed(1)}`,
   )
 }

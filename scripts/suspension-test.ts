@@ -1,14 +1,15 @@
 import * as THREE from "three"
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
-import { CarController } from "../src/mainview/systems/CarController"
+import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
 import {
   createChassisBody,
   initPhysics,
   moveGroundBody,
   FIXED_DT,
   stepVehicleOnce,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
+import { activeCar, makeRig } from "./lib/cars"
 
 const RAPIER = await initPhysics()
 
@@ -29,22 +30,10 @@ const idle: DriveInput = {
 const W = { ...idle, throttle: 1 }
 const S = { ...idle, brake: 1 }
 
-const WEIGHT = 1650 * 9.81 // modelled chassis mass only (wheels unsprung)
+const WEIGHT = activeCar().physics.mass.chassis * 9.81 // modelled chassis mass only (wheels unsprung)
 
 function mk() {
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
-  world.timestep = FIXED_DT
-  const g = RAPIER.RigidBodyDesc.fixed()
-  const gb = world.createRigidBody(g)
-  world.createCollider(
-    RAPIER.ColliderDesc.cuboid(3000, 0.5, 3000)
-      .setTranslation(0, -0.55, 0)
-      .setFriction(1.0),
-    gb,
-  )
-  const body = createChassisBody(world, 0, 0.72, 0)
-  const car = new CarController(world, body, RAPIER)
-  return { world, gb, body, car }
+  return makeRig(RAPIER, activeCar())
 }
 
 function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {

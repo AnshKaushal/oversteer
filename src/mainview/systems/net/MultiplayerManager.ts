@@ -1,11 +1,15 @@
 import * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { joinRoom, selfId } from "@trystero-p2p/torrent"
-import type { CarController } from "../CarController"
-import type { CarTelemetry } from "../CarController"
+import type { Vehicle } from "../../physics/vehicle/Vehicle"
+import type { CarTelemetry } from "../../physics/vehicle/Vehicle"
 import type { TireSmoke } from "../TireSmoke"
 import { DEFAULT_PLAYER_COLOR, colorHex } from "../carTint"
-import { DEFAULT_CAR_ID, getCar, modelFileForCarId } from "../../constants/cars"
+import { DEFAULT_CAR_ID, getCar, modelFileForCarId } from "../../data/cars"
+import { NET } from "../../data/net"
+import { WORLD } from "../../data/world"
+import { decodeState, encodeState, fnv1a, hex32, specHash } from "./codec"
+import { NetClock } from "./NetClock"
 import { RemoteCar } from "./RemoteCar"
 import {
   maybeLogNetDiag,
@@ -28,8 +32,7 @@ import {
 } from "./stateProtocol"
 import type { CarStatePacket, NetworkEventPacket, PeerPlayer } from "./types"
 
-const BROADCAST_INTERVAL_MS = 16
-const PING_INTERVAL_MS = 2000
+const PING_INTERVAL_MS = NET.pingIntervalMs
 
 export function roomPasswordHash(roomId: string, password: string): string {
   const text = `oversteer:${roomId}:${password}`
@@ -61,6 +64,8 @@ export class MultiplayerManager {
   public localName: string
   public localColor: number
   public localColorHex: string
+  /** The garage paint of the selected car; null shows the model's own colour. */
+  public localPaint: number | null = null
   public localCarId: string = DEFAULT_CAR_ID
   public roomId: string | null = null
   public roomPasswordHashV: string | null = null
@@ -68,7 +73,7 @@ export class MultiplayerManager {
 
   private room: any = null
   private lanWs: WebSocket | null = null
-  private sendStateAction: ((data: CarStatePacket) => void) | null = null
+  private sendStateAction: ((data: Uint8Array) => void) | null = null
   private sendEventAction: ((data: NetworkEventPacket) => void) | null = null
   private deniedIds = new Set<string>()
 
@@ -76,10 +81,18 @@ export class MultiplayerManager {
   public remoteCars = new Map<string, RemoteCar>()
 
   private callbacks: MultiplayerCallbacks = {}
-  private lastBroadcast = 0
+  private tick = 0
+  private clocks = new Map<string, NetClock>()
+  private readonly sendEveryTicks = Math.max(
+    1,
+    Math.round(WORLD.fixedHz / NET.sendHz),
+  )
   private lastPing = 0
   private packetSeq = 0
   private localSession = ""
+  private get sessionHash() {
+    return fnv1a(this.localSession)
+  }
   private sessions = new PeerSessionTracker()
 
   private activeScene: THREE.Scene | null = null
@@ -108,7 +121,10 @@ export class MultiplayerManager {
     return {
       name: this.localName,
       color: this.localColor,
-      session: this.localSession,
+      paint: this.localPaint,
+      session: hex32(this.sessionHash),
+      proto: NET.protocolVersion,
+      specHash: specHash(getCar(this.localCarId).physics),
       carId: this.localCarId,
       passHash: this.roomPasswordHashV,
     }
@@ -117,10 +133,12 @@ export class MultiplayerManager {
     const def = getCar(peer?.carId)
     return {
       modelFile: def.modelFile,
-      dims: def.physics.dimensions,
-      mass: def.physics.mass.chassis,
+      physics: def.physics,
       paintMatch: def.paintMatch,
       paintTexture: def.paintTexture,
+      pivots: def.pivots,
+      wheelSpots: def.wheels,
+      stock: peer?.paint === null,
     }
   }
 
@@ -312,7 +330,7 @@ export class MultiplayerManager {
     const stateAction = this.room.makeAction("state")
     const eventAction = this.room.makeAction("event")
 
-    this.sendStateAction = (pkt: CarStatePacket) => {
+    this.sendStateAction = (pkt: Uint8Array) => {
       stateAction.send(pkt).catch((e: unknown) => {
         console.warn("[Multiplayer P2P] State send failed:", e)
       })
@@ -324,10 +342,10 @@ export class MultiplayerManager {
     }
 
     stateAction.onMessage = (
-      pkt: CarStatePacket,
+      data: unknown,
       { peerId }: { peerId: string },
     ) => {
-      this.handleStatePacket(pkt, peerId)
+      this.handleBinaryState(data, peerId)
     }
 
     eventAction.onMessage = (
@@ -396,10 +414,16 @@ export class MultiplayerManager {
     this.lanWs = ws
     let opened = false
 
-    this.sendStateAction = (pkt: CarStatePacket) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "state", senderId: this.localId, pkt }))
-      }
+    ws.binaryType = "arraybuffer"
+    // frame: [id length][id utf8][state bytes]
+    const idBytes = new TextEncoder().encode(this.localId)
+    this.sendStateAction = (pkt: Uint8Array) => {
+      if (ws.readyState !== WebSocket.OPEN) return
+      const frame = new Uint8Array(1 + idBytes.length + pkt.length)
+      frame[0] = idBytes.length
+      frame.set(idBytes, 1)
+      frame.set(pkt, 1 + idBytes.length)
+      ws.send(frame)
     }
 
     this.sendEventAction = (evt: NetworkEventPacket) => {
@@ -422,6 +446,23 @@ export class MultiplayerManager {
 
     ws.onmessage = (event) => {
       try {
+        if (typeof event.data !== "string") {
+          const u8 = new Uint8Array(event.data as ArrayBuffer)
+          const n = u8[0]
+          const sid = new TextDecoder().decode(u8.subarray(1, 1 + n))
+          if (!sid || sid === this.localId) return
+          if (!this.peers.has(sid)) {
+            this.registerPeer(sid)
+            this.sendEvent({
+              type: "HELLO",
+              senderId: this.localId,
+              t: Date.now(),
+              payload: this.helloPayload(),
+            })
+          }
+          this.handleBinaryState(u8.subarray(1 + n), sid)
+          return
+        }
         const msg = JSON.parse(event.data)
         const senderId = msg.senderId
         if (!senderId || senderId === this.localId) return
@@ -436,9 +477,7 @@ export class MultiplayerManager {
           })
         }
 
-        if (msg.type === "state" && msg.pkt) {
-          this.handleStatePacket(msg.pkt, senderId)
-        } else if (msg.type === "event" && msg.evt) {
+        if (msg.type === "event" && msg.evt) {
           this.handleNetworkEvent(msg.evt, senderId)
         }
       } catch (err) {
@@ -515,6 +554,7 @@ export class MultiplayerManager {
   private unregisterPeer(peerId: string) {
     this.peers.delete(peerId)
     this.sessions.reset(peerId)
+    this.clocks.delete(peerId)
     netDiagPeerEvent(peerId, "disconnect")
     const remote = this.remoteCars.get(peerId)
     if (remote) {
@@ -533,13 +573,67 @@ export class MultiplayerManager {
     netDiagRemoteCount(this.remoteCars.size)
   }
 
-  private handleStatePacket(pkt: CarStatePacket, senderId: string) {
+  private handleBinaryState(data: unknown, senderId: string) {
+    if (this.deniedIds.has(senderId)) return
+    const arrivalMs = performance.now()
+    if (!(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data)) {
+      netDiagInvalid(senderId, "malformed-envelope")
+      return
+    }
+    const d = decodeState(data)
+    if (!d.ok) {
+      netDiagInvalid(senderId, d.reason)
+      return
+    }
+    const w = d.state
+    this.handleStatePacket(
+      {
+        id: senderId,
+        t: w.t,
+        seq: w.seq,
+        sess: hex32(w.sess),
+        x: w.x,
+        y: w.y,
+        z: w.z,
+        qx: w.qx,
+        qy: w.qy,
+        qz: w.qz,
+        qw: w.qw,
+        vx: w.vx,
+        vy: w.vy,
+        vz: w.vz,
+        wx: w.wx,
+        wy: w.wy,
+        wz: w.wz,
+        steer: w.steer,
+        speed: w.speed,
+        rpm: w.rpm,
+        gear: w.gear,
+        throttle: w.throttle,
+        brake: w.brake,
+        drift: w.drift,
+        smoke: w.smoke,
+        handbrake: w.handbrake,
+        progress: w.progress,
+        wheelOmega: w.wheelOmega,
+        compression: w.compression,
+        smokeLevel: w.smokeLevel,
+      },
+      senderId,
+      arrivalMs,
+    )
+  }
+
+  private handleStatePacket(
+    pkt: CarStatePacket,
+    senderId: string,
+    arrivalMs: number = performance.now(),
+  ) {
     if (this.deniedIds.has(senderId)) return
     if (!pkt || typeof pkt !== "object") {
       netDiagInvalid(senderId, "malformed-envelope")
       return
     }
-    const arrivalMs = performance.now()
     const checked = validateStatePacket(pkt)
     if (!checked.ok) {
       netDiagInvalid(senderId, checked.reason)
@@ -588,7 +682,18 @@ export class MultiplayerManager {
       this.remoteCars.set(senderId, car)
       netDiagRemoteCount(this.remoteCars.size)
     }
-    if (car) car.onPacket(checked.state, arrivalMs)
+    if (car) {
+      let clock = this.clocks.get(senderId)
+      if (!clock) {
+        clock = new NetClock()
+        this.clocks.set(senderId, clock)
+      }
+      if (clock.observe(checked.state.senderT, checked.state.seq, arrivalMs)) {
+        car.resetInterpolation("clock-resync")
+      }
+      car.delayMs = clock.delayMs
+      car.onPacket(checked.state, clock.toLocal(checked.state.senderT), arrivalMs)
+    }
 
     const peer = this.peers.get(senderId)
     if (peer) {
@@ -600,6 +705,20 @@ export class MultiplayerManager {
   private handleNetworkEvent(evt: NetworkEventPacket, senderId: string) {
     switch (evt.type) {
       case "HELLO": {
+        if (evt.payload?.proto !== NET.protocolVersion) {
+          console.warn(
+            `[Multiplayer] Peer ${senderId} speaks protocol ${evt.payload?.proto ?? "1"}, we speak ${NET.protocolVersion}`,
+          )
+          this.deniedIds.add(senderId)
+          if (this.peers.has(senderId)) this.unregisterPeer(senderId)
+          this.sendEvent({
+            type: "DENY",
+            senderId: this.localId,
+            t: Date.now(),
+            payload: { reason: "version", proto: NET.protocolVersion },
+          })
+          return
+        }
         if (
           this.roomPasswordHashV !== null &&
           evt.payload?.passHash !== this.roomPasswordHashV
@@ -617,22 +736,39 @@ export class MultiplayerManager {
           return
         }
         const peer = this.registerPeer(senderId)
+        if (typeof evt.payload?.carId === "string") {
+          const mine = specHash(getCar(evt.payload.carId).physics)
+          peer.specMismatch = evt.payload?.specHash !== mine
+          if (peer.specMismatch) {
+            console.warn(
+              `[Multiplayer] ${senderId}'s ${evt.payload.carId} data differs from ours; their car will drive differently here`,
+            )
+          }
+        }
         this.sessions.noteSession(senderId, evt.payload?.session)
         peer.name = evt.payload?.name || peer.name
         peer.color = evt.payload?.color ?? peer.color
         peer.colorHex = colorHex(peer.color)
+        if (evt.payload && "paint" in evt.payload) {
+          peer.paint = typeof evt.payload.paint === "number" ? evt.payload.paint : null
+        }
         if (typeof evt.payload?.carId === "string") {
           peer.carId = evt.payload.carId
         }
         const car = this.remoteCars.get(senderId)
         if (car) {
           car.name = peer.name
-          if (evt.payload?.color !== undefined) {
+          if (peer.paint !== undefined) car.setPaint(peer.paint)
+          else if (evt.payload?.color !== undefined) {
             car.setColor(evt.payload.color)
           }
+          const def = getCar(peer.carId)
           car.setModel(modelFileForCarId(peer.carId), {
-            paintMatch: getCar(peer.carId).paintMatch,
-            paintTexture: getCar(peer.carId).paintTexture,
+            paintMatch: def.paintMatch,
+            paintTexture: def.paintTexture,
+            pivots: def.pivots,
+            wheelSpots: def.wheels,
+            physics: def.physics,
           })
         }
         this.notifyPeersChanged()
@@ -682,10 +818,15 @@ export class MultiplayerManager {
         break
       }
       case "DENY": {
-        console.warn("[Multiplayer] Denied by the room (wrong password)")
+        const version = evt.payload?.reason === "version"
+        console.warn(
+          `[Multiplayer] Denied by the room (${version ? "version" : "wrong password"})`,
+        )
         this.leave()
         this.callbacks.onJoinError?.(
-          "Room is password-protected: wrong or missing password.",
+          version
+            ? "This room runs a different game version. Update OverSteer on both sides."
+            : "Room is password-protected: wrong or missing password.",
         )
         break
       }
@@ -729,28 +870,35 @@ export class MultiplayerManager {
     }, 400)
   }
 
-  public broadcastLocalState(
-    car: CarController,
+  /** Called once per fixed physics step; sends on every Nth tick, stamped with sim time. */
+  public onPhysicsTick(
+    car: Vehicle,
     tele: CarTelemetry | null,
-    progress: number,
+    progress: () => number,
   ) {
-    if (!this.sendStateAction) return
-    if (!tele) return
-
-    const now = performance.now()
-    if (now - this.lastBroadcast < BROADCAST_INTERVAL_MS) return
-    this.lastBroadcast = now
+    this.tick++
+    if (!this.sendStateAction || !tele) return
+    if (this.tick % this.sendEveryTicks !== 0) return
 
     const body = car.body
     const p = body.translation()
     const q = body.rotation()
     const v = body.linvel()
 
-    const pkt: CarStatePacket = {
-      id: this.localId,
-      t: now,
+    const w = body.angvel()
+    // the same measure the local car smokes by
+    const smokeLevel = Math.min(
+      1,
+      Math.max(
+        tele.slipRatio,
+        tele.drift ? 0.55 : 0,
+        tele.launching ? 0.7 : 0,
+      ),
+    )
+    const pkt = encodeState({
       seq: this.packetSeq++,
-      sess: this.localSession,
+      t: (this.tick * 1000) / WORLD.fixedHz,
+      sess: this.sessionHash,
       x: p.x,
       y: p.y,
       z: p.z,
@@ -761,14 +909,23 @@ export class MultiplayerManager {
       vx: v.x,
       vy: v.y,
       vz: v.z,
+      wx: w.x,
+      wy: w.y,
+      wz: w.z,
       steer: car.steerAngle,
       speed: Number.isFinite(tele.speedKmh) ? tele.speedKmh : 0,
       rpm: tele.rpm,
       gear: tele.gear,
+      throttle: tele.throttle,
+      brake: tele.brake,
       drift: tele.drift,
-      smoke: tele.slipRatio > 0.4 || tele.drift,
-      progress,
-    }
+      smoke: smokeLevel > 0.28,
+      handbrake: tele.parkingBrake,
+      progress: progress(),
+      wheelOmega: car.getWheelOmegas(),
+      compression: car.getWheelCompressions(),
+      smokeLevel,
+    })
 
     try {
       this.sendStateAction(pkt)
@@ -856,6 +1013,8 @@ export class MultiplayerManager {
     this.sendStateAction = null
     this.sendEventAction = null
     this.sessions.clear()
+    this.clocks.clear()
+    this.tick = 0
     this.localSession = ""
     for (const id of this.peers.keys()) {
       netDiagPeerEvent(id, "cleanup")

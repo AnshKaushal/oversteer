@@ -1,65 +1,126 @@
-# Car Registry
+# Adding a Car
 
-The car registry is the **only file you edit to add a car**. Nothing else in the codebase needs to change.
+A car is one data file. Everything the game needs (physics, tyres, wheel
+positions, dash scale, paint rules) lives in a `CarSpec`; no system code
+changes. The menu, rivals and multiplayer pick the car up from the registry.
 
-## Table of Contents
-
-- [Adding a Car](#adding-a-car)
-- [Nose Direction](#nose-direction)
-- [Lamps](#lamps)
-- [Troubleshooting](#troubleshooting)
+1. [Steps](#steps)
+2. [The spec](#the-spec)
+3. [Tuning from real figures](#tuning-from-real-figures)
+4. [Verify](#verify)
+5. [Nose direction](#nose-direction)
+6. [Lamps](#lamps)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Adding a Car
+## Steps
 
-Adding a car takes five steps.
+1. **Model.** Put the GLB in `src/mainview/models/` and the same file in
+   `src/mainview/public/models/` (the first is what the game imports, the
+   second is what the dev server and the build serve). Use lowercase with
+   underscores: `my_car.glb`.
+2. **Orient it.** The nose must face +Z (see [Nose direction](#nose-direction)).
+   Fix the file, not the spec.
+3. **Spec file.** Copy the closest existing car in `src/mainview/data/cars/`
+   to `<id>.ts` (kebab-case id, e.g. `my-car.ts`) and edit it. Copy a car of
+   the same layout (FWD/RWD/AWD, turbo or not) so the structure fits; do not
+   copy its handling, set the numbers from the car you are adding.
+4. **Register.** In `src/mainview/data/cars/index.ts` import it and add it to
+   `ALL_CARS`. Order is menu order. Invalid specs throw in dev and are
+   skipped (with a log) in a production build.
+5. **Verify** with the [commands below](#verify).
 
-### 1. Add the model files
+---
 
-Place the GLB in two locations:
+## The spec
 
-| Location                                | Purpose                          |
-| --------------------------------------- | -------------------------------- |
-| `src/mainview/models/<name>.glb`        | Source copy                      |
-| `src/mainview/public/models/<name>.glb` | Served directory used at runtime |
+`CarSpec` is defined in `src/mainview/data/schema.ts`. The top level:
 
-### 2. Find the wheel pivots
+| Field          | What it is                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| `id`           | Unique kebab-case id. Also what multiplayer peers announce.                                               |
+| `name`/`shortName` | Menu name and the short label for the HUD.                                                            |
+| `modelFile`    | `models/<file>.glb`.                                                                                      |
+| `pivots`       | How to find the four wheel nodes in the GLB: `{ pattern: "^Wheel_" }` (regex) or `{ names: [...] }`.      |
+| `wheels`       | Four `WheelDef`s `{ x, z, front, left }` in metres, body space, front is -z. Order FL, FR, RL, RR.        |
+| `dash`         | `{ maxRpm, redFromRpm, maxKmh }`, the dial scale only.                                                    |
+| `tested`       | `{ zeroToHundredS, topSpeedKmh }`: the real car's figures, for comparison with `scripts/dyno.ts`.         |
+| `defaultTint`  | Paint colour (number) or `null` to keep the model's own colours.                                          |
+| `paintMatch`   | Optional material-name substrings that count as body paint.                                               |
+| `paintTexture` | Optional `{ keepMap, neutralize }` for models whose paint is baked into a texture.                        |
+| `physics`      | Everything below.                                                                                         |
 
-Wheel pivots are the non-mesh nodes that hold the wheel meshes. Identify them with one of two options:
+`physics` sections: `dimensions`, `mass`, `chassis` (damping, `crash`
+preset, collider boxes, `remote` ghost friction), `engine`, `transmission`,
+`differential`, `drivetrain`, `wheels` (tyres, suspension, steering, brakes),
+`aero`, `assists`, `brakes`, `kinematics`, `cruise`, `launch`, `shiftLogic`,
+`creep`, `contact`, `selfRight`, `limits`.
 
-- **`pivotPattern`**: a regex matched against node names. For example, the BMW and R8 use `Plane003..006`.
-- **`pivotNames`**: an explicit list, for models where the numbering is irregular. For example, the Urus wheels are `Plane030`, `Plane031`, `Plane032` and `Plane035`, with the discs in between.
+Helpers keep a spec short and consistent:
 
-> **Note:** Candidates smaller than 2.5% of the body length are ignored. This means brake calipers and discs that share the pattern never become wheels.
+- `engineBuild({ layout, cylinders, displacementL, flywheel })` derives the
+  rotating inertia, friction and response from the engine build. `flywheel`
+  is `"road" | "sport" | "race"`.
+- `tyre("sport" | "street" | "race", overrides)` gives a full compound
+  (grip, Pacejka curves, relaxation); override only what differs.
+- `CRASH.open | sport | road | heavy` picks the impact behaviour.
 
-> **Fallback:** If the number of pivots found is not exactly 4, the car gets plain cylinder wheels at the `wheels` positions instead. This never crashes the game, but it looks worse.
+Rules the specs follow:
 
-### 3. Check the nose
+- **Per-car numbers live in the spec.** Do not add `if (car === ...)` or a
+  tuned constant to a system; add a field to the schema and the validator.
+- **Automatic gearbox only.** Launch flare, launch control and managed power
+  belong to the safety aids and are configured under `assists`/`launch`.
+- Wheel `x`/`z` come from the model (measure the pivots, e.g. with
+  `car-visual-check.ts`); wheelbase and track are derived from them.
 
-Every model must face **+Z** in model space, with the nose at max-Z. See [Nose Direction](#nose-direction) for how each existing model was verified.
+---
 
-If your model faces -Z, rotate the GLB. A `flipNose: true` field is reserved for this case, but it is currently unused because every car faces +Z.
+## Tuning from real figures
 
-### 4. Fill in the real specs
+Start from published numbers, not from another car's feel:
 
-Enter the real values for power, torque, mass, drag coefficient (Cd) and size. The physics settings with the biggest effect are:
+1. Mass, wheelbase, track, centre of mass height, power, torque, gear ratios,
+   final drive, tyre size, drag and frontal area, brake sizes.
+2. Fill `engine.maxTorqueNm` and `torqueCurve` (relative to the peak) so the
+   power peak lands where the real car's does.
+3. Run the dyno and compare with the real figures:
 
-| Setting                             | Scales with       | Notes                                   |
-| ----------------------------------- | ----------------- | --------------------------------------- |
-| `springRate`                        | mass              | Suspension stiffness                    |
-| `brakeForce`                        | mass              | Braking power                           |
-| `referenceLoad`                     | `mass * 9.81 / 4` | Per-wheel static load                   |
-| `dragCoefficient` and `frontalArea` | n/a               | Together they set top speed             |
-| `torqueCurve`                       | n/a               | Its shape sets the character of the car |
+```bash
+CAR=<id> bun scripts/dyno.ts          # add --csv for the pull as rows
+```
 
-### 5. Add one entry to `CARS`
+It prints crank torque and power every 500 rpm, the peaks, hp/tonne, then a
+full-throttle automatic pull: 0-100, 0-200, top speed, shift points and the
+drivetrain loss the pull implies. `tested` is the real car's claim and is
+there to compare against; a gap means check the data (gearing, tyre radius,
+drag, torque curve), not the script.
 
-Add a single entry to the `CARS` array. The rest happens automatically:
+---
 
-- The menu renders from `CARS` (`RaceMenu`), so the new car appears with no menu changes.
-- Rivals cycle through the registry automatically.
-- Multiplayer ghosts resolve the model through `modelFileForCarId()`.
+## Verify
+
+```bash
+bun scripts/validate-cars.ts                     # spec validation, all cars
+CAR=<id> bun scripts/smoke-test.ts               # drives the one car
+bun scripts/run-per-car.ts scripts/feel-test.ts  # a suite across every car
+bun scripts/run-per-car.ts scripts/chassis-tests.ts
+bun scripts/audit-literals.ts --fail             # no stray tuned numbers in code
+bun scripts/golden-master.ts                     # existing cars unchanged
+npx tsc --noEmit -p .
+```
+
+`scripts/known-failures.json` lists accepted failures per car and suite. If a
+new car fails a check, fix the data; only add a known failure when the check
+does not apply to that car, and say why in the entry.
+
+Models: `bun scripts/car-visual-check.ts <id>` (wheel pivots found and
+classified) and `bun scripts/light-info.ts <id>` (lamp detection).
+
+Multiplayer: peers compare a hash of the whole spec. If two builds disagree
+on a car's data, the peer is flagged as a spec mismatch and a warning is
+logged, so ship the same data to everyone.
 
 ---
 
@@ -89,7 +150,7 @@ Most GLBs can be dropped in as they are. Some do not:
   and a red emissive so `carLights` can find it and brighten it under
   braking.
 - **The wheel pivots have unusable names.** Sketchfab calls them
-  `fl.001_17` and friends, and the loader strips the dots, so the registry
+  `fl.001_17` and friends, and the loader strips the dots, so the spec
   would have to spell them out. The prep script renames them to
   `Wheel_FL`/`FR`/`RL`/`RR` instead.
 
@@ -97,7 +158,7 @@ Most GLBs can be dropped in as they are. Some do not:
 
 ## Lamps
 
-Headlights never take paint, and tail lights glow under braking. **Nothing about this needs editing in the registry.**
+Headlights never take paint, and tail lights glow under braking. **Nothing about this needs editing in the car spec.**
 
 - **`carTint`** skips emissive materials when it looks for paint. Previously the M3's white headlight strip was repainted, which gave black cars black headlights.
 - **`carLights`** finds each car's red lamps by their **glowing** colour —
@@ -128,6 +189,16 @@ Run the test script to guard both behaviours:
 bun scripts/light-materials-test.ts
 ```
 
+### Lamps baked into the body material
+
+If `light-info.ts` shows no lamp and no `lit` material, the lenses are painted
+into a shared texture. Split them out in the file instead of special-casing the
+car in code: `scripts/prepare-mercedes-sl65.ts` moves the lamp triangles (picked
+by position and by the lens colours in the texture) into primitives named
+`SL_Headlight` and `SL_Taillight`, with a warm-white and a red emissive. The
+existing detection then lights them (headlights on `H`, tail lamps on braking).
+Check the selection with `--debug out.json` before writing the file.
+
 ### Known limitation
 
 A car whose lamps are baked into one shared texture (the G-Wagen) has nothing separable to glow, so it is left out of the glow behaviour by design.
@@ -140,10 +211,15 @@ expects. The M3 still ships with 10, which is why that check fails today.
 
 ## Troubleshooting
 
-| Symptom                                             | Likely cause                                                      | Fix                                                                         |
-| --------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Car has plain cylinder wheels                       | The pivot search did not find exactly 4 pivots                    | Adjust `pivotPattern`, or list the nodes in `pivotNames`                    |
-| Brake discs or calipers spin as wheels              | Their names match the pattern but are larger than the 2.5% cutoff | Use `pivotNames` with an explicit list                                      |
-| Car drives backwards or lights are at the wrong end | The model faces -Z                                                | Rotate the GLB so the nose is at max-Z                                      |
-| Black car has black headlights                      | A headlight material is not marked emissive                       | Check the material with `bun scripts/light-info.ts <car-id>`                |
-| Tail lights do not glow when braking                | Lamps are baked into a shared texture, or are not a glowing red   | Run `light-info.ts`. Baked textures cannot be fixed without separate meshes |
+| Symptom                                             | Likely cause                                                      | Fix                                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Spec rejected at startup                            | A field is missing or out of range                                | Run `bun scripts/validate-cars.ts` for the exact message                     |
+| Car has plain cylinder wheels                       | The pivot search did not find exactly 4 pivots                    | Adjust `pivots.pattern`, or list the nodes in `pivots.names`                 |
+| Brake discs or calipers spin as wheels              | Their names match the pattern but are larger than the 2.5% cutoff | Use `pivots.names` with an explicit list                                     |
+| Car drives backwards or lights are at the wrong end | The model faces -Z                                                | Rotate the GLB so the nose is at max-Z                                       |
+| Wheels float or sink                                | `wheels[].x/z` or `dimensions` do not match the model             | Re-measure the pivots; check `groundClearance` and suspension rest length    |
+| Black car has black headlights                      | A headlight material is not marked emissive                       | Check the material with `bun scripts/light-info.ts <car-id>`                 |
+| Tail lights do not glow when braking                | Lamps are baked into a shared texture, or are not a glowing red   | Run `light-info.ts`. Baked textures cannot be fixed without separate meshes  |
+| Paint changes tyres, trim or glass                  | Generic material names (`Cylinder`, `Plane`) fall to the heuristic, which tints every light material | List the GLB's materials (names, base colour, texture), find which one is the shell, set `paintMatch` with anchored regexes (`^Cylinder$`) and `paintTexture` with `neutralize` set to the shell's flat texture colour (the SL 65 is the worked example) |
+| Top speed or 0-100 far from `tested`                | Gearing, tyre radius, drag or torque curve are off                | `CAR=<id> bun scripts/dyno.ts`, then correct the data                        |
+| Multiplayer shows a spec mismatch                   | Peers run different data for that car                             | Update both builds to the same commit                                        |

@@ -4,7 +4,7 @@ export default {
   app: {
     name: "OverSteer",
     identifier: "dev.oversteer.game",
-    version: "1.0",
+    version: "2.0.0",
   },
   release: {
     baseUrl: "https://github.com/AnshKaushal/car-game/releases/latest/download",

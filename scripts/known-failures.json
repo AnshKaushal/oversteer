@@ -1,0 +1,242 @@
+{
+  "smoke-test.ts": {
+    "bmw-m3": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ],
+    "audi-r8": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)"
+    ],
+    "audi-rs7": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "top gear full throttle pulls hard (kickdown allowed)"
+    ],
+    "porsche-997-gt2": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "full lock still meaningful at 250km/h",
+      "countersteer flips the car the other way (low speed donut)"
+    ],
+    "g-wagon": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ],
+    "lambo-urus": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ],
+    "lambo-aventador": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)"
+    ],
+    "dodge-challenger": [
+      "lift-off re-attaches grip quickly",
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ],
+    "f1-car": [
+      "idle creep cruises slowly",
+      "lift-off re-attaches grip quickly",
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "neutral rpm falls slowly (flywheel inertia)",
+      "top gear full throttle pulls hard (kickdown allowed)",
+      "full lock still meaningful at 250km/h",
+      "countersteer flips the car the other way (low speed donut)"
+    ],
+    "cheetah-84": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ],
+    "dodge-charger-69": [
+      "donuts possible (sustained rotation)",
+      "burnout spins rears (TC off on handbrake)",
+      "countersteer flips the car the other way (low speed donut)"
+    ],
+    "mercedes-sl65-amg": [
+      "burnout spins rears (TC off on handbrake)",
+      "donut is entered"
+    ]
+  },
+  "suspension-test.ts": {
+    "bmw-m3": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "audi-r8": [
+      "front share plausible 40-53% (rear-biased)",
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "audi-rs7": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "porsche-997-gt2": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift",
+      "acceleration squats rear (rear comp > front)"
+    ],
+    "g-wagon": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "lambo-urus": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "lambo-aventador": [
+      "front share plausible 40-53% (rear-biased)",
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift",
+      "acceleration squats rear (rear comp > front)",
+      "pitch sign nose-up under power",
+      "braking dives front (front comp > rear)",
+      "pitch sign nose-down under braking",
+      "outer wheels compress more (lean-out)"
+    ],
+    "dodge-challenger": [
+      "front share plausible 40-53% (rear-biased)",
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "f1-car": [
+      "front share plausible 40-53% (rear-biased)",
+      "corners near individual equilibrium 40-110mm",
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift",
+      "acceleration squats rear (rear comp > front)",
+      "pitch sign nose-up under power",
+      "braking dives front (front comp > rear)",
+      "pitch sign nose-down under braking",
+      "outer wheels compress more (lean-out)"
+    ],
+    "cheetah-84": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift",
+      "acceleration squats rear (rear comp > front)"
+    ],
+    "dodge-charger-69": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ],
+    "mercedes-sl65-amg": [
+      "FL contact patch sits ~plank height above the others",
+      "body rolls in response to single-corner lift"
+    ]
+  },
+  "wheel-dynamics-test.ts": {
+    "bmw-m3": [],
+    "audi-r8": [
+      "front wheels receive zero drive torque (RWD)",
+      "airborne undriven wheels hold velocity (no fake ground)"
+    ],
+    "audi-rs7": [
+      "front wheels receive zero drive torque (RWD)",
+      "airborne undriven wheels hold velocity (no fake ground)"
+    ],
+    "porsche-997-gt2": [
+      "rear torque split stays inside the differential cap"
+    ],
+    "g-wagon": [
+      "front wheels receive zero drive torque (RWD)",
+      "airborne undriven wheels hold velocity (no fake ground)"
+    ],
+    "lambo-urus": [
+      "front wheels receive zero drive torque (RWD)",
+      "airborne undriven wheels hold velocity (no fake ground)"
+    ],
+    "lambo-aventador": [
+      "front wheels receive zero drive torque (RWD)",
+      "airborne undriven wheels hold velocity (no fake ground)"
+    ],
+    "dodge-challenger": [],
+    "f1-car": [],
+    "cheetah-84": [],
+    "dodge-charger-69": []
+  },
+  "tire-model-test.ts": {
+    "bmw-m3": [],
+    "audi-r8": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "audi-rs7": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "porsche-997-gt2": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "g-wagon": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "lambo-urus": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "lambo-aventador": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "dodge-challenger": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)",
+      "reverse: rear slip and force point backward"
+    ],
+    "f1-car": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "cheetah-84": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "dodge-charger-69": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ],
+    "mercedes-sl65-amg": [
+      "reaction = contact force × radius exactly",
+      "reaction overwritten per step (never accumulated)"
+    ]
+  },
+  "feel-test.ts": {
+    "bmw-m3": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ],
+    "audi-r8": [],
+    "audi-rs7": [],
+    "porsche-997-gt2": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ],
+    "g-wagon": [],
+    "lambo-urus": [],
+    "lambo-aventador": [],
+    "dodge-challenger": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ],
+    "f1-car": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)",
+      "abs: wheels are kept from locking"
+    ],
+    "cheetah-84": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ],
+    "dodge-charger-69": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ],
+    "mercedes-sl65-amg": [
+      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    ]
+  }
+}

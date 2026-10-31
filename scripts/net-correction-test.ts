@@ -11,7 +11,7 @@ import {
   createWorld,
   createChassisBody,
   FIXED_DT,
-} from "../src/mainview/systems/PhysicsSystem"
+} from "../src/mainview/physics/core/PhysicsSystem"
 import {
   CorrectionState,
   clampCorrectionDelta,
@@ -22,6 +22,15 @@ import {
 import { validateStatePacket } from "../src/mainview/systems/net/stateProtocol"
 import { getNetDiagSnapshot } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
+import { getCar } from "../src/mainview/data/cars"
+
+/** Net tests only need some real car; they do not depend on which. */
+const TEST_CAR = getCar("bmw-m3")
+const TEST_REMOTE_OPTS = {
+  modelFile: TEST_CAR.modelFile,
+  physics: TEST_CAR.physics,
+  startPlaced: true,
+}
 
 let failures = 0
 let passes = 0
@@ -48,7 +57,7 @@ function makeWorld() {
   return { world, scene }
 }
 function makeRemote(world: any, scene: THREE.Scene, id: string): RemoteCar {
-  return new RemoteCar(id, id, 0xffffff, scene, "./", world, R)
+  return new RemoteCar(id, id, 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
 }
 function pkt(seq: number, x: number, z: number, vx = 0, vz = 0) {
   const r = validateStatePacket({
@@ -147,7 +156,7 @@ const diag = (id: string) => getNetDiagSnapshot().peers[id]
 // ---------- B4/B5/B6. contact suppresses servos, no oscillation ----------
 {
   const { world, scene } = makeWorld()
-  const local = createChassisBody(world, 0, 0.72, -8)
+  const local = createChassisBody(world, 0, 0.72, -8, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step() // settle
   const car = makeRemote(world, scene, "c-contact")
   const T = 2_000_000
@@ -217,7 +226,7 @@ const diag = (id: string) => getNetDiagSnapshot().peers[id]
 // ---------- B7. recovery: hysteresis then gradual reconvergence, no warp ----------
 {
   const { world, scene } = makeWorld()
-  const local = createChassisBody(world, 0, 0.72, -8)
+  const local = createChassisBody(world, 0, 0.72, -8, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
   const car = makeRemote(world, scene, "c-recover")
   const T = 3_000_000
@@ -288,7 +297,7 @@ const diag = (id: string) => getNetDiagSnapshot().peers[id]
 // ---------- B8. stale peer: commands zero, drags nothing ----------
 {
   const { world, scene } = makeWorld()
-  const local = createChassisBody(world, 2.2, 0.72, 0) // adjacent to ghost
+  const local = createChassisBody(world, 2.2, 0.72, 0, TEST_CAR.physics) // adjacent to ghost
   for (let i = 0; i < 60; i++) world.step()
   const car = makeRemote(world, scene, "c-stale")
   const T = 4_000_000
@@ -409,7 +418,7 @@ const diag = (id: string) => getNetDiagSnapshot().peers[id]
 {
   const { world, scene } = makeWorld()
   // Striker parked 5 cm into the ghost's flank: real narrow-phase contact.
-  const striker = createChassisBody(world, 1.8, 0.72, 0)
+  const striker = createChassisBody(world, 1.8, 0.72, 0, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step() // settle
   const car = makeRemote(world, scene, "c-angular")
   const T = 9_000_000
@@ -476,7 +485,7 @@ const diag = (id: string) => getNetDiagSnapshot().peers[id]
 // ---------- overhead probe ----------
 {
   const { world, scene } = makeWorld()
-  const local = createChassisBody(world, 0, 0.72, -3)
+  const local = createChassisBody(world, 0, 0.72, -3, TEST_CAR.physics)
   const car = makeRemote(world, scene, "c-perf")
   for (let i = 0; i < 30; i++) world.step()
   const t0 = performance.now()

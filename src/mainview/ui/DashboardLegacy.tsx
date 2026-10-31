@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react"
-import type { CarTelemetry } from "../systems/CarController"
+import type { CarTelemetry } from "../physics/vehicle/Vehicle"
 
 const RED_FROM_RPM = 6750
 const MAX_RPM = 8000
 const MAX_KMH = 340
 
 const RED = "#ff3b30"
+const BLUE = "#5fb4ff"
 const AMBER = "#ffb020"
 const OFF = "#3a4350"
 
@@ -24,6 +25,45 @@ interface GaugeRefs {
   numRef: { current: SVGTextElement | null }
   rimRef?: { current: SVGCircleElement | null }
   iconRef: { current: SVGGElement | null }
+  icon2Ref?: { current: SVGGElement | null }
+  icon3Ref?: { current: SVGGElement | null }
+  icon4Ref?: { current: SVGGElement | null }
+}
+
+function TextIcon({ label }: { label: string }) {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" />
+      <text x="12" y="15" textAnchor="middle" fontSize="8" fontWeight="700" fill="currentColor" stroke="none">
+        {label}
+      </text>
+    </g>
+  )
+}
+
+/** Telltale arc under the readout: icon size, angular step and radius from the dial centre (dial units). */
+const ICON_SIZE = 15
+const ICON_ARC_STEP_DEG = 15
+const ICON_ARC_R = 70
+
+function SafetyIcon() {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l7 2.6v5.6c0 4.4-3 8-7 9.8-4-1.8-7-5.4-7-9.8V5.6z" />
+      <path d="M8.6 12l2.4 2.4 4.4-4.8" />
+    </g>
+  )
+}
+
+/** Gauge with a needle: cruise control. */
+function CruiseIcon() {
+  return (
+    <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 17a8.5 8.5 0 1 1 16 0" />
+      <path d="M12 17l4.2-5.4" />
+      <circle cx="12" cy="17" r="1.2" fill="currentColor" />
+    </g>
+  )
 }
 
 function ParkIcon() {
@@ -75,10 +115,11 @@ function paintTelltale(
   el.style.filter = on && lit ? `drop-shadow(0 0 4px ${color})` : "none"
 }
 
-function BmwDial({
+function Dial({
   title,
   unit,
   maxLabel,
+  isRpm,
   redFrom,
   redRpm,
   yellowRpm,
@@ -89,6 +130,7 @@ function BmwDial({
   title: string
   unit: string
   maxLabel: number
+  isRpm: boolean
   redFrom: number
   redRpm: number
   yellowRpm: number
@@ -100,7 +142,6 @@ function BmwDial({
     CY = 100,
     CR = 78
   const ticks: React.ReactNode[] = []
-  const isRpm = maxLabel <= 10
   // Tick counts are derived so labelled ticks always land on integers:
   // rpm dials get one label per 1000 rpm (maxLabel must be whole), speed
   // dials one per 20 km/h. (A 7000-rpm dial with the old fixed 40 steps
@@ -110,12 +151,13 @@ function BmwDial({
     : maxLabel % 20 === 0
       ? (maxLabel / 20) * 4
       : 68
-  const labelEvery = isRpm ? 5 : maxLabel % 20 === 0 ? 4 : 8
+  // speed dials label every 20 km/h up to 200, every 40 beyond, so the numbers never crowd
+  const labelEvery = isRpm ? (maxLabel > 10 ? 10 : 5) : maxLabel % 20 === 0 ? (maxLabel > 200 ? 8 : 4) : 8
 
   for (let i = 0; i <= steps; i++) {
     const frac = i / steps
     const a = angleFor(frac)
-    const labelled = i % labelEvery === 0 || i === steps
+    const labelled = i % labelEvery === 0 || (isRpm && i === steps && steps % labelEvery > labelEvery / 2)
     const p1 = polar(CX, CY, CR, a)
     const p2 = polar(CX, CY, CR - (labelled ? 12 : 6), a)
     const rpm = frac * maxLabel * 1000
@@ -256,7 +298,7 @@ function BmwDial({
         textAnchor="middle"
         fontSize={modeLabel ? "8" : "8.5"}
         fill={
-          modeLabel ? (modeLabel === "AUTO" ? "#7db8ec" : "#cbd5e1") : "#8f99a8"
+          modeLabel ? (modeLabel === "ENGINE OFF" ? "#ff3b30" : modeLabel === "AUTO" ? "#7db8ec" : "#cbd5e1") : "#8f99a8"
         }
         fontFamily={SANS}
         letterSpacing={modeLabel ? "1.5" : "2.5"}
@@ -266,11 +308,32 @@ function BmwDial({
       </text>
 
       {/* Telltale lights: parking brake (speed dial) / traction control / drift (rpm dial) */}
-      <g transform={`translate(${CX - 12} 96)`}>
-        <g ref={refs.iconRef} style={{ color: OFF, opacity: 0.85 }}>
-          {isRpm ? <DriftIcon /> : <ParkIcon />}
-        </g>
-      </g>
+      {(isRpm
+        ? ([
+            [refs.iconRef, <DriftIcon key="drift" />],
+            [refs.icon3Ref, <TextIcon key="tc" label="TC" />],
+            [refs.icon4Ref, <TextIcon key="abs" label="ABS" />],
+            [refs.icon2Ref, <SafetyIcon key="safe" />],
+          ] as const)
+        : ([
+            [refs.iconRef, <ParkIcon key="park" />],
+            [refs.icon2Ref, <CruiseIcon key="cruise" />],
+          ] as const)
+      ).map(([ref, icon], i, row) => {
+        // icons sit on an arc concentric with the dial, each turned to follow it
+        const a = 180 + ((row.length - 1) / 2 - i) * ICON_ARC_STEP_DEG
+        const pt = polar(CX, CY, ICON_ARC_R, a)
+        return (
+          <g
+            key={i}
+            transform={`translate(${pt.x} ${pt.y}) rotate(${a - 180}) scale(${ICON_SIZE / 24}) translate(-12 -12)`}
+          >
+            <g ref={ref} style={{ color: OFF, opacity: 0.85 }}>
+              {icon}
+            </g>
+          </g>
+        )
+      })}
 
       <g ref={refs.needleRef}>
         <line
@@ -319,17 +382,21 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
   const spdNeedle = useRef<SVGGElement | null>(null)
   const spdNum = useRef<SVGTextElement | null>(null)
   const spdIcon = useRef<SVGGElement | null>(null)
+  const spdIcon2 = useRef<SVGGElement | null>(null)
   const rpmNeedle = useRef<SVGGElement | null>(null)
   const rpmNum = useRef<SVGTextElement | null>(null)
   const rpmRim = useRef<SVGCircleElement | null>(null)
   const rpmIcon = useRef<SVGGElement | null>(null)
+  const rpmIcon2 = useRef<SVGGElement | null>(null)
+  const rpmIcon3 = useRef<SVGGElement | null>(null)
+  const rpmIcon4 = useRef<SVGGElement | null>(null)
 
   useEffect(() => {
     let raf = 0
     let last = performance.now()
     let dRpm = 0,
       dKmh = 0
-    // BMW-style digital readout: the needle sweeps live, but the number
+    // Digital readout: the needle sweeps live, but the number
     // steps at 2 Hz off the damped speed — no flickering last digit.
     let lastNumT = 0
     const loop = (now: number) => {
@@ -374,7 +441,7 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
 
         rpmRim.current.setAttribute(
           "stroke",
-          limiter ? `rgba(227,6,19,${flash})` : "url(#bmw-rpm-chrome)",
+          limiter ? `rgba(227,6,19,${flash})` : "url(#dial-rpm-chrome)",
         )
 
         rpmRim.current.setAttribute(
@@ -396,6 +463,10 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
       paintTelltale(spdIcon.current, !!t.parkingBrake, RED, true)
       const blink = Math.floor(now / 170) % 2 === 0
       paintTelltale(rpmIcon.current, !!t.drift, AMBER, blink)
+      paintTelltale(rpmIcon2.current, t.stabilityControl !== false, AMBER, !t.stabilityActive || blink)
+      paintTelltale(rpmIcon3.current, t.tractionControl !== false, AMBER, !t.tractionActive || blink)
+      paintTelltale(rpmIcon4.current, t.absOn !== false, AMBER, !t.absActive || blink)
+      paintTelltale(spdIcon2.current, !!t.cruiseOn, BLUE, true)
 
       if (spdNum.current && now - lastNumT >= 500) {
         lastNumT = now
@@ -427,23 +498,25 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
 
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-4 sm:px-6 sm:pb-5">
         <div className="w-[clamp(150px,20vw,25vw)]">
-          <BmwDial
+          <Dial
             title="SPEED"
             unit="KM/H"
             maxLabel={dashMaxKmh}
+            isRpm={false}
             redFrom={2}
             redRpm={Infinity}
             yellowRpm={Infinity}
-            refs={{ needleRef: spdNeedle, numRef: spdNum, iconRef: spdIcon }}
-            id="bmw-spd"
+            refs={{ needleRef: spdNeedle, numRef: spdNum, iconRef: spdIcon, icon2Ref: spdIcon2 }}
+            id="dial-spd"
           />
         </div>
 
         <div className="w-[clamp(150px,20vw,25vw)]">
-          <BmwDial
+          <Dial
             title="POWER"
             unit=""
             maxLabel={dashMaxRpm / 1000}
+            isRpm
             redFrom={dashRedFrom / dashMaxRpm}
             redRpm={dashRedFrom}
             yellowRpm={dashYellowFrom}
@@ -452,9 +525,12 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
               numRef: rpmNum,
               rimRef: rpmRim,
               iconRef: rpmIcon,
+              icon2Ref: rpmIcon2,
+              icon3Ref: rpmIcon3,
+              icon4Ref: rpmIcon4,
             }}
-            id="bmw-rpm"
-            modeLabel={tele.autoMode ? "AUTO" : "MANUAL"}
+            id="dial-rpm"
+            modeLabel={!tele.engineOn ? "ENGINE OFF" : tele.autoMode ? "AUTO" : "MANUAL"}
           />
         </div>
       </div>

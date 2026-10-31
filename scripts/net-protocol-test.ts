@@ -5,7 +5,7 @@
  * Follows the repo's scripts/ convention — plain bun, zero new dependencies.
  */
 import * as THREE from "three"
-import { initPhysics, createWorld } from "../src/mainview/systems/PhysicsSystem"
+import { initPhysics, createWorld } from "../src/mainview/physics/core/PhysicsSystem"
 import {
   validateStatePacket,
   PeerSessionTracker,
@@ -18,6 +18,15 @@ import {
 } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
 import { MultiplayerManager } from "../src/mainview/systems/net/MultiplayerManager"
+import { getCar } from "../src/mainview/data/cars"
+
+/** Net tests only need some real car; they do not depend on which. */
+const TEST_CAR = getCar("bmw-m3")
+const TEST_REMOTE_OPTS = {
+  modelFile: TEST_CAR.modelFile,
+  physics: TEST_CAR.physics,
+  startPlaced: true,
+}
 
 let failures = 0
 let passes = 0
@@ -345,7 +354,7 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
     type: "HELLO",
     senderId: "peerX",
     t: Date.now(),
-    payload: { name: "X", color: 1, session: "B" },
+    payload: { name: "X", color: 1, session: "B", proto: 2 },
   })
   H(makePkt({ id: "peerX", sess: "B", seq: 0, progress: 10 }))
   check("I rejoin accepted", prog() === 10, prog())
@@ -378,7 +387,7 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   const R = await initPhysics()
   const world = createWorld()
   const scene = new THREE.Scene()
-  const car = new RemoteCar("p", "n", 0xffffff, scene, "./", world, R)
+  const car = new RemoteCar("p", "n", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
   const r = validateStatePacket(
     makePkt({ qx: 2, qy: 0, qz: 0, qw: 0, t: 9e12, x: 33 }),
   )

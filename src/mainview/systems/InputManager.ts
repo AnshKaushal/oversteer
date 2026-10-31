@@ -17,6 +17,13 @@ export interface DriveInput {
   toggleModePressed: boolean
   toggleLaunchPressed: boolean
   toggleParkPressed: boolean
+  toggleTractionPressed: boolean
+  toggleStabilityPressed: boolean
+  toggleSafetyPressed: boolean
+  toggleIgnitionPressed: boolean
+  /** A tap of Space: latch the handbrake on or off. */
+  toggleHandbrakePressed: boolean
+  toggleAbsPressed: boolean
   resetPressed: boolean
   toggleCameraPressed: boolean
   startPressed: boolean
@@ -28,6 +35,10 @@ export interface DriveInput {
   toggleHeadlightsPressed: boolean
 }
 
+/** A Space press longer than this is a hold (momentary), not a tap (latch). */
+const HANDBRAKE_HOLD_MS = 300
+const HANDBRAKE_TAP = "HandbrakeTap"
+
 export class InputManager {
   private keys = new Set<string>()
   private edgeQueue = new Set<string>()
@@ -36,6 +47,8 @@ export class InputManager {
   brake = 0
   steer = 0
 
+  private spaceDownAt = 0
+
   // Cruise control hold-repeat: first extra tap after ~350ms, then every 150ms.
   private ccHold = new Map<string, number>()
   private ccRepeat = new Map<string, number>()
@@ -43,16 +56,35 @@ export class InputManager {
   constructor() {
     this.onKeyDown = this.onKeyDown.bind(this)
     this.onKeyUp = this.onKeyUp.bind(this)
+    this.release = this.release.bind(this)
+    this.onVisibility = this.onVisibility.bind(this)
+  }
+
+  /** A key whose release the page never sees (focus lost, Cmd held) must not stay pressed. */
+  private release() {
+    this.keys.clear()
+    this.ccHold.clear()
+    this.ccRepeat.clear()
+  }
+
+  private onVisibility() {
+    if (document.visibilityState !== "visible") this.release()
   }
 
   attach() {
     window.addEventListener("keydown", this.onKeyDown)
     window.addEventListener("keyup", this.onKeyUp)
+    window.addEventListener("blur", this.release)
+    window.addEventListener("contextmenu", this.release)
+    document.addEventListener("visibilitychange", this.onVisibility)
   }
 
   detach() {
     window.removeEventListener("keydown", this.onKeyDown)
     window.removeEventListener("keyup", this.onKeyUp)
+    window.removeEventListener("blur", this.release)
+    window.removeEventListener("contextmenu", this.release)
+    document.removeEventListener("visibilitychange", this.onVisibility)
   }
 
   private normalize(e: KeyboardEvent): string {
@@ -62,6 +94,7 @@ export class InputManager {
   private onKeyDown(e: KeyboardEvent) {
     if (isTypingTarget(e)) return
     const c = this.normalize(e)
+    if (c.startsWith("Meta")) this.release()
     if (
       c === "Space" ||
       c.startsWith("Arrow") ||
@@ -79,6 +112,11 @@ export class InputManager {
       c === "KeyC" ||
       c === "KeyT" ||
       c === "KeyH" ||
+      c === "KeyX" ||
+      c === "KeyV" ||
+      c === "KeyN" ||
+      c === "KeyG" ||
+      c === "KeyB" ||
       c === "BracketLeft" ||
       c === "BracketRight" ||
       c === "Semicolon" ||
@@ -86,15 +124,37 @@ export class InputManager {
     ) {
       e.preventDefault()
     }
+    if (c === "Space" && !e.repeat) this.spaceDownAt = e.timeStamp
     if (!e.repeat) this.edgeQueue.add(c)
     this.keys.add(c)
   }
 
   private onKeyUp(e: KeyboardEvent) {
-    if (isTypingTarget(e)) return
+    // a short press latches the handbrake; holding only engages it while held
+    if (this.normalize(e) === "Space" && e.timeStamp - this.spaceDownAt <= HANDBRAKE_HOLD_MS) {
+      this.edgeQueue.add(HANDBRAKE_TAP)
+    }
+    if (this.normalize(e).startsWith("Meta")) this.release()
     this.keys.delete(this.normalize(e))
     this.ccHold.delete(this.normalize(e))
     this.ccRepeat.delete(this.normalize(e))
+  }
+
+  /** Give back the edges of an update no physics step consumed (a frame shorter than one step). */
+  requeue(out: DriveInput) {
+    const edges: [boolean, string][] = [
+      [out.upshiftPressed, "KeyE"],
+      [out.downshiftPressed, "KeyQ"],
+      [out.toggleModePressed, "KeyM"],
+      [out.toggleLaunchPressed, "KeyL"],
+      [out.toggleHandbrakePressed, HANDBRAKE_TAP],
+      [out.toggleTractionPressed, "KeyX"],
+      [out.toggleStabilityPressed, "KeyG"],
+      [out.toggleIgnitionPressed, "KeyV"],
+      [out.toggleSafetyPressed, "KeyN"],
+      [out.toggleAbsPressed, "KeyB"],
+    ]
+    for (const [on, code] of edges) if (on) this.edgeQueue.add(code)
   }
 
   clear() {
@@ -171,7 +231,13 @@ export class InputManager {
       downshiftPressed: edge("KeyQ"),
       toggleModePressed: edge("KeyM"),
       toggleLaunchPressed: edge("KeyL"),
-      toggleParkPressed: edge("Space"),
+      toggleParkPressed: false,
+      toggleHandbrakePressed: edge(HANDBRAKE_TAP),
+      toggleTractionPressed: edge("KeyX"),
+      toggleStabilityPressed: edge("KeyG"),
+      toggleIgnitionPressed: edge("KeyV"),
+      toggleSafetyPressed: edge("KeyN"),
+      toggleAbsPressed: edge("KeyB"),
       resetPressed: edge("KeyR"),
       toggleCameraPressed: edge("KeyC"),
       startPressed: edge("Enter"),

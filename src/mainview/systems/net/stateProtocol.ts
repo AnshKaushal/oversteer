@@ -1,11 +1,12 @@
-const POS_ABS_MAX = 100_000
-const VEL_COMP_MAX = 150
-const STEER_MAX = 2.0
-const SPEED_ABS_MAX = 500
+import { NET } from "../../data/net"
+const POS_ABS_MAX = NET.limits.posAbs
+const VEL_COMP_MAX = NET.limits.velComp
+const STEER_MAX = NET.limits.steer
+const SPEED_ABS_MAX = NET.limits.speedKmh
 const RPM_MIN = 0
-const RPM_MAX = 9000
-const GEAR_MIN = -1
-const GEAR_MAX = 8
+const RPM_MAX = NET.limits.rpmMax
+const GEAR_MIN = NET.limits.gearMin
+const GEAR_MAX = NET.limits.gearMax
 const PROGRESS_MIN = -10_000
 const PROGRESS_MAX = 1_000_000_000
 const QUAT_NORM_SQ_MIN = 1e-6
@@ -33,6 +34,15 @@ export interface ValidatedState {
   drift: boolean
   smoke: boolean
   progress: number
+  wx: number
+  wy: number
+  wz: number
+  throttle: number
+  brake: number
+  handbrake: boolean
+  wheelOmega: number[] | null
+  compression: number[] | null
+  smokeLevel: number
 }
 
 export type ValidateFailure =
@@ -110,6 +120,37 @@ export function validateStatePacket(pkt: unknown): ValidateFailure {
     }
   }
 
+  for (const k of ["wx", "wy", "wz"] as const) {
+    const v = p[k]
+    if (v !== undefined && (!isFiniteNum(v) || Math.abs(v) > NET.limits.angVelComp)) {
+      return { ok: false, reason: "bad-angvel" }
+    }
+  }
+  for (const k of ["throttle", "brake"] as const) {
+    const v = p[k]
+    if (v !== undefined && (!isFiniteNum(v) || v < 0 || v > 1)) {
+      return { ok: false, reason: "bad-input" }
+    }
+  }
+
+  const wheelArr = (k: string, max: number): number[] | null | false => {
+    const v = p[k]
+    if (v === undefined) return null
+    if (!Array.isArray(v) || v.length !== 4) return false
+    for (const n of v) if (!isFiniteNum(n) || Math.abs(n) > max) return false
+    return v as number[]
+  }
+  const wheelOmega = wheelArr("wheelOmega", NET.limits.wheelOmega)
+  const compression = wheelArr("compression", 5)
+  if (wheelOmega === false || compression === false) {
+    return { ok: false, reason: "bad-wheels" }
+  }
+
+  const sl = p["smokeLevel"]
+  if (sl !== undefined && (!isFiniteNum(sl) || sl < 0 || sl > 1)) {
+    return { ok: false, reason: "bad-input" }
+  }
+
   if (!isFiniteNum(p["steer"]) || Math.abs(p["steer"] as number) > STEER_MAX) {
     return { ok: false, reason: "bad-steer" }
   }
@@ -168,6 +209,15 @@ export function validateStatePacket(pkt: unknown): ValidateFailure {
       drift: p["drift"] as boolean,
       smoke: p["smoke"] as boolean,
       progress: p["progress"] as number,
+      wx: (p["wx"] as number | undefined) ?? 0,
+      wy: (p["wy"] as number | undefined) ?? 0,
+      wz: (p["wz"] as number | undefined) ?? 0,
+      throttle: (p["throttle"] as number | undefined) ?? 0,
+      brake: (p["brake"] as number | undefined) ?? 0,
+      handbrake: p["handbrake"] === true,
+      wheelOmega,
+      compression,
+      smokeLevel: (sl as number | undefined) ?? (p["smoke"] === true ? 0.6 : 0),
     },
   }
 }

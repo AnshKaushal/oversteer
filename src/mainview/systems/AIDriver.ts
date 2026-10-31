@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { DriveInput } from "./InputManager"
-import type { CarController } from "./CarController"
+import type { Vehicle } from "../physics/vehicle/Vehicle"
 import { roadCenterX, roadYaw } from "./WorldManager"
 
 export const ZERO_EDGES = {
@@ -10,6 +10,12 @@ export const ZERO_EDGES = {
   toggleModePressed: false,
   toggleLaunchPressed: false,
   toggleParkPressed: false,
+  toggleTractionPressed: false,
+  toggleStabilityPressed: false,
+  toggleSafetyPressed: false,
+  toggleIgnitionPressed: false,
+  toggleHandbrakePressed: false,
+  toggleAbsPressed: false,
   resetPressed: false,
   toggleCameraPressed: false,
   startPressed: false,
@@ -17,6 +23,8 @@ export const ZERO_EDGES = {
   cruiseSetPressed: false,
   cruiseUpPressed: false,
   cruiseTogglePressed: false,
+  toggleTimeOfDayPressed: false,
+  toggleHeadlightsPressed: false,
 } as const
 
 const _fwd = new THREE.Vector3()
@@ -128,7 +136,7 @@ export class AIDriver {
     return this.mode !== "drive"
   }
 
-  drive(car: CarController, traffic: TrafficEntry[], dt: number): DriveInput {
+  drive(car: Vehicle, traffic: TrafficEntry[], dt: number): DriveInput {
     const body = car.body
     const p = body.translation()
     const s = -p.z
@@ -440,7 +448,7 @@ export class AIDriver {
     }
   }
 
-  private unstick(car: CarController, dt: number): DriveInput {
+  private unstick(car: Vehicle, dt: number): DriveInput {
     this.modeT += dt
     const base = {
       throttle: 0,
@@ -508,7 +516,7 @@ export class AIDriver {
     }
   }
 
-  private headingError(car: CarController, dt: number): number {
+  private headingError(car: Vehicle, dt: number): number {
     const body = car.body
     const p = body.translation()
     const s = -p.z
