@@ -5,6 +5,7 @@ import {
   Updater,
 } from "electrobun/main"
 import os from "os"
+import { UPDATE_ICON_DATA_URI } from "./updateIcon"
 
 const DEV_SERVER_PORT = 5173
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`
@@ -27,7 +28,63 @@ async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
   }
 }
 
+const UPDATE_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%;background:#0b0d12;color:#e8eaf0;font-family:-apple-system,"Segoe UI",sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+  img{width:72px;height:72px;border-radius:16px}
+  h1{margin:0;font-size:22px;letter-spacing:.2em;font-weight:800}
+  #msg{font-size:13px;opacity:.7}
+  .bar{width:280px;height:6px;border-radius:3px;background:#1d212b;overflow:hidden}
+  #fill{height:100%;width:0;background:#2f7bff;transition:width .2s}
+  .bar.busy #fill{width:35%;animation:slide 1.1s ease-in-out infinite alternate}
+  @keyframes slide{from{margin-left:0}to{margin-left:65%}}
+</style></head><body>
+  <img src="${UPDATE_ICON_DATA_URI}" alt="">
+  <h1>OVERSTEER</h1>
+  <div class="bar busy" id="bar"><div id="fill"></div></div>
+  <div id="msg">Updating…</div>
+  <script>
+    window.setUpdate=function(msg,pct){
+      document.getElementById("msg").textContent=msg;
+      var bar=document.getElementById("bar");
+      if(typeof pct==="number"){bar.className="bar";document.getElementById("fill").style.width=pct+"%"}
+      else bar.className="bar busy";
+    };
+  </script>
+</body></html>`
+
+function openUpdateWindow(): BrowserWindow | null {
+  try {
+    return new BrowserWindow({
+      title: "OverSteer",
+      html: UPDATE_HTML,
+      frame: { width: 420, height: 220 },
+      titleBarStyle: "hidden",
+      styleMask: { Miniaturizable: false, Resizable: false },
+    })
+  } catch {
+    return null
+  }
+}
+
+function setUpdateStatus(
+  win: BrowserWindow | null,
+  message: string,
+  progress?: number,
+): void {
+  try {
+    win?.webview?.executeJavascript(
+      `window.setUpdate&&window.setUpdate(${JSON.stringify(message)},${
+        progress === undefined ? "null" : Math.round(progress)
+      })`,
+    )
+  } catch {}
+}
+
 async function autoUpdate(): Promise<void> {
+  let updateWin: BrowserWindow | null = null
+
   let channel = ""
 
   try {
@@ -41,6 +98,18 @@ async function autoUpdate(): Promise<void> {
   try {
     Updater.onStatusChange((entry) => {
       console.log(`[update] ${entry.status}: ${entry.message}`)
+
+      if (entry.status === "download-progress") {
+        setUpdateStatus(
+          updateWin,
+          "Downloading update…",
+          entry.details?.progress,
+        )
+      } else if (entry.status === "applying" || entry.status === "replacing-app") {
+        setUpdateStatus(updateWin, "Installing update…")
+      } else if (entry.status === "launching-new-version") {
+        setUpdateStatus(updateWin, "Restarting…")
+      }
     })
 
     const info = await withTimeout(Updater.checkForUpdate(), 8000)
@@ -49,20 +118,33 @@ async function autoUpdate(): Promise<void> {
 
     console.log(`[update] version ${info.version} available, downloading`)
 
+    updateWin = openUpdateWindow()
+    setUpdateStatus(updateWin, `Downloading version ${info.version}…`)
+
     const downloaded = await withTimeout(
       Updater.downloadUpdate(),
       10 * 60 * 1000,
     )
 
-    if (downloaded === null) return
+    if (downloaded === null) {
+      updateWin?.close()
+      return
+    }
 
     const fresh = await Updater.checkForUpdate()
 
     if (fresh.updateReady && !fresh.error) {
       console.log("[update] applying, relaunching on the new version")
+      setUpdateStatus(updateWin, "Installing update…")
       await Updater.applyUpdate()
     }
-  } catch {}
+
+    updateWin?.close()
+  } catch {
+    try {
+      updateWin?.close()
+    } catch {}
+  }
 }
 
 await autoUpdate()
