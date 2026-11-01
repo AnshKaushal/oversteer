@@ -1,11 +1,13 @@
 import {
   ApplicationMenu,
+  BrowserView,
   BrowserWindow,
   GlobalShortcut,
   Updater,
 } from "electrobun/main"
 import os from "os"
 import { UPDATE_ICON_DATA_URI } from "./updateIcon"
+import type { OverSteerRPC, UpdateResult } from "../shared/updateRpc"
 
 const DEV_SERVER_PORT = 5173
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`
@@ -82,18 +84,58 @@ function setUpdateStatus(
   } catch {}
 }
 
-async function autoUpdate(): Promise<void> {
-  let updateWin: BrowserWindow | null = null
+let updateRunning = false
+
+async function runUpdate(manual: boolean): Promise<UpdateResult> {
+  if (updateRunning) {
+    return { outcome: "busy", message: "An update check is already running." }
+  }
 
   let channel = ""
 
   try {
     channel = await Updater.localInfo.channel()
   } catch {
-    return
+    return { outcome: "error", message: "Could not read the app version." }
   }
 
-  if (channel === "dev") return
+  if (channel === "dev") {
+    return {
+      outcome: "dev-build",
+      message: "Updates are disabled in development builds.",
+    }
+  }
+
+  updateRunning = true
+
+  // A manual check shows the window straight away; the automatic startup
+  // check only opens it once an update is actually found.
+  let updateWin: BrowserWindow | null = null
+
+  if (manual) {
+    updateWin = openUpdateWindow()
+    setUpdateStatus(updateWin, "Checking for updates…")
+  }
+
+  const finish = (result: UpdateResult, closeAfterMs = 0): UpdateResult => {
+    updateRunning = false
+
+    if (closeAfterMs > 0) {
+      setUpdateStatus(updateWin, result.message, result.outcome === "error" ? undefined : 100)
+      const win = updateWin
+      setTimeout(() => {
+        try {
+          win?.close()
+        } catch {}
+      }, closeAfterMs)
+    } else {
+      try {
+        updateWin?.close()
+      } catch {}
+    }
+
+    return result
+  }
 
   try {
     Updater.onStatusChange((entry) => {
@@ -114,11 +156,26 @@ async function autoUpdate(): Promise<void> {
 
     const info = await withTimeout(Updater.checkForUpdate(), 8000)
 
-    if (!info || info.error || !info.updateAvailable) return
+    if (!info || info.error) {
+      return finish(
+        {
+          outcome: "error",
+          message: "Could not reach the update server.",
+        },
+        manual ? 2500 : 0,
+      )
+    }
+
+    if (!info.updateAvailable) {
+      return finish(
+        { outcome: "up-to-date", message: "You're on the latest version." },
+        manual ? 2000 : 0,
+      )
+    }
 
     console.log(`[update] version ${info.version} available, downloading`)
 
-    updateWin = openUpdateWindow()
+    if (!updateWin) updateWin = openUpdateWindow()
     setUpdateStatus(updateWin, `Downloading version ${info.version}…`)
 
     const downloaded = await withTimeout(
@@ -127,8 +184,10 @@ async function autoUpdate(): Promise<void> {
     )
 
     if (downloaded === null) {
-      updateWin?.close()
-      return
+      return finish(
+        { outcome: "error", message: "The update download failed." },
+        manual ? 2500 : 0,
+      )
     }
 
     const fresh = await Updater.checkForUpdate()
@@ -137,17 +196,16 @@ async function autoUpdate(): Promise<void> {
       console.log("[update] applying, relaunching on the new version")
       setUpdateStatus(updateWin, "Installing update…")
       await Updater.applyUpdate()
+      return { outcome: "updating", message: `Updating to version ${info.version}…` }
     }
 
-    updateWin?.close()
+    return finish({ outcome: "error", message: "The update could not be installed." }, manual ? 2500 : 0)
   } catch {
-    try {
-      updateWin?.close()
-    } catch {}
+    return finish({ outcome: "error", message: "The update failed." }, manual ? 2500 : 0)
   }
 }
 
-await autoUpdate()
+await runUpdate(false)
 
 async function getMainViewUrl(): Promise<string> {
   const channel = await Updater.localInfo.channel()
@@ -249,9 +307,19 @@ const openWindows: BrowserWindow[] = []
 function createWindow(winUrl: string, windowed = isWindowed) {
   console.log(`[Window] Creating window (windowed=${windowed}) -> ${winUrl}`)
 
+  const rpc = BrowserView.defineRPC<OverSteerRPC>({
+    handlers: {
+      requests: {
+        checkForUpdates: () => runUpdate(true),
+      },
+      messages: {},
+    },
+  })
+
   const win = new BrowserWindow({
     title: "OverSteer",
     url: winUrl,
+    rpc,
     frame: {
       width: windowed ? 1024 : 1440,
       height: windowed ? 680 : 900,
@@ -288,6 +356,10 @@ if (process.platform === "win32") {
           label: "New Window (multiplayer test)",
           action: "new-window",
           accelerator: "CmdOrCtrl+N",
+        },
+        {
+          label: "Check for Updates…",
+          action: "check-for-updates",
         },
         { role: "quit" },
       ],
@@ -366,6 +438,11 @@ if (process.platform === "darwin") {
 
 ApplicationMenu.on("application-menu-clicked", (event: any) => {
   const data = event?.data ?? event
+
+  if (data?.action === "check-for-updates") {
+    void runUpdate(true)
+    return
+  }
 
   if (data?.action === "new-window") {
     // extra windows are always windowed so two can sit side by side
