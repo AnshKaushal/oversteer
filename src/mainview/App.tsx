@@ -157,6 +157,7 @@ function shadowRange2(s: AppSettings): number {
 
 function applyFog(wm: WorldManager, s: AppSettings) {
   wm.setShadowQuality(s.shadowQuality ?? 100)
+  wm.setVegetation(s.vegetation ?? 100)
   wm.setStreetLights(s.streetLights !== false, s.streetLightsOn !== false)
   const k = FOG_INTENSITY[s.fog ?? "normal"]
   wm.setFog(k !== undefined, k ?? 1)

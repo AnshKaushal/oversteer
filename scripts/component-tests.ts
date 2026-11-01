@@ -83,7 +83,7 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) <= tol * Math
   const logic = new ShiftLogic(P.shiftLogic, P.engine, P.transmission.autoUpshiftRPM, P.transmission.gearRatios)
   const base: ShiftInput = { dt: 1 / 120, gear: 2, gearCount: P.transmission.gearRatios.length, rpm: P.engine.idleRPM,
     throttle: 0.5, aggressionCoef: 0.5, speedKmh: 60, autoMode: true, shifting: false, changeDelayActive: false,
-    launchArmed: false, limiterCut: false, slipRatioAvg: 0, lateralVelocity: 0, predictedRpm: () => P.engine.idleRPM * 2 }
+    launchArmed: false, limiterCut: false, assistCutting: false, slipRatioAvg: 0, lateralVelocity: 0, predictedRpm: () => P.engine.idleRPM * 2 }
   check("shift: upshifts near redline", logic.decide({ ...base, rpm: P.engine.redlineRPM - 100, aggressionCoef: 1 }) === 1)
   check("shift: no upshift in manual mode", logic.decide({ ...base, autoMode: false, rpm: P.engine.redlineRPM }) === 0)
   check("shift: no upshift mid-shift", logic.decide({ ...base, shifting: true, rpm: P.engine.redlineRPM }) === 0)

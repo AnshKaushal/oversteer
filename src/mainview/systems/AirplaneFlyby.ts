@@ -32,7 +32,15 @@ export const PASS_LENGTH = PASS_HALF * 2
  * pass is over. It is deep in the haze by then, so it can simply be
  * switched off rather than faded away.
  */
-const EXIT_LEN = 400
+const EXIT_LEN = 1800
+/** A landing rolls to a taxi pace instead, so it is switched off sooner. */
+const LANDING_EXIT_LEN = 600
+/** Distance the aircraft keeps flying past the end of its path. */
+function exitLen(mode: FlybyMode): number {
+  return mode === "landing" ? LANDING_EXIT_LEN : EXIT_LEN
+}
+/** Climb gradient of a take-off once it is past the end of the path. */
+const TAKEOFF_CLIMB_SLOPE = 0.14
 /** How far ahead of the car the crossing may be pushed for a fast car. */
 const MAX_LEAD = 700
 /** Seconds between passes once one has finished. */
@@ -217,22 +225,47 @@ interface Profile {
  * Flight profile for a pass. `u` runs from the start of the pass to the
  * far side of the road.
  */
-function profileFor(mode: FlybyMode, u: number): Profile {
+/** How far along the pass the wheels meet the ground, 0..1. */
+const LANDING_TOUCH_U = 0.85
+/** Height of the aircraft above its touchdown point at the start of the pass. */
+/** Clearance a landing keeps over hills on its way down, in metres. */
+const LANDING_HILL_MARGIN = 4
+const LANDING_START_HEIGHT = 100
+/** Speed at touchdown, m/s. */
+const LANDING_TOUCH_SPEED = 40
+/** Braking on the runway, m/s², and the walking pace it settles to. */
+const LANDING_DECEL = 1.4
+const LANDING_MIN_SPEED = 8
+
+function profileFor(mode: FlybyMode, u: number, rolled = 0, beyond = 0): Profile {
   if (mode === "takeoff") {
     // Rotating off the deck: low over the trees, climbing away as it crosses.
     return {
-      y: 12 + 40 * Math.pow(u, 0.75),
+      // Past the end of the path it keeps climbing away, rather than
+      // hanging at one height until it is switched off.
+      y: 18 + 42 * Math.pow(u, 0.75) + beyond * TAKEOFF_CLIMB_SLOPE,
       speed: 44 + 20 * u,
-      pitch: 13 * Math.pow(1 - u, 1.6) * DEG,
+      pitch:
+        13 * Math.pow(1 - u, 1.6) * DEG +
+        Math.atan(TAKEOFF_CLIMB_SLOPE) * Math.min(1, beyond / 200),
     }
   }
   if (mode === "landing") {
-    // On final approach: high and fast at the start, nose down and slow
-    // as it drops over the treeline.
+    // On final approach: a steady glide down to the touchdown point, wings
+    // level and attitude flat. `y` here is height above touchdown; the
+    // pass adds the ground and the belly.
+    const k = Math.min(1, u / LANDING_TOUCH_U)
+    // After touchdown the speed bleeds off at a steady rate over the
+    // roll-out, `rolled` metres since the wheels met the ground.
+    const v0 = LANDING_TOUCH_SPEED
+    const speed =
+      rolled > 0
+        ? Math.sqrt(Math.max(LANDING_MIN_SPEED ** 2, v0 * v0 - 2 * LANDING_DECEL * rolled))
+        : 58 - (58 - v0) * k
     return {
-      y: 50 - 42 * Math.pow(u, 1.7),
-      speed: 58 - 18 * u,
-      pitch: (-1.5 - 6 * Math.pow(u, 1.8)) * DEG,
+      y: LANDING_START_HEIGHT * Math.pow(1 - k, 1.15),
+      speed,
+      pitch: 0,
     }
   }
   return {
@@ -299,15 +332,29 @@ export function passState(
   path: FlightPath,
   age: number,
   speedFactor = 1,
+  /** Distance from the aircraft's centre down to its wheels or belly. */
+  belly = 0,
 ): PassState {
   const u = Math.max(0, Math.min(1, traveled / path.length))
-  const pr = profileFor(mode, u)
+  const pr = profileFor(
+    mode,
+    u,
+    traveled - LANDING_TOUCH_U * path.length,
+    Math.max(0, traveled - path.length),
+  )
   const along = traveled - path.length / 2
+  const x = path.x + along * path.dx
+  const z = path.z + along * path.dz
+
+  // A landing is on flat ground (paths over hills are rejected), so the
+  // wheels meet it at the touchdown point and stay there, with no bobbing.
+  const y =
+    mode === "landing" ? belly + pr.y : pr.y + Math.sin(age * 0.9) * 0.5
 
   return {
-    x: path.x + along * path.dx,
-    y: pr.y + Math.sin(age * 0.9) * 0.5,
-    z: path.z + along * path.dz,
+    x,
+    y,
+    z,
     heading: Math.atan2(path.dx, path.dz),
     pitch: pr.pitch,
     speed: pr.speed * speedFactor,
@@ -381,11 +428,21 @@ export function pathBlocked(
     const along = u * total - total / 2
     const x = path.x + along * path.dx
     const z = path.z + along * path.dz
-    const y = profileFor(mode, Math.min(1, u * total / path.length)).y
-    if (terrainAt(x, z) > y - clearance) return true
+    const y = profileFor(
+      mode,
+      Math.min(1, (u * total) / path.length),
+      0,
+      Math.max(0, u * total - path.length),
+    ).y
+    // A landing ends on flat ground and rolls out on it, so the ground under
+    // the whole path must be flat there; higher up it only has to clear the
+    // glide. `y` here is height above the flat ground, belly excluded.
+    const limit =
+      mode === "landing" ? Math.max(0.3, y - LANDING_HILL_MARGIN) : y - clearance
+    if (terrainAt(x, z) > limit) return true
     if (half > 0) {
-      if (terrainAt(x + px * half, z + pz * half) > y - clearance) return true
-      if (terrainAt(x - px * half, z - pz * half) > y - clearance) return true
+      if (terrainAt(x + px * half, z + pz * half) > limit) return true
+      if (terrainAt(x - px * half, z - pz * half) > limit) return true
     }
   }
   return false
@@ -1213,17 +1270,20 @@ export class AirplaneFlyby {
     f.traveled += f.speed * dt
     f.age += dt
     f.u = Math.max(0, Math.min(1, f.traveled / f.path.length))
-    const pr = profileFor(f.mode, f.u)
+    const pr = profileFor(f.mode, f.u, f.traveled - LANDING_TOUCH_U * f.path.length)
     f.speed = pr.speed * ac.spec.speed
 
-    const st = passState(f.mode, f.traveled, f.path, f.age, ac.spec.speed)
+    const st = passState(f.mode, f.traveled, f.path, f.age, ac.spec.speed, ac.clearance - 1)
     ac.root.position.set(st.x, st.y, st.z)
     ac.root.rotation.y = st.heading
 
     // A little sway so it does not look like it is on rails.
     const sway = Math.sin(f.age * 0.55) * 0.6 + Math.sin(f.age * 1.3) * 0.25
-    ac.body.rotation.x = -st.pitch
-    ac.body.rotation.z = (sway * 2.2 + (f.mode === "landing" ? 3 : -2)) * DEG
+    // A landing is dead level on every axis.
+    const level = f.mode === "landing"
+    ac.body.rotation.x = level ? 0 : -st.pitch
+    ac.body.rotation.z = level ? 0 : (sway * 2.2 - 2) * DEG
+    ac.body.rotation.y = 0
 
     // No fade: the aircraft is simply there or it is not. It flies its
     // line, on past the end of the path, until it is lost in the haze.
@@ -1254,7 +1314,7 @@ export class AirplaneFlyby {
       ac.beacons[i].visible = beaconActive
     }
 
-    if (f.traveled >= f.path.length + EXIT_LEN) this.endFlight()
+    if (f.traveled >= f.path.length + exitLen(f.mode)) this.endFlight()
   }
 
   /**
@@ -1309,7 +1369,7 @@ export class AirplaneFlyby {
       lead * 0.35,
       ac.span,
       ac.clearance,
-      EXIT_LEN,
+      exitLen(mode),
     )
     // Every crossing along the road is blocked by a hill, so there is
     // nothing to fly: try again in a moment rather than fly through it.

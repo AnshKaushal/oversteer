@@ -513,6 +513,10 @@ export interface ShiftLogicSpec {
   /** Driver aggression the realistic shift mode shifts at, 0..1; arcade follows the pedals instead. */
   realisticAggression: number
   upMargin: number
+  /** Seconds rpm must stay over the shift point before 1st→2nd (default 0.45); lets launches rev out and stutter. */
+  firstGearHold?: number
+  /** Max seconds an upshift is held back while the wheels are slipping, in any gear (default 1). */
+  slipShiftHoldMax?: number
   /** Rpm step when scanning the torque curve for the best shift point. */
   optimalScanStepRpm: number
   lowUpFraction: number

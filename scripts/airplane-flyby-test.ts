@@ -116,13 +116,13 @@ for (const mode of MODES) {
     )
   } else {
     check(
-      minY > 5 && maxY < 60,
+      (mode === "landing" ? minY >= 0 : minY > 5) && maxY < 110,
       `${mode} stays below the cloud layer`,
       `${minY.toFixed(1)}-${maxY.toFixed(1)} m`,
     )
   }
   check(
-    minV > 30 && maxV < 80,
+    (mode === "landing" ? minV >= 3 : minV > 30) && maxV < 80,
     `${mode} stays at a sensible airspeed`,
     `${(minV * 3.6).toFixed(0)}-${(maxV * 3.6).toFixed(0)} km/h`,
   )
@@ -146,7 +146,7 @@ const pitch = (mode: FlybyMode, t: number) => {
 }
 check(pitch("takeoff", 0) > 8, "take-off starts nose up", `${pitch("takeoff", 0).toFixed(1)} deg`)
 check(pitch("takeoff", PASS_LENGTH) < 3, "take-off levels off", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
-check(pitch("landing", PASS_LENGTH) < -4, "landing ends nose down", `${pitch("landing", PASS_LENGTH).toFixed(1)} deg`)
+check(Math.abs(pitch("landing", PASS_LENGTH)) < 1e-9 && Math.abs(pitch("landing", 0)) < 1e-9, "landing stays level in pitch", `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`)
 
 // 8. The aircraft is never faded. It flies its line, on past the end of
 //    the path, and is simply switched off when it is gone.

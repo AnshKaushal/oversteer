@@ -427,6 +427,7 @@ export class Vehicle {
       changeDelayActive: g.changeDelayActive,
       launchArmed: this.launch.armed,
       limiterCut: this.engine.limiterCut,
+      assistCutting: this.engineCut || this.stability.engineFactor < 1,
       slipRatioAvg: this.slip.slipRatioAvg,
       lateralVelocity: this.lateralVelocity(),
       predictedRpm: (gear) => g.predictedRpm(gear, this.driveline.drivenOmega),

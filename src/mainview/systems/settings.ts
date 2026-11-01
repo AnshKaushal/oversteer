@@ -104,6 +104,8 @@ export interface AppSettings {
   streetLights?: boolean
   /** Whether the lamps light up outside daytime. */
   streetLightsOn?: boolean
+  /** 0 to 100: share of trees and grass, 100 being the full world. */
+  vegetation?: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -118,6 +120,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   perfOverlay: false,
   streetLights: true,
   streetLightsOn: true,
+  vegetation: 100,
 }
 
 const SETTINGS_KEY = "oversteer_settings"

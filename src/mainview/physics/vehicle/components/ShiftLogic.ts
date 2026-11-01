@@ -38,6 +38,8 @@ export interface ShiftInput {
   changeDelayActive: boolean
   launchArmed: boolean
   limiterCut: boolean
+  /** TC or stability control is cutting torque right now. */
+  assistCutting: boolean
   slipRatioAvg: number
   lateralVelocity: number
   /** Rpm the driven wheels would impose in a given forward gear. */
@@ -55,6 +57,8 @@ export class ShiftLogic {
   private kickdownTarget: number | null = null
   private lastGear = 0
   private sinceUpshift = Infinity
+  /** Seconds rpm has stayed over the upshift point in the current gear. */
+  private overRevTime = 0
   /** Computed upshift rpm per gear, used when the car gives no override. */
   readonly optimal: number[]
 
@@ -118,12 +122,27 @@ export class ShiftLogic {
 
     if (antiStall) return 1 - i.gear
 
+    // Revs flare past the shift point in 1st under wheelspin; make the box wait
+    // so the engine hits the limiter and stutters before 2nd goes in.
+    // In any gear, keep holding while the wheels are spinning, up to a cap so a
+    // burnout or slide cannot pin the box forever; shift once grip returns.
+    // TC/ESC keep slip high and pull revs back under the shift point, so the
+    // slip hold would never release; leave shifting to the assists then.
+    const hold = slipping && !i.assistCutting
+      ? (p.slipShiftHoldMax ?? 1)
+      : i.gear === 1
+        ? (p.firstGearHold ?? 0.45)
+        : 0
+    // decay rather than reset: assists dip rpm under the point for a frame
+    this.overRevTime = i.rpm > upRpm ? this.overRevTime + i.dt : Math.max(0, this.overRevTime - i.dt)
+
     if (
       i.rpm > upRpm &&
       i.gear < i.gearCount &&
       !i.launchArmed &&
       i.speedKmh > p.upshiftMinKmh
     ) {
+      if (this.overRevTime < hold) return 0
       const forced = i.rpm >= highUp || i.limiterCut
       return (!slipping || forced) && !heavySlide ? 1 : 0
     }
@@ -194,6 +213,7 @@ export class ShiftLogic {
   reset() {
     this.lastGear = 0
     this.sinceUpshift = Infinity
+    this.overRevTime = 0
     this.kickdownTimer = 0
     this.kickdownTarget = null
   }

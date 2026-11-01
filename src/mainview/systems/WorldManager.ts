@@ -70,6 +70,8 @@ export function roadGapM(a: number, b: number): number {
 const RIB_DIV = 16
 
 // 40 clouds, 80 m apart in s, repeat every ring; hills and clouds shrink out of sight over fade distances.
+/** How far out the sun/moon disk is drawn, beyond every cloud. */
+const SKY_DISK_DISTANCE = 1200
 const CLOUD_GAP = 80
 const CLOUD_RING = 40 * CLOUD_GAP
 /** 1 up to `from` metres away, easing to 0 at `to`. */
@@ -376,6 +378,36 @@ export class WorldManager {
   }
 
   /** User settings: show the street lamps, and let them light up in every sky but day. */
+  /** Share of trees and grass kept, 0..1. */
+  private vegetation = 1
+
+  /**
+   * Thins out trees and grass, 0 (none) to 100 (everything). Kept props are
+   * always a subset of the denser setting, so dragging the slider only adds
+   * or removes plants rather than reshuffling them.
+   */
+  setVegetation(percent: number) {
+    const v = Math.min(100, Math.max(0, percent)) / 100
+    if (v === this.vegetation) return
+    this.vegetation = v
+    // Roadside props are generated per segment: drop them and let them refill.
+    for (const k of [...this.segProps.keys()]) {
+      this.freeSeg(k)
+      this.segProps.delete(k)
+    }
+    this.primed = false
+    // Hill dressing was placed once, so show or hide it by rank.
+    for (const hill of this.hills) {
+      for (const child of hill.mesh.children) {
+        const rank = child.userData?.vegRank as number | undefined
+        if (rank === undefined) continue
+        const show = rank < v
+        child.visible = show
+        ;(child.userData.collider as RAPIER.Collider | undefined)?.setEnabled(show)
+      }
+    }
+  }
+
   setStreetLights(show: boolean, power: boolean) {
     this.streetLightsShown = show
     this.streetLightsPower = power
@@ -466,12 +498,15 @@ export class WorldManager {
     if (this.sunVisual) {
       const mat = this.sunVisual.material as THREE.MeshBasicMaterial
       this.sunVisual.visible = preset.rain === 0
+      // The disk sits far out in the sky, scaled to look the same size, so
+      // the clouds (all nearer than that) always pass in front of it.
+      const k = SKY_DISK_DISTANCE / this.sunOffset.length()
       if (mode === "night") {
         mat.color.setHex(0xdde6ff)
-        this.sunVisual.scale.setScalar(0.55)
+        this.sunVisual.scale.setScalar(0.55 * k)
       } else {
         mat.color.setHex(preset.sunColor)
-        this.sunVisual.scale.setScalar(1)
+        this.sunVisual.scale.setScalar(k)
       }
     }
 
@@ -982,7 +1017,9 @@ export class WorldManager {
           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
           .setFriction(0.7)
           .setRestitution(0)
-        world.createCollider(col, hb)
+        const made = world.createCollider(col, hb)
+        cm.userData.collider = made
+        if (!cm.visible) made.setEnabled(false)
       }
     }
     // Props generated before the physics world existed have no colliders yet
@@ -1278,11 +1315,29 @@ export class WorldManager {
       m.position.copy(s.pos).addScaledVector(s.nrm, -sink)
       m.scale.setScalar(sc)
       m.userData.collidable = pv.category === "tree" || pv.category === "rock"
+      if (pv.category === "tree" || pv.category === "grass") {
+        const rank = this.rand(seed + k * 53)
+        m.userData.vegRank = rank
+        m.visible = rank < this.vegetation
+      }
       hill.mesh.add(m)
     })
   }
 
   private genSegProps(seg: number): PropEntry[] {
+    const all = this.genSegPropsAll(seg)
+    if (this.vegetation >= 1) return all
+    return all.filter((t) => {
+      const cat = this.propVariants[t.variantIdx]?.category
+      if (cat !== "tree" && cat !== "grass") return true
+      const rank = this.rand(
+        Math.floor(t.pos.x * 7) + Math.floor(t.pos.z * 13) * 10007 + seg * 31,
+      )
+      return rank < this.vegetation
+    })
+  }
+
+  private genSegPropsAll(seg: number): PropEntry[] {
     const out: PropEntry[] = []
     if (this.propVariants.length === 0) return out
     const W = WORLD_CONFIG.vegetation
@@ -1541,10 +1596,11 @@ export class WorldManager {
       sun.target.updateMatrixWorld()
     }
     if (this.sunVisual) {
+      const k = SKY_DISK_DISTANCE / this.sunOffset.length()
       this.sunVisual.position.set(
-        carPos.x + this.sunOffset.x,
-        this.sunOffset.y,
-        carPos.z + this.sunOffset.z,
+        carPos.x + this.sunOffset.x * k,
+        this.sunOffset.y * k,
+        carPos.z + this.sunOffset.z * k,
       )
     }
     if (this.starsPoints && this.starsPoints.visible) {

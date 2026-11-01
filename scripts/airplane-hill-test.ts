@@ -77,6 +77,7 @@ wm.update(0, carPos, 1)
   let moved = 0
   let stillBlocked = 0
   let worstClearance = Infinity
+  let landingOnHill = 0
   let checked = 0
 
   for (const mode of modes) {
@@ -105,6 +106,11 @@ wm.update(0, carPos, 1)
         const z = p.z + (t - PASS_LENGTH / 2) * p.dz
         const h = wm.terrainHeightAt(x, z)
         const st = passState(mode, t, pathFor(s), 0)
+        // A landing rolls out on flat ground: no hill may rise into its path.
+        if (mode === "landing") {
+          if (h > Math.max(0.3, st.y - 4)) landingOnHill++
+          continue
+        }
         worstClearance = Math.min(worstClearance, st.y - h)
       }
     }
@@ -127,6 +133,7 @@ wm.update(0, carPos, 1)
     "every chosen crossing has a clear path",
     `${stillBlocked} still blocked`,
   )
+  check(landingOnHill === 0, "landings never meet a hill", `${landingOnHill} samples`)
   check(
     worstClearance > 4,
     "the chosen path keeps its clearance",

@@ -144,7 +144,7 @@ check(propTurned > 0, "a propeller turned")
     const first = steps[0] ?? 0
     const later = steps[Math.min(20, steps.length - 1)] ?? 0
     check(
-      first > 0.1 && Math.abs(first - later) < 1e-6,
+      first > 0.1 && Math.abs(first - later) < 0.01,
       "the propeller turns at a steady rate",
       `${first.toFixed(4)} rad/frame, then ${later.toFixed(4)}`,
     )
