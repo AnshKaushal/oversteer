@@ -162,26 +162,26 @@ export const AIRCRAFT: AircraftSpec[] = [
     modes: ["takeoff", "landing", "cruise"],
     prop: "separate",
   },
-  // {
-  //   file: "c17_globemaster.glb",
-  //   span: 70,
-  //   spanAxis: "x",
-  //   yaw: 0,
-  //   speed: 1.4,
-  //   modes: ["takeoff", "cruise", "landing"],
-  //   prop: "none",
-  // },
-  // {
-  //   file: "cessna_172.glb",
-  //   span: 25,
-  //   spanAxis: "x",
-  //   yaw: 0,
-  //   speed: 1,
-  //   modes: ["takeoff", "landing", "cruise"],
-  //   prop: "merged",
-  //   // The model already has its wheels.
-  //   gear: false,
-  // },
+  {
+    file: "c17_globemaster.glb",
+    span: 70,
+    spanAxis: "x",
+    yaw: 0,
+    speed: 1.4,
+    modes: ["takeoff", "cruise", "landing"],
+    prop: "none",
+  },
+  {
+    file: "cessna_172.glb",
+    span: 25,
+    spanAxis: "x",
+    yaw: 0,
+    speed: 1,
+    modes: ["takeoff", "landing", "cruise"],
+    prop: "merged",
+    // The model already has its wheels.
+    gear: false,
+  },
 ]
 
 /** A spinning part and the axis it spins about in its own space. */
