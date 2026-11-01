@@ -299,7 +299,7 @@ export class WorldManager {
     if (scene.background instanceof THREE.Color) {
       this.hazedSky(scene.background, preset).lerp(white, f * 0.55)
     }
-    if (scene.fog instanceof THREE.Fog) scene.fog.color.setHex(preset.fogColor).lerp(white, f * 0.5)
+    if (scene.fog instanceof THREE.Fog) scene.fog.color.setHex(this.fogEnabled ? preset.fogColor : preset.skyColor).lerp(white, f * 0.5)
   }
 
   /** 1 where a visible puddle lies at (x, z), else 0. */
@@ -357,10 +357,14 @@ export class WorldManager {
     if (this.sceneRef?.background instanceof THREE.Color) this.hazedSky(this.sceneRef.background, preset)
     this.cloudLastCarS = -999999
     if (!this.fogEnabled) {
-      fog.near = 1e5
-      fog.far = 2e5
+      // Never truly off: a faint fade in the sky's own colour over the last
+      // stretch before the camera's far plane, so the ground never ends in a line.
+      fog.color.setHex(preset.skyColor)
+      fog.near = 1300
+      fog.far = 2350
       return
     }
+    fog.color.setHex(preset.fogColor)
     fog.near = preset.fogNear / this.fogIntensity
     fog.far = preset.fogFar / this.fogIntensity
   }
@@ -410,7 +414,7 @@ export class WorldManager {
       }
 
       if (this.sceneRef.fog instanceof THREE.Fog) {
-        this.sceneRef.fog.color.setHex(preset.fogColor)
+        this.sceneRef.fog.color.setHex(this.fogEnabled ? preset.fogColor : preset.skyColor)
         this.applyFogRange()
       }
     }
@@ -583,7 +587,7 @@ export class WorldManager {
     this.starsPoints.visible = false
     this.group.add(this.starsPoints)
 
-    const gGeo = new THREE.PlaneGeometry(1200, 1200, 1, 1)
+    const gGeo = new THREE.PlaneGeometry(6000, 6000, 1, 1)
     const gMat = new THREE.MeshStandardMaterial({
       color: 0x44602f,
       roughness: 1,

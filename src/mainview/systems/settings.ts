@@ -83,7 +83,7 @@ export type FogLevel = "off" | "light" | "normal" | "heavy"
 export const FOG_LEVELS: FogLevel[] = ["off", "light", "normal", "heavy"]
 /** Thickness multiplier on each time of day's own fog; undefined when off. */
 export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
-  off: undefined,
+  off: 0.75,
   light: 1,
   normal: 2,
   heavy: 3,

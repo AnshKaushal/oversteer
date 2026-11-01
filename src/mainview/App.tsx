@@ -1177,6 +1177,7 @@ export default function App() {
         }
         const onWinBlur = () => {
           input.clear()
+          cmdHeld = false
           // give the cursor back at once; the loop re-grabs it when focus returns
           if (nativeWant) {
             nativeWant = false
@@ -1269,6 +1270,13 @@ export default function App() {
         // pointer can't wander onto the dock or a hot corner.
         let nativeActive = false
         let nativeWant = false
+        // Holding Cmd hands the cursor back, so Cmd+Shift+3/4/5 screenshots work
+        let cmdHeld = false
+        const onCmdKey = (e: KeyboardEvent) => {
+          cmdHeld = e.metaKey
+        }
+        window.addEventListener("keydown", onCmdKey)
+        window.addEventListener("keyup", onCmdKey)
         onNativeMouseDelta((dx, dy) => {
           if (!nativeActive) return
           e0.lastMovementX += dx
@@ -1424,6 +1432,7 @@ export default function App() {
             !pausedRef.current &&
             !showSettingsRef.current &&
             !raceFinishedRef.current &&
+            !cmdHeld &&
             document.hasFocus()
           if (wantNative !== nativeWant) {
             nativeWant = wantNative
@@ -2257,6 +2266,8 @@ export default function App() {
           window.removeEventListener("resize", onResize)
           window.removeEventListener("keydown", onStatsKey)
           onNativeMouseDelta(null)
+          window.removeEventListener("keydown", onCmdKey)
+          window.removeEventListener("keyup", onCmdKey)
           if (nativeWant) void setNativeCursorLock(false)
           statsEl.style.display = "none"
           window.removeEventListener("blur", onWinBlur)
