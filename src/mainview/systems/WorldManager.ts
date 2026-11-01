@@ -1,3 +1,4 @@
+import { Puddles } from "./Puddles"
 import type { SurfaceId } from "../data/surfaces"
 import { registerSurface } from "../physics/core/Surfaces"
 import * as THREE from "three"
@@ -23,39 +24,42 @@ export function roadDirYaw(s: number): number {
 }
 
 const ARC_STEP = 5
-// The road function is periodic, so it is valid for negative s too. The lower
-// bound has to be generous: driving in reverse walks s downwards indefinitely,
-// and anything clamped here silently freezes roadArcLength.
-const ARC_MIN = -25000
-const ARC_MAX = 12500
+// The road is periodic (sin(0.004 s) and sin(0.0013 s) realign every ROAD_PERIOD
+// metres), so arc length is one table over a single period plus whole periods.
+// That keeps it exact and unbounded in both driving directions.
+export const ROAD_PERIOD = (2 * Math.PI * 40) / 0.004
 let arcTable: Float64Array | null = null
+let periodArc = 0
 
 function roadSlope(s: number): number {
   return (roadCenterX(s + 2) - roadCenterX(s - 2)) / 4
 }
 
 function buildArcTable(): Float64Array {
-  const n = Math.floor((ARC_MAX - ARC_MIN) / ARC_STEP) + 1
+  const n = Math.ceil(ROAD_PERIOD / ARC_STEP) + 2
   const t = new Float64Array(n)
   let acc = 0
   for (let i = 1; i < n; i++) {
-    const sMid = ARC_MIN + (i - 0.5) * ARC_STEP
+    const sMid = (i - 0.5) * ARC_STEP
     const fp = roadSlope(sMid)
     acc += Math.sqrt(1 + fp * fp) * ARC_STEP
     t[i] = acc
   }
+  periodArc = roadArcLength0(ROAD_PERIOD, t)
   return t
+}
+
+function roadArcLength0(c: number, tab: Float64Array): number {
+  const f = c / ARC_STEP
+  const i = Math.floor(f)
+  const t = f - i
+  return tab[i] + (tab[i + 1] - tab[i]) * t
 }
 
 export function roadArcLength(s: number): number {
   if (!arcTable) arcTable = buildArcTable()
-  const c = Math.max(ARC_MIN, Math.min(ARC_MAX, s))
-  const f = (c - ARC_MIN) / ARC_STEP
-  const i = Math.floor(f)
-  const t = f - i
-  const a = arcTable[i]
-  const b = arcTable[Math.min(i + 1, arcTable.length - 1)]
-  return a + (b - a) * t
+  const k = Math.floor(s / ROAD_PERIOD)
+  return k * periodArc + roadArcLength0(s - k * ROAD_PERIOD, arcTable)
 }
 
 export function roadGapM(a: number, b: number): number {
@@ -63,6 +67,20 @@ export function roadGapM(a: number, b: number): number {
 }
 
 const RIB_DIV = 16
+
+// 40 clouds, 80 m apart in s, repeat every ring; hills and clouds shrink out of sight over fade distances.
+const CLOUD_GAP = 80
+const CLOUD_RING = 40 * CLOUD_GAP
+/** 1 up to `from` metres away, easing to 0 at `to`. */
+function fadeOut(d: number, from: number, to: number): number {
+  const x = Math.min(1, Math.max(0, (d - from) / (to - from)))
+  return 1 - x * x * (3 - 2 * x)
+}
+
+// 22 hills share a ring of 44 segments; hill i owns every segment = hillResidue(i) (mod 44).
+const HILL_PERIOD = 44
+const hillResidue = (i: number) => -2 + i * 2
+
 
 function makeRibbonGeometry(
   len: number,
@@ -189,6 +207,8 @@ interface CloudEntry {
   pos: THREE.Vector3
   rot: number
   variantIdx: number
+  /** Which repeat of its ring the cloud is standing on. */
+  k: number
 }
 
 interface Hill {
@@ -225,6 +245,8 @@ const CLOUD_NODES = [
   "NUVEM_2_1",
 ]
 
+const LIGHTNING_TINT = new THREE.Color(0xe4ecff)
+
 export class WorldManager {
   group = new THREE.Group()
   private roadSegs: RoadSeg[] = []
@@ -245,6 +267,9 @@ export class WorldManager {
   private readonly SHADOW_FADE_RADIUS = 110
   private shadowFadeMat: THREE.MeshDepthMaterial | null = null
   private timeOfDay: TimeOfDayMode = "day"
+  private fogEnabled = true
+  /** 1 is the preset's own fog; 2 is twice as thick (half the view distance). */
+  private fogIntensity = 1
   private sunLight: THREE.DirectionalLight | null = null
   private hemiLight: THREE.HemisphereLight | null = null
   private sunVisual: THREE.Mesh | null = null
@@ -261,14 +286,92 @@ export class WorldManager {
     }
   }
 
+  /** Lightning flash, 0 (none) to 1: lifts the light and washes the sky and fog toward white. */
+  setLightning(f: number) {
+    const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
+    if (!preset) return
+    this.puddles?.setFlash(f)
+    if (this.hemiLight) this.hemiLight.intensity = preset.hemiIntensity + f * 3.2
+    if (this.sunLight) this.sunLight.intensity = preset.sunIntensity + f * 2.5
+    const scene = this.sceneRef
+    if (!scene) return
+    const white = LIGHTNING_TINT
+    if (scene.background instanceof THREE.Color) {
+      this.hazedSky(scene.background, preset).lerp(white, f * 0.55)
+    }
+    if (scene.fog instanceof THREE.Fog) scene.fog.color.setHex(preset.fogColor).lerp(white, f * 0.5)
+  }
+
+  /** 1 where a visible puddle lies at (x, z), else 0. */
+  puddleAt(x: number, z: number): number {
+    return this.puddles?.coverageAt(x, z) ?? 0
+  }
+
+  /** Where a puddle disc of radius r at (x, z) may lie: wholly on the tarmac, wholly on open grass, or nowhere. */
+  private puddleSurface(x: number, z: number, r: number): "road" | "grass" | null {
+    const road = WORLD_CONFIG.road
+    const s = -z
+    const tx = (roadCenterX(s + 2) - roadCenterX(s - 2)) / 4
+    const across = Math.abs(x - roadCenterX(s)) / Math.hypot(tx, 1)
+    if (across + r <= road.width / 2) return "road"
+    if (across - r < (road.width + 2 * road.shoulderWidth) / 2 + 1) return null
+    // keep out of hills: their surface is above the flat ground the puddle lies on
+    for (const hill of this.hills) {
+      const dx = x - hill.mesh.position.x
+      const dz = z - hill.mesh.position.z
+      const reach = hill.radius * 1.4 + r + 2
+      if (dx * dx + dz * dz < reach * reach) return null
+    }
+    return "grass"
+  }
+
   getTimeOfDay(): TimeOfDayMode {
     return this.timeOfDay
+  }
+
+  /** User fog setting: off, or a thickness multiplier on the time-of-day fog. */
+  setFog(enabled: boolean, intensity: number) {
+    this.fogEnabled = enabled
+    this.fogIntensity = Math.max(0.1, intensity)
+    this.applyFogRange()
+  }
+
+  /** Sky colour, drawn toward the fog colour as fog thickens so thick fog hides the sky too. */
+  private hazedSky(out: THREE.Color, preset: (typeof TIME_OF_DAY_PRESETS)[TimeOfDayMode]) {
+    out.setHex(preset.skyColor)
+    if (!this.fogEnabled) return out
+    const haze = Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7))
+    return out.lerp(new THREE.Color(preset.fogColor), haze)
+  }
+
+  /** False when something this far away is entirely hidden by fog. */
+  private withinFog(d: number): boolean {
+    const fog = this.sceneRef?.fog
+    return !this.fogEnabled || !(fog instanceof THREE.Fog) || d < fog.far + 20
+  }
+
+  private applyFogRange() {
+    const fog = this.sceneRef?.fog
+    if (!(fog instanceof THREE.Fog)) return
+    const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
+    if (this.sceneRef?.background instanceof THREE.Color) this.hazedSky(this.sceneRef.background, preset)
+    this.cloudLastCarS = -999999
+    if (!this.fogEnabled) {
+      fog.near = 1e5
+      fog.far = 2e5
+      return
+    }
+    fog.near = preset.fogNear / this.fogIntensity
+    fog.far = preset.fogFar / this.fogIntensity
   }
 
   setTimeOfDay(mode: TimeOfDayMode) {
     this.timeOfDay = mode
     const preset = TIME_OF_DAY_PRESETS[mode]
     if (!preset) return
+
+    this.puddles?.setSky(preset.fogColor)
+    this.puddles?.setRain(preset.rain)
 
     this.sunOffset.set(
       preset.sunPosition.x,
@@ -289,6 +392,7 @@ export class WorldManager {
 
     if (this.sunVisual) {
       const mat = this.sunVisual.material as THREE.MeshBasicMaterial
+      this.sunVisual.visible = preset.rain === 0
       if (mode === "night") {
         mat.color.setHex(0xdde6ff)
         this.sunVisual.scale.setScalar(0.55)
@@ -300,15 +404,14 @@ export class WorldManager {
 
     if (this.sceneRef) {
       if (this.sceneRef.background instanceof THREE.Color) {
-        this.sceneRef.background.setHex(preset.skyColor)
+        this.hazedSky(this.sceneRef.background, preset)
       } else {
         this.sceneRef.background = new THREE.Color(preset.skyColor)
       }
 
       if (this.sceneRef.fog instanceof THREE.Fog) {
         this.sceneRef.fog.color.setHex(preset.fogColor)
-        this.sceneRef.fog.near = preset.fogNear
-        this.sceneRef.fog.far = preset.fogFar
+        this.applyFogRange()
       }
     }
 
@@ -387,9 +490,14 @@ export class WorldManager {
   private segColliders = new Map<number, RAPIER.Collider[]>()
   private carPos = new THREE.Vector3()
   private hills: Hill[] = []
+  private puddles: Puddles | null = null
   private hillRay = new THREE.Raycaster()
-  private readonly SEG_BEHIND = 12
-  private readonly SEG_AHEAD = 24
+  /** Segments of props kept each side of the car: all of them, or just what the fog leaves visible. */
+  private get segRange() {
+    const fog = this.sceneRef?.fog
+    if (!this.fogEnabled || !(fog instanceof THREE.Fog)) return 18
+    return Math.min(18, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
+  }
   private readonly ROAD_RIB = RIB_DIV
   private loader = new GLTFLoader()
 
@@ -410,6 +518,7 @@ export class WorldManager {
     const W = WORLD_CONFIG
     this.sceneRef = scene
     scene.add(this.group)
+    this.puddles = new Puddles(this.group, (x, z, r) => this.puddleSurface(x, z, r))
     scene.fog = new THREE.Fog(
       W.environment.fogColor,
       W.environment.fogNear,
@@ -495,9 +604,13 @@ export class WorldManager {
       const radius = far
         ? 120 + this.rand(i * 613 + 7) * 100
         : 35 + this.rand(i * 613 + 7) * 35
-      const height = far
-        ? 80 + this.rand(i * 977 + 13) * 80
-        : 15 + this.rand(i * 977 + 13) * 30
+      // Height is capped against the radius so no flank is steeper than a tyre can climb.
+      const height = Math.min(
+        far
+          ? 80 + this.rand(i * 977 + 13) * 80
+          : 15 + this.rand(i * 977 + 13) * 30,
+        radius * 0.32,
+      )
       const seed = i * 311 + 3
       const hill = new THREE.Mesh(
         this.makeHillGeometry(radius, height, seed),
@@ -508,7 +621,7 @@ export class WorldManager {
       hill.castShadow = true
       hill.receiveShadow = true
       this.group.add(hill)
-      const seg = -2 + i * 2
+      const seg = hillResidue(i) + HILL_PERIOD * Math.round(-hillResidue(i) / HILL_PERIOD)
       this.hills.push({ mesh: hill, seg: -999999, rotY, radius })
       this.placeHill(this.hills[i], seg)
     }
@@ -617,26 +730,6 @@ export class WorldManager {
         this.propVariants.push({ im, category, targetH })
       }
 
-      {
-        const grassGeo = new THREE.PlaneGeometry(7, 7)
-        grassGeo.rotateX(-Math.PI / 2)
-        const grassMat = new THREE.MeshStandardMaterial({
-          color: 0x4d7a33,
-          roughness: 1,
-        })
-        const grassIM = new THREE.InstancedMesh(grassGeo, grassMat, 12000)
-        grassIM.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-        grassIM.count = 0
-        grassIM.castShadow = false
-        grassIM.receiveShadow = true
-        grassIM.frustumCulled = false
-        this.group.add(grassIM)
-        this.propVariants.push({
-          im: grassIM,
-          category: "grass",
-          targetH: 0.3,
-        })
-      }
       const g111 = bakeNodes(["Object_111"])
       if (g111) {
         for (const im of bakeSplit(g111, 6, 150, { uniformScale: 0.012 }))
@@ -691,21 +784,17 @@ export class WorldManager {
     if (this.cloudVariants.length === 0) return
     const nV = this.cloudVariants.length
     for (let i = 0; i < this.NUM_CLOUDS; i++) {
-      const seed = i * 3571 + 9973
       this.cloudEntries.push({
-        pos: new THREE.Vector3(
-          (this.rand(seed) - 0.5) * 600,
-          60 + this.rand(seed * 7) * 60,
-          -(i * 80 + (this.rand(seed * 3) - 0.5) * 60),
-        ),
-        rot: this.rand(seed * 11) * Math.PI * 2,
+        pos: new THREE.Vector3(0, 60, 0),
+        rot: 0,
         variantIdx: i % nV,
+        k: Number.NaN,
       })
     }
-    this.flushClouds()
+    this.updateClouds(0, new THREE.Vector3())
   }
 
-  private flushClouds() {
+  private flushClouds(carS = this.cloudLastCarS) {
     if (this.cloudVariants.length === 0) return
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
@@ -719,7 +808,8 @@ export class WorldManager {
       if (idx >= pv.im.instanceMatrix.count) continue
       e.set(0, c.rot, 0)
       q.setFromEuler(e)
-      sc.set(1, 1, 1)
+      const cd = Math.abs(-c.pos.z - carS)
+      sc.setScalar(this.withinFog(cd) ? fadeOut(cd, 1000, 1500) : 0)
       m.compose(c.pos, q, sc)
       pv.im.setMatrixAt(idx, m)
     }
@@ -729,31 +819,31 @@ export class WorldManager {
     })
   }
 
-  private updateClouds(carS: number, carPos: THREE.Vector3) {
+  private updateClouds(carS: number, _carPos: THREE.Vector3) {
     if (this.cloudVariants.length === 0) return
-    const dir = this.travelDir
-    let dirty = false
+    // Cloud i owns s = i * CLOUD_GAP (mod CLOUD_RING) and stands on whichever of
+    // those is nearest the car, so the sky is the same from either direction.
+    // Clouds shrink to nothing toward that half-ring distance, so the hop is unseen.
+    let dirty = Math.abs(carS - this.cloudLastCarS) > 25
     for (let i = 0; i < this.cloudEntries.length; i++) {
       const c = this.cloudEntries[i]
-      // s = -z. A cloud is trailing when it sits more than 600m behind the car
-      // along the travel axis; that test flips with the driving direction.
-      const cloudS = -c.pos.z
-      if (dir * (cloudS - carS) >= -600) continue
-      const seed = i * 4001 + Math.floor(carS) * 13
-      // Ahead means further along the travel axis, so reversing pushes the new
-      // position to lower s instead of higher.
-      const aheadS = carS + dir * (2000 + this.rand(seed * 3) * 400)
+      const base = i * CLOUD_GAP
+      const k = Math.round((carS - base) / CLOUD_RING)
+      if (k === c.k) continue
+      c.k = k
+      const seed = i * 4001 + k * 7919
+      const s = base + k * CLOUD_RING + (this.rand(seed * 5) - 0.5) * 60
       c.pos.set(
-        carPos.x + (this.rand(seed) - 0.5) * 700,
+        roadCenterX(s) + (this.rand(seed) - 0.5) * 700,
         60 + this.rand(seed * 7) * 60,
-        -aheadS,
+        -s,
       )
       c.rot = this.rand(seed * 11) * Math.PI * 2
       dirty = true
     }
-    if (dirty || Math.abs(carS - this.cloudLastCarS) > 50) {
+    if (dirty) {
       this.cloudLastCarS = carS
-      this.flushClouds()
+      this.flushClouds(carS)
     }
   }
 
@@ -939,6 +1029,8 @@ export class WorldManager {
       return x * x * (3 - 2 * x)
     }
 
+    // Noise features scale with the hill, so a big hill is not bumpier ring to ring.
+    const nr = Math.min(radius, 60)
     const nTop = this.hillNoise(seed, 0, 0)
     positions.push(0, height + nTop * height * 0.05, 0)
     c.copy(green).lerp(rock, 0.55)
@@ -946,16 +1038,16 @@ export class WorldManager {
 
     for (let i = 1; i <= NR; i++) {
       const rho = i / NR
-      const prof = Math.pow(1 - smooth(rho), 1.25)
+      const prof = 1 - smooth(rho)
       const apron = 1 + (1 - smooth(Math.min(1, rho / 0.35))) * 0.35
       for (let j = 0; j < NS; j++) {
         const th = (j / NS) * Math.PI * 2
         const dx = Math.cos(th)
         const dz = Math.sin(th)
         const env = Math.sin(Math.PI * Math.min(1, Math.max(0.02, rho)))
-        const n = this.hillNoise(seed, dx * rho * radius, dz * rho * radius)
-        const rr = radius * rho * apron * (1 + 0.22 * n * env)
-        const h = Math.max(0, height * prof + n * height * 0.1 * env)
+        const n = this.hillNoise(seed, dx * rho * nr, dz * rho * nr)
+        const rr = radius * rho * apron * (1 + 0.1 * n * env)
+        const h = Math.max(0, height * prof + n * height * 0.06 * env)
         positions.push(dx * rr, h, dz * rr)
         const rockiness = Math.min(
           1,
@@ -1238,7 +1330,7 @@ export class WorldManager {
   }
 
   private ensureSegs(minSeg: number, maxSeg: number, carSeg: number) {
-    if (this.primed && this.segMax >= minSeg && this.segMin <= maxSeg) {
+    if (this.primed && this.segMax >= minSeg && this.segMin <= maxSeg && this.segMax - this.segMin <= maxSeg - minSeg) {
       let complete = true
       for (let s = minSeg; s <= maxSeg; s++) {
         if (!this.segProps.has(s)) {
@@ -1335,6 +1427,7 @@ export class WorldManager {
   update(carS: number, carPos: THREE.Vector3, grassTarget = 1) {
     const W = WORLD_CONFIG
     this.carPos.copy(carPos)
+    this.puddles?.update(carPos)
     // Dead-band keeps travelDir stable while parked or crawling, so recycling
     // does not oscillate between the two ends of the window.
     if (Number.isFinite(this.lastCarS)) {
@@ -1386,19 +1479,23 @@ export class WorldManager {
     }
     const carSeg = Math.floor(carS / this.segLen)
     this.ensureSegs(
-      carSeg - this.SEG_BEHIND,
-      carSeg + this.SEG_AHEAD,
+      carSeg - this.segRange,
+      carSeg + this.segRange,
       carSeg,
     )
-    for (const h of this.hills) {
-      // Recycle whichever side has fallen out of range and re-seed it ahead of
-      // the car in the direction it is actually travelling.
-      if (Math.abs(h.seg - carSeg) > this.SEG_AHEAD) {
-        this.placeHill(
-          h,
-          carSeg + this.travelDir * (this.SEG_AHEAD + (Math.abs(h.seg) % 3)),
-        )
-      }
+    // Hill i only ever stands on segments congruent to hillResidue(i), so a place
+    // always holds the same hill whichever way the car arrives. A hill moves to
+    // its nearest such segment, half a period (>1 km) from the car: out of sight.
+    for (let i = 0; i < this.hills.length; i++) {
+      const h = this.hills[i]
+      const r = hillResidue(i)
+      const seg = r + HILL_PERIOD * Math.round((carSeg - r) / HILL_PERIOD)
+      if (seg !== h.seg) this.placeHill(h, seg)
+      // Shrink into the ground toward the hop distance, so the hop is never seen.
+      const f = fadeOut(Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z), 800, 1050)
+      h.mesh.visible = f > 0.01 && this.withinFog(Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z) - h.radius)
+      const sc = Math.max(f, 0.01)
+      if (h.mesh.scale.x !== sc) h.mesh.scale.setScalar(sc)
     }
     this.updateClouds(carS, carPos)
     this.grassDensity += (grassTarget - this.grassDensity) * 0.08

@@ -508,38 +508,38 @@ export class CarVisual {
 
           const leftSpot = new THREE.SpotLight(
             0xfff0cc,
-            this.headlightsOn ? 75 : 0,
-            75,
-            Math.PI / 3.0,
-            0.9,
+            this.headlightsOn ? 260 : 0,
+            160,
+            Math.PI / 4.2,
+            0.8,
             1.0,
           )
           leftSpot.position.set(-headlightSpacing, headlightY, frontZ - 0.15)
           leftSpot.castShadow = true
           leftSpot.shadow.mapSize.set(1024, 1024)
           leftSpot.shadow.camera.near = 0.4
-          leftSpot.shadow.camera.far = 75
+          leftSpot.shadow.camera.far = 90
           leftSpot.shadow.bias = -0.0003
           leftSpot.shadow.normalBias = 0.015
-          leftSpot.target.position.set(-headlightSpacing * 0.9, headlightY * 0.75, frontZ - 32)
+          leftSpot.target.position.set(-headlightSpacing * 0.9, 0, frontZ - 70)
           leftSpot.visible = true
 
           const rightSpot = new THREE.SpotLight(
             0xfff0cc,
-            this.headlightsOn ? 75 : 0,
-            75,
-            Math.PI / 3.0,
-            0.9,
+            this.headlightsOn ? 260 : 0,
+            160,
+            Math.PI / 4.2,
+            0.8,
             1.0,
           )
           rightSpot.position.set(headlightSpacing, headlightY, frontZ - 0.15)
           rightSpot.castShadow = true
           rightSpot.shadow.mapSize.set(1024, 1024)
           rightSpot.shadow.camera.near = 0.4
-          rightSpot.shadow.camera.far = 75
+          rightSpot.shadow.camera.far = 90
           rightSpot.shadow.bias = -0.0003
           rightSpot.shadow.normalBias = 0.015
-          rightSpot.target.position.set(headlightSpacing * 0.9, headlightY * 0.75, frontZ - 32)
+          rightSpot.target.position.set(headlightSpacing * 0.9, 0, frontZ - 70)
           rightSpot.visible = true
 
           this.headlightGroup.add(leftSpot.target, rightSpot.target)
@@ -820,38 +820,38 @@ export class CarVisual {
     if (isPlayer) {
       const leftSpot = new THREE.SpotLight(
         0xfff0cc,
-        this.headlightsOn ? 75 : 0,
-        75,
-        Math.PI / 3.0,
-        0.9,
+        this.headlightsOn ? 260 : 0,
+        160,
+        Math.PI / 4.2,
+        0.8,
         1.0,
       )
       leftSpot.position.set(-headlightSpacing, headlightY, frontZ - 0.15)
       leftSpot.castShadow = true
       leftSpot.shadow.mapSize.set(1024, 1024)
       leftSpot.shadow.camera.near = 0.4
-      leftSpot.shadow.camera.far = 75
+      leftSpot.shadow.camera.far = 90
       leftSpot.shadow.bias = -0.0003
       leftSpot.shadow.normalBias = 0.015
-      leftSpot.target.position.set(-headlightSpacing * 0.9, headlightY * 0.75, frontZ - 32)
+      leftSpot.target.position.set(-headlightSpacing * 0.9, 0, frontZ - 70)
       leftSpot.visible = true
 
       const rightSpot = new THREE.SpotLight(
         0xfff0cc,
-        this.headlightsOn ? 75 : 0,
-        75,
-        Math.PI / 3.0,
-        0.9,
+        this.headlightsOn ? 260 : 0,
+        160,
+        Math.PI / 4.2,
+        0.8,
         1.0,
       )
       rightSpot.position.set(headlightSpacing, headlightY, frontZ - 0.15)
       rightSpot.castShadow = true
       rightSpot.shadow.mapSize.set(1024, 1024)
       rightSpot.shadow.camera.near = 0.4
-      rightSpot.shadow.camera.far = 75
+      rightSpot.shadow.camera.far = 90
       rightSpot.shadow.bias = -0.0003
       rightSpot.shadow.normalBias = 0.015
-      rightSpot.target.position.set(headlightSpacing * 0.9, headlightY * 0.75, frontZ - 32)
+      rightSpot.target.position.set(headlightSpacing * 0.9, 0, frontZ - 70)
       rightSpot.visible = true
 
       group.add(leftSpot.target, rightSpot.target)

@@ -1,10 +1,14 @@
-export type TimeOfDayMode = "sunrise" | "day" | "evening" | "night"
+import type { WeatherId } from "../data/surfaces"
+
+export type TimeOfDayMode = "sunrise" | "day" | "evening" | "night" | "rainy" | "stormy"
 
 export const TIME_OF_DAY_MODES: readonly TimeOfDayMode[] = [
   "sunrise",
   "day",
   "evening",
   "night",
+  "rainy",
+  "stormy",
 ] as const
 
 export const TIME_OF_DAY_LABELS: Record<TimeOfDayMode, string> = {
@@ -12,6 +16,8 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDayMode, string> = {
   day: "Day",
   evening: "Evening",
   night: "Night",
+  rainy: "Rainy",
+  stormy: "Stormy",
 }
 
 export interface TimeOfDayPreset {
@@ -43,6 +49,12 @@ export interface TimeOfDayPreset {
   groundColor: number
   /** Whether headlights should be automatically active */
   isLowLight: boolean
+  /** Rain intensity, 0 (none) to 1 (downpour). */
+  rain: number
+  /** Whether lightning flashes in this sky. */
+  lightning: boolean
+  /** Grip this sky implies; the settings weather can only make it worse. */
+  weather: WeatherId
 }
 
 export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
@@ -62,6 +74,9 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     hemiIntensity: 0.85,
     groundColor: 0x3e5229,
     isLowLight: false,
+    rain: 0,
+    lightning: false,
+    weather: "dry",
   },
   day: {
     id: "day",
@@ -79,6 +94,9 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     hemiIntensity: 0.9,
     groundColor: 0x44602f,
     isLowLight: false,
+    rain: 0,
+    lightning: false,
+    weather: "dry",
   },
   evening: {
     id: "evening",
@@ -96,6 +114,9 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     hemiIntensity: 0.65,
     groundColor: 0x2c3b22,
     isLowLight: true,
+    rain: 0,
+    lightning: false,
+    weather: "dry",
   },
   night: {
     id: "night",
@@ -113,6 +134,49 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     hemiIntensity: 0.35,
     groundColor: 0x162215,
     isLowLight: true,
+    rain: 0,
+    lightning: false,
+    weather: "dry",
+  },
+  rainy: {
+    id: "rainy",
+    name: "Rainy",
+    skyColor: 0x3a424a,
+    horizonColor: 0x59636b,
+    fogColor: 0x474f57,
+    fogNear: 30,
+    fogFar: 420,
+    sunColor: 0xa8b4c0,
+    sunIntensity: 0.4,
+    sunPosition: { x: 120, y: 150, z: 60 },
+    hemiSkyColor: 0x63707c,
+    hemiGroundColor: 0x1f2a1d,
+    hemiIntensity: 0.5,
+    groundColor: 0x27381e,
+    isLowLight: true,
+    rain: 0.55,
+    lightning: false,
+    weather: "wet",
+  },
+  stormy: {
+    id: "stormy",
+    name: "Stormy",
+    skyColor: 0x2a3038,
+    horizonColor: 0x4a525c,
+    fogColor: 0x353c45,
+    fogNear: 18,
+    fogFar: 300,
+    sunColor: 0x9aa8b8,
+    sunIntensity: 0.3,
+    sunPosition: { x: 80, y: 130, z: 40 },
+    hemiSkyColor: 0x56606c,
+    hemiGroundColor: 0x1c261a,
+    hemiIntensity: 0.5,
+    groundColor: 0x263b1f,
+    isLowLight: true,
+    rain: 1,
+    lightning: true,
+    weather: "storm",
   },
 }
 
@@ -122,4 +186,12 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
  */
 export function isLowLight(mode: TimeOfDayMode): boolean {
   return TIME_OF_DAY_PRESETS[mode]?.isLowLight ?? false
+}
+
+const WEATHER_SEVERITY: readonly WeatherId[] = ["dry", "damp", "wet", "storm"]
+
+/** The worse of the chosen weather and what the sky implies, so a rainy sky is never dry underfoot. */
+export function effectiveWeather(chosen: WeatherId, mode: TimeOfDayMode): WeatherId {
+  const sky = TIME_OF_DAY_PRESETS[mode]?.weather ?? "dry"
+  return WEATHER_SEVERITY.indexOf(sky) > WEATHER_SEVERITY.indexOf(chosen) ? sky : chosen
 }

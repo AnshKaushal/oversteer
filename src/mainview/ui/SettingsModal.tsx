@@ -1,13 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import gsap from "gsap"
 import {
-  X,
   Monitor,
   Sparkles,
   Zap,
   Check,
   RotateCcw,
-  Sliders,
   Cpu,
   Info,
   Layers,
@@ -17,6 +15,8 @@ import {
   Gauge,
   Droplets,
   RefreshCw,
+  CloudFog,
+  Activity,
 } from "lucide-react"
 import { DEFAULT_WEATHER, WEATHER_GRIP, type WeatherId } from "../data/surfaces"
 
@@ -28,6 +28,8 @@ import {
 } from "../constants/timeOfDay"
 import {
   type AppSettings,
+  type FogLevel,
+  FOG_LEVELS,
   type ResolutionId,
   RESOLUTION_PRESETS,
   DEFAULT_SETTINGS,
@@ -50,6 +52,7 @@ export function SettingsModal({
   onClose,
 }: SettingsModalProps) {
   const [mounted, setMounted] = useState(open)
+  const [tab, setTab] = useState<"graphics" | "world" | "interface" | "about">("graphics")
   const [showUpscalingInfo, setShowUpscalingInfo] = useState(false)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateMessage, setUpdateMessage] = useState("")
@@ -105,11 +108,11 @@ export function SettingsModal({
       animRef.current = tl
 
       tl.set(overlay, { autoAlpha: 0 })
-        .set(modal, { autoAlpha: 0, scale: 0.92, y: 30 })
+        .set(modal, { autoAlpha: 0, y: 14 })
         .to(overlay, { autoAlpha: 1, duration: 0.28, ease: "power2.out" })
         .to(
           modal,
-          { autoAlpha: 1, scale: 1, y: 0, duration: 0.38, ease: EASE.soft },
+          { autoAlpha: 1, y: 0, duration: 0.34, ease: EASE.soft },
           "-=0.18",
         )
         .fromTo(
@@ -135,8 +138,7 @@ export function SettingsModal({
 
       tl.to(modal, {
         autoAlpha: 0,
-        scale: 0.95,
-        y: 16,
+        y: 10,
         duration: 0.22,
         ease: EASE.in,
       }).to(overlay, { autoAlpha: 0, duration: 0.18, ease: "power2.in" }, "-=0.12")
@@ -152,6 +154,7 @@ export function SettingsModal({
     if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault()
         e.stopPropagation()
         onClose()
       }
@@ -206,6 +209,13 @@ export function SettingsModal({
     })
   }
 
+  const handleSelectFog = (fog: FogLevel) => {
+    onUpdateSettings({
+      ...settings,
+      fog,
+    })
+  }
+
   const handleSelectWeather = (weather: WeatherId) => {
     onUpdateSettings({
       ...settings,
@@ -224,50 +234,74 @@ export function SettingsModal({
     onUpdateSettings(DEFAULT_SETTINGS)
   }
 
+  const TABS = [
+    { id: "graphics", label: "Graphics", icon: Monitor },
+    { id: "world", label: "World", icon: Sun },
+    { id: "interface", label: "Interface", icon: Gauge },
+    { id: "about", label: "Updates", icon: RefreshCw },
+  ] as const
+
   return (
     <div
       ref={overlayRef}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose()
-      }}
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 sm:p-6"
+      className="fixed inset-0 z-[120] overflow-y-auto bg-black/55 backdrop-blur-[2px] text-white"
     >
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-modal-title"
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-lg border border-[#51a7d5]/50 bg-[#0b0e14]/95 shadow-[0_20px_70px_rgba(0,0,0,0.85)] flex flex-col text-white"
-      >
-        {/* Header Bar */}
-        <div className="flex items-center justify-between border-b border-[#51a7d5]/30 bg-[#51a7d5]/10 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded border border-[#51a7d5] bg-[#51a7d5]/20 text-[#6ec2f0]">
-              <Sliders size={20} />
-            </div>
-            <div>
-              <h2
-                id="settings-modal-title"
-                className="text-lg font-bold tracking-wide text-white uppercase"
-              >
-                Graphics & Resolution
-              </h2>
-              <p className="text-xs text-[#8f99a8]">
-                Adjust 3D rendering resolution for higher FPS & smoother gameplay
-              </p>
-            </div>
+      <div ref={modalRef} className="flex min-h-full flex-col p-5 md:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+          <div data-anim-item>
+            <div
+              className="mb-2 h-2.5 w-20"
+              style={{
+                backgroundImage:
+                  "repeating-conic-gradient(#51a7d5 0% 25%, #0b0e14 0% 50%)",
+                backgroundSize: "12px 12px",
+              }}
+            />
+            <span className="text-[64px] font-bold leading-[0.9] tracking-tight text-white drop-shadow-[0_8px_30px_rgba(0,0,0,0.6)] md:text-[96px]">
+              Settings
+            </span>
+            <p className="mt-2 text-[13px] tracking-wide text-gray-300">
+              Graphics, world and interface. Changes apply instantly.
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close settings"
-            className="rounded p-1.5 text-gray-400 transition hover:bg-white/10 hover:text-white active:scale-95"
-          >
-            <X size={20} />
-          </button>
+          <div data-anim-item className="flex w-full flex-col gap-2 sm:w-[280px]">
+            <button
+              onClick={onClose}
+              className="w-full bg-[#51a7d5] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#51a7d5]/90 active:scale-[0.98] inline-flex items-center justify-center gap-2"
+            >
+              <Check size={16} />
+              Done
+            </button>
+            <button
+              onClick={handleReset}
+              className="w-full border border-white/12 bg-white/5 px-6 py-3 text-[14px] font-medium text-gray-100 transition hover:bg-white/10 active:scale-[0.98] inline-flex items-center justify-center gap-2"
+            >
+              <RotateCcw size={16} />
+              Reset defaults
+            </button>
+          </div>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+        <div className="mt-8 grid flex-1 gap-6 md:grid-cols-[220px_1fr]">
+          <div data-anim-item className="flex flex-row gap-2 md:flex-col md:self-start">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex flex-1 items-center gap-2.5 border px-4 py-3 text-left text-[14px] font-semibold transition active:scale-[0.98] md:flex-none ${
+                  tab === id
+                    ? "border-[#51a7d5] bg-[#51a7d5] text-[#0b0e14]"
+                    : "border-white/10 bg-black/30 text-gray-300 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="max-w-3xl space-y-4">
+            <div className={tab === "graphics" ? "space-y-4" : "hidden"}>
           {/* Active Resolution Live Status Card */}
           <div
             data-anim-item
@@ -479,131 +513,6 @@ export function SettingsModal({
             </button>
           </div>
 
-          {/* Time of Day */}
-          <div
-            data-anim-item
-            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
-          >
-            <div>
-              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
-                <Sun size={14} className="text-[#51a7d5]" />
-                Time of Day
-              </div>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                Select atmosphere (headlights turn on automatically at evening & night)
-              </p>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2">
-              {TIME_OF_DAY_MODES.map((mode) => {
-                const active = (settings.timeOfDay ?? "day") === mode
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => handleSelectTimeOfDay(mode)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold transition ${
-                      active
-                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
-                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
-                    }`}
-                  >
-                    <span>{TIME_OF_DAY_LABELS[mode]}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Weather */}
-          <div
-            data-anim-item
-            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
-          >
-            <div>
-              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
-                <Droplets size={14} className="text-[#51a7d5]" />
-                Weather
-              </div>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                Wet weather lowers tyre grip, most on tarmac
-              </p>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2">
-              {WEATHER_IDS.map((id) => {
-                const active = (settings.weather ?? DEFAULT_WEATHER) === id
-                return (
-                  <button
-                    key={id}
-                    onClick={() => handleSelectWeather(id)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold capitalize transition ${
-                      active
-                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
-                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
-                    }`}
-                  >
-                    <span>{id}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Cluster Style */}
-          <div
-            data-anim-item
-            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
-          >
-            <div>
-              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
-                <Gauge size={14} className="text-[#51a7d5]" />
-                Dashboard Cluster Style
-              </div>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                Pick the instrument cluster look — twin half-dials or the classic
-                circular gauges
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  {
-                    id: "modern" as const,
-                    name: "Modern Cluster",
-                    desc: "Twin half-circle dials hugging the corners",
-                  },
-                  {
-                    id: "classic" as const,
-                    name: "Classic Cluster",
-                    desc: "Circular chrome gauges with red needles",
-                  },
-                ]
-              ).map((opt) => {
-                const active = (settings.dashStyle ?? "modern") === opt.id
-                return (
-                  <button
-                    key={opt.id}
-                    onClick={() => handleSelectDashStyle(opt.id)}
-                    className={`relative flex flex-col items-start gap-0.5 p-3 rounded border text-left transition ${
-                      active
-                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white ring-1 ring-[#51a7d5]"
-                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
-                    }`}
-                  >
-                    <span className="text-sm font-bold">{opt.name}</span>
-                    <span className="text-[11px] opacity-80">{opt.desc}</span>
-                    {active && (
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#51a7d5] text-[#0b0e14] absolute top-2.5 right-2.5">
-                        <Check size={13} strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Upscaling Tech Info Accordion (MetalFX / DLSS / FSR) */}
           <div
             data-anim-item
@@ -663,6 +572,203 @@ export function SettingsModal({
             )}
           </div>
 
+            </div>
+            <div className={tab === "world" ? "space-y-4" : "hidden"}>
+          {/* Time of Day */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Sun size={14} className="text-[#51a7d5]" />
+                Time of Day
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Select atmosphere (headlights turn on automatically at evening, night and in rain; rain and storms also lower tyre grip)
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {TIME_OF_DAY_MODES.map((mode) => {
+                const active = (settings.timeOfDay ?? "day") === mode
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleSelectTimeOfDay(mode)}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    <span>{TIME_OF_DAY_LABELS[mode]}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Fog */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <CloudFog size={14} className="text-[#51a7d5]" />
+                Fog
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                How thick the haze is on top of the time of day. Off shows the whole horizon
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {FOG_LEVELS.map((level) => {
+                const active = (settings.fog ?? "normal") === level
+                return (
+                  <button
+                    key={level}
+                    onClick={() => handleSelectFog(level)}
+                    className={`flex items-center justify-center py-2 px-2 rounded border text-xs font-semibold capitalize transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    {level}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Weather */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Droplets size={14} className="text-[#51a7d5]" />
+                Weather
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Wet weather lowers tyre grip, most on tarmac
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {WEATHER_IDS.map((id) => {
+                const active = (settings.weather ?? DEFAULT_WEATHER) === id
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleSelectWeather(id)}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold capitalize transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    <span>{id}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+            </div>
+            <div className={tab === "interface" ? "space-y-4" : "hidden"}>
+          {/* Performance metrics */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Activity size={14} className="text-[#51a7d5]" />
+                Performance Metrics
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Show FPS, frame and physics timings and draw calls (F3 also toggles it)
+              </p>
+            </div>
+
+            <button
+              onClick={() =>
+                onUpdateSettings({ ...settings, perfOverlay: !settings.perfOverlay })
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                settings.perfOverlay ? "bg-[#51a7d5]" : "bg-gray-700"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.perfOverlay ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Cluster Style */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
+          >
+            <div>
+              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Gauge size={14} className="text-[#51a7d5]" />
+                Dashboard Cluster Style
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Pick the instrument cluster look — twin half-dials or the classic
+                circular gauges
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  {
+                    id: "modern" as const,
+                    name: "Modern Cluster",
+                    desc: "Twin half-circle dials hugging the corners",
+                  },
+                  {
+                    id: "classic" as const,
+                    name: "Classic Cluster",
+                    desc: "Circular chrome gauges with red needles",
+                  },
+                ]
+              ).map((opt) => {
+                const active = (settings.dashStyle ?? "modern") === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleSelectDashStyle(opt.id)}
+                    className={`relative flex flex-col items-start gap-0.5 p-3 rounded border text-left transition ${
+                      active
+                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white ring-1 ring-[#51a7d5]"
+                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">{opt.name}</span>
+                    <span className="text-[11px] opacity-80">{opt.desc}</span>
+                    {active && (
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#51a7d5] text-[#0b0e14] absolute top-2.5 right-2.5">
+                        <Check size={13} strokeWidth={3} />
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+            </div>
+            <div className={tab === "about" ? "space-y-4" : "hidden"}>
           {/* Updates */}
           <div
             data-anim-item
@@ -687,24 +793,8 @@ export function SettingsModal({
               {updateChecking ? "Checking…" : "Check for Updates"}
             </button>
           </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-white/10 bg-[#0b0e14] px-6 py-4">
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-white transition"
-          >
-            <RotateCcw size={14} />
-            Reset Defaults
-          </button>
-
-          <button
-            onClick={onClose}
-            className="rounded bg-[#51a7d5] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#51a7d5]/30 transition hover:bg-[#51a7d5]/90 active:scale-95"
-          >
-            Done
-          </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -79,6 +79,16 @@ export const RESOLUTION_PRESETS: ResolutionPreset[] = [
   },
 ]
 
+export type FogLevel = "off" | "light" | "normal" | "heavy"
+export const FOG_LEVELS: FogLevel[] = ["off", "light", "normal", "heavy"]
+/** Thickness multiplier on each time of day's own fog; undefined when off. */
+export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
+  off: undefined,
+  light: 1,
+  normal: 2,
+  heavy: 3,
+}
+
 export interface AppSettings {
   resolution: ResolutionId
   renderScale: number // 50 to 100
@@ -86,6 +96,8 @@ export interface AppSettings {
   timeOfDay?: TimeOfDayMode
   weather?: WeatherId
   dashStyle?: "modern" | "classic"
+  fog?: FogLevel
+  perfOverlay?: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -95,6 +107,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timeOfDay: "day",
   weather: "dry",
   dashStyle: "modern",
+  fog: "normal",
+  perfOverlay: false,
 }
 
 const SETTINGS_KEY = "oversteer_settings"

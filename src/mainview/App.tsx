@@ -1,5 +1,5 @@
 import { conditions } from "./physics/core/Conditions"
-import { DEFAULT_WEATHER } from "./data/surfaces"
+import { DEFAULT_WEATHER, WEATHER_WETNESS } from "./data/surfaces"
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { Play, RotateCcw, LogOut, Loader2, Settings } from "lucide-react"
@@ -23,6 +23,7 @@ import {
 } from "./physics/vehicle/Vehicle"
 import {
   WorldManager,
+  groundSurfaceAt,
   roadCenterX,
   roadDirYaw,
   roadYaw,
@@ -30,6 +31,8 @@ import {
 import {
   type TimeOfDayMode,
   TIME_OF_DAY_MODES,
+  TIME_OF_DAY_PRESETS,
+  effectiveWeather,
   isLowLight,
 } from "./constants/timeOfDay"
 import { CarVisual } from "./systems/CarVisual"
@@ -60,11 +63,14 @@ import {
 import Dashboard from "./ui/Dashboard"
 import { EASE, Screen, usePresence, Wipe } from "./ui/anim"
 import { RaceHud, RaceLiveBoard, RaceMenu, RaceResults } from "./ui/RaceOverlay"
+import { RainEffect } from "./systems/RainEffect"
 import { SettingsModal } from "./ui/SettingsModal"
+import { ControllerToast } from "./ui/ControllerToast"
 import {
   loadSettings,
   saveSettings,
   applyRendererResolution,
+  FOG_INTENSITY,
   type AppSettings,
 } from "./systems/settings"
 import { SpeedLines } from "./ui/SpeedLines"
@@ -127,6 +133,25 @@ const _vNpcFront = new THREE.Vector3()
 const _vNpcTarget = new THREE.Vector3()
 const _vNpcPos = new THREE.Vector3()
 
+/** The one stats overlay for the page, made on first use and reused by every run of the game loop. */
+function perfOverlay(): HTMLPreElement {
+  const old = document.getElementById("perf-overlay")
+  if (old) return old as HTMLPreElement
+  const el = document.createElement("pre")
+  el.id = "perf-overlay"
+  el.style.cssText =
+    "position:fixed;top:8px;left:8px;margin:0;padding:6px 8px;z-index:9999;" +
+    "font:11px/1.35 ui-monospace,monospace;color:#9fe;background:rgba(0,0,0,.6);" +
+    "pointer-events:none;display:none;white-space:pre"
+  document.body.appendChild(el)
+  return el
+}
+
+function applyFog(wm: WorldManager, s: AppSettings) {
+  const k = FOG_INTENSITY[s.fog ?? "normal"]
+  wm.setFog(k !== undefined, k ?? 1)
+}
+
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null)
   const [tele, setTele] = useState<CarTelemetry>(initialTele)
@@ -161,6 +186,7 @@ export default function App() {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [padNotice, setPadNotice] = useState<string | null>(null)
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -170,10 +196,14 @@ export default function App() {
   )
   const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
   timeOfDayRef.current = timeOfDay
-  conditions.weather = settings.weather ?? DEFAULT_WEATHER
+  conditions.weather = effectiveWeather(
+    settings.weather ?? DEFAULT_WEATHER,
+    timeOfDay,
+  )
   conditions.timeOfDay = timeOfDay
   const wmRef = useRef<WorldManager | null>(null)
   const flybyRef = useRef<AirplaneFlyby | null>(null)
+  const rainRef = useRef<RainEffect | null>(null)
   const playerVisualRef = useRef<CarVisual | null>(null)
   const activeRivalsRef = useRef<{ visual: CarVisual }[]>([])
   const activeTrafficRef = useRef<{ visual: CarVisual }[]>([])
@@ -188,6 +218,10 @@ export default function App() {
     })
     wmRef.current?.setTimeOfDay(mode)
     flybyRef.current?.setTimeOfDay(mode)
+    rainRef.current?.setConditions(
+      TIME_OF_DAY_PRESETS[mode].rain,
+      TIME_OF_DAY_PRESETS[mode].lightning,
+    )
     const lowLight = isLowLight(mode)
     playerVisualRef.current?.setHeadlights(lowLight)
     for (const r of activeRivalsRef.current) {
@@ -210,6 +244,7 @@ export default function App() {
         next,
       )
     }
+    if (wmRef.current) applyFog(wmRef.current, next)
     if (next.timeOfDay && next.timeOfDay !== timeOfDayRef.current) {
       applyTimeOfDay(next.timeOfDay)
     }
@@ -446,11 +481,12 @@ export default function App() {
       ;(navigator as any).keyboard?.lock?.(["Escape"])?.catch?.(() => {})
     } catch {}
   }
-  const unlockEscapeKey = () => {
-    try {
-      ;(navigator as any).keyboard?.unlock?.()
-    } catch {}
-  }
+  // Escape stays locked for the whole session: releasing it on pause made
+  // Escape (e.g. to close Settings) leave fullscreen.
+  const unlockEscapeKey = () => {}
+  useEffect(() => {
+    lockEscapeKey()
+  }, [])
 
   const lockCanvas = () => {
     document.documentElement.style.cursor = "none"
@@ -631,6 +667,13 @@ export default function App() {
         const baseUrl = base.endsWith("/") ? base : base + "/"
         await wm.init(scene, baseUrl)
         wm.setTimeOfDay(timeOfDayRef.current)
+        applyFog(wm, settingsRef.current)
+        const rain = new RainEffect(scene)
+        rainRef.current = rain
+        rain.setConditions(
+          TIME_OF_DAY_PRESETS[timeOfDayRef.current].rain,
+          TIME_OF_DAY_PRESETS[timeOfDayRef.current].lightning,
+        )
         if (disposed) {
           try {
             world.free()
@@ -652,7 +695,7 @@ export default function App() {
 
         const playerDef = getCar(carIdRef.current)
         const camHeightBoost =
-          Math.max(0, playerDef.physics.dimensions.height - 1.43) * 1.35
+          Math.max(0, playerDef.physics.dimensions.height - 1.43) * 1.65
 
         const setup = raceSetupRef.current
         const rivalCount = setup?.rivals ?? 0
@@ -1101,6 +1144,10 @@ export default function App() {
 
         const smoke = new TireSmoke()
         scene.add(smoke.points)
+        // wet weather and standing water thin the smoke and throw spray
+        smoke.wetnessAt = (x, z) =>
+          Math.max(WEATHER_WETNESS[conditions.weather], wm.puddleAt(x, z))
+        smoke.grassAt = (x, z) => groundSurfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
         const smokeSpots: THREE.Vector3[] = []
         let smokeAcc = 0
 
@@ -1117,6 +1164,12 @@ export default function App() {
         const input = new InputManager()
         input.attach()
         inputRef.current = input
+        let padNoticeTimer: ReturnType<typeof setTimeout> | undefined
+        input.onPadChange = (connected, name) => {
+          setPadNotice(connected ? `${name} connected` : "Controller disconnected")
+          clearTimeout(padNoticeTimer)
+          padNoticeTimer = setTimeout(() => setPadNotice(null), 3000)
+        }
         const onWinBlur = () => {
           input.clear()
         }
@@ -1140,16 +1193,11 @@ export default function App() {
         const stepper = createFixedStepper()
         let substepTick = 0
         const stats = new FrameStats(WORLD.statsWindowMs)
-        const statsEl = document.createElement("pre")
-        statsEl.style.cssText =
-          "position:fixed;top:8px;left:8px;margin:0;padding:6px 8px;z-index:9999;" +
-          "font:11px/1.35 ui-monospace,monospace;color:#9fe;background:rgba(0,0,0,.6);" +
-          "pointer-events:none;display:none;white-space:pre"
-        document.body.appendChild(statsEl)
+        const statsEl = perfOverlay()
+        // Shown when Settings says so; F3 flips whatever Settings chose.
+        let f3Flip = false
         const onStatsKey = (e: KeyboardEvent) => {
-          if (e.code === "F3")
-            statsEl.style.display =
-              statsEl.style.display === "none" ? "block" : "none"
+          if (e.code === "F3") f3Flip = !f3Flip
         }
         window.addEventListener("keydown", onStatsKey)
         const poses = new WeakMap<object, PoseHistory>()
@@ -1200,6 +1248,9 @@ export default function App() {
         let camPitch = 0
         let lastOrbit = -10000
         let orbiting = false
+        let recentering = false
+        let lightningWasOn = false
+        let padAbsApplied = false
         let lastPX = 0,
           lastPY = 0
         const e0 = { lastMovementX: 0, lastMovementY: 0 }
@@ -1336,14 +1387,24 @@ export default function App() {
         renderer!.compile(scene, camera)
         setLoading(false)
 
+        let cpuMax = 0
+        let renderMax = 0
         const loop = (now: number) => {
           if (disposed) return
           raf = requestAnimationFrame(loop)
+          const loopT0 = performance.now()
           let dt = (now - last) / 1000
           last = now
           dt = Math.min(dt, WORLD.maxFrameDt)
 
           const inp = input.update(dt)
+          // a connected pad drives with ABS on; the keyboard (B) can still switch it off
+          if (input.padConnected) {
+            if (!padAbsApplied) {
+              car.abs.enabled = true
+              padAbsApplied = true
+            }
+          } else padAbsApplied = false
           if (!startedRef.current && !showIntroRef.current && inp.startPressed)
             startGame()
           if (startedRef.current && inp.pausePressed) {
@@ -1941,6 +2002,11 @@ export default function App() {
             }
           }
           wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))
+          if (TIME_OF_DAY_PRESETS[timeOfDayRef.current].rain > 0) {
+            const flash = rain.update(dt, camera.position)
+            if (flash > 0 || lightningWasOn) wm.setLightning(flash)
+            lightningWasOn = flash > 0
+          }
           const kmhNow = Math.abs(car.forwardSpeed) * 3.6
           if (raceActive && kmhNow > 210) wm.setPropShadows(false)
           else if (!raceActive || kmhNow < 190) wm.setPropShadows(true)
@@ -2024,17 +2090,28 @@ export default function App() {
                 camPitch = Math.max(-0.5, Math.min(0.5, camPitch + my * 0.0022))
                 lastOrbit = nowS
               }
+              // right stick orbits the same way a mouse drag does
+              if (input.lookX !== 0 || input.lookY !== 0) {
+                camYaw -= input.lookX * 2.6 * dt
+                camPitch = Math.max(-0.5, Math.min(0.5, camPitch + input.lookY * 1.2 * dt))
+                lastOrbit = nowS
+                recentering = false
+              }
+              if (mx !== 0 || my !== 0) recentering = false
+              // R3: glide back behind the car, even when parked
+              if (input.lookReset) recentering = true
             }
             e0.lastMovementX = 0
             e0.lastMovementY = 0
             const rolling = Math.abs(car.forwardSpeed) > 1.0
-            if (!orbiting && rolling && nowS - lastOrbit > 2.5) {
-              const ck = 1 - Math.exp(-dt * 2.2)
+            if (!orbiting && ((rolling && nowS - lastOrbit > 2.5) || recentering)) {
+              const ck = 1 - Math.exp(-dt * (recentering ? 4.5 : 2.2))
               camYaw +=
                 (Math.round(camYaw / (Math.PI * 2)) * Math.PI * 2 - camYaw) * ck
               if (Math.abs(camYaw) < 0.002) camYaw = 0
               camPitch += (0 - camPitch) * ck
               if (Math.abs(camPitch) < 0.002) camPitch = 0
+              if (camYaw === 0 && camPitch === 0) recentering = false
             }
             const orbitQ = new THREE.Quaternion().setFromAxisAngle(
               new THREE.Vector3(0, 1, 0),
@@ -2043,7 +2120,7 @@ export default function App() {
             const viewDir = smoothFwd.clone().applyQuaternion(orbitQ)
             viewDir.y = 0
             viewDir.normalize()
-            const dist = chaseFar ? 6.4 : 5.2
+            const dist = chaseFar ? 5.5 : 4.4
             const height =
               (chaseFar ? 1.08 : 0.92) + camPitch * 5 + camHeightBoost
             const desired = carPos
@@ -2118,9 +2195,18 @@ export default function App() {
             startedRef.current && !raceActive,
           )
 
+          const renderT0 = performance.now()
           renderer!.render(scene, camera)
+          const renderT1 = performance.now()
+          cpuMax = Math.max(cpuMax * 0.985, renderT0 - loopT0)
+          renderMax = Math.max(renderMax * 0.985, renderT1 - renderT0)
           stats.frame(now, dt * 1000, frameSteps, frameStepMs)
-          if (statsEl.style.display !== "none") statsEl.textContent = stats.text()
+          const showStats = !!settingsRef.current.perfOverlay !== f3Flip
+          statsEl.style.display = showStats ? "block" : "none"
+          if (showStats) {
+            const ri = rendererRef.current!.info.render
+            statsEl.textContent = `${stats.text()}\n${ri.calls} draw calls, ${(ri.triangles / 1000).toFixed(0)}k tris\nlogic max ${cpuMax.toFixed(1)} ms, render submit max ${renderMax.toFixed(1)} ms`
+          }
           frameSteps = 0
           frameStepMs = 0
 
@@ -2134,7 +2220,7 @@ export default function App() {
           garageApiRef.current = null
           window.removeEventListener("resize", onResize)
           window.removeEventListener("keydown", onStatsKey)
-          statsEl.remove()
+          statsEl.style.display = "none"
           window.removeEventListener("blur", onWinBlur)
           dom.removeEventListener("pointerdown", onPointerDown)
           dom.removeEventListener("pointermove", onPointerMove)
@@ -2144,6 +2230,10 @@ export default function App() {
           document.removeEventListener("pointerlockerror", onForceHide)
           document.removeEventListener("pointerlockchange", onLockChange)
           input.detach()
+          rainRef.current = null
+          try {
+            rain.dispose()
+          } catch {}
           flybyRef.current = null
           try {
             flyby.dispose()
@@ -2204,7 +2294,8 @@ export default function App() {
 
   const menuOn =
     !loading && !error && !started && !showMultiplayerLobby && !showIntro
-  const pauseOn = !loading && !error && started && paused && !race.finished
+  const pauseOn =
+    !loading && !error && started && paused && !race.finished && !showSettings
   const introOn = showIntro && !started
   const resultsOn = !loading && !error && started && race.finished
   const dashOn = !loading && !error && started && !race.finished
@@ -2317,6 +2408,7 @@ export default function App() {
           onTimeOfDay={applyTimeOfDay}
         />
       )}
+      <ControllerToast message={padNotice} />
       <SettingsModal
         open={showSettings}
         settings={settings}

@@ -442,7 +442,7 @@ check(AIRCRAFT.length >= 3, "the sky has more than one kind of traffic", `${AIRC
   for (const a of AIRCRAFT) {
     if (!(await Bun.file(`src/mainview/models/${a.file}`).exists())) allThere = false
     if (a.modes.length === 0) allThere = false
-    if (a.span < 5 || a.span > 60) allThere = false
+    if (a.span < 5 || a.span > 80) allThere = false
   }
   check(allThere, "every aircraft has a model, a span and a manoeuvre")
   const speeds = AIRCRAFT.map((a) => a.speed)

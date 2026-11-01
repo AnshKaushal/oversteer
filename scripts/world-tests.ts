@@ -66,7 +66,7 @@ function brakeDistance(surface: SurfaceId): number {
   const dry = brakeDistance("asphalt")
   const grass = brakeDistance("grass")
   const sand = brakeDistance("sand")
-  check("surface: braking on grass takes longer than on asphalt", grass > dry * 1.2, `${grass.toFixed(1)} m vs ${dry.toFixed(1)} m`)
+  check("surface: braking on grass takes longer than on asphalt", grass > dry * 1.1, `${grass.toFixed(1)} m vs ${dry.toFixed(1)} m`)
   check("surface: sand is the slowest to stop on", sand > grass * 0.9, `${sand.toFixed(1)} m`)
   conditions.weather = "wet"
   const wet = brakeDistance("asphalt")

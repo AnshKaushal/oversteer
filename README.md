@@ -18,6 +18,8 @@ Grab the latest DMG (macOS) or Setup zip (Windows) from the [Releases page](../.
 
 ## Controls
 
+Keyboard, or a gamepad (standard mapping: Xbox, PlayStation and most others; press any button once so the system reports it).
+
 | Input             | Action                                                                |
 | ----------------- | --------------------------------------------------------------------- |
 | `W` / `↑`         | Throttle                                                              |
@@ -39,6 +41,24 @@ Grab the latest DMG (macOS) or Setup zip (Windows) from the [Releases page](../.
 | `P` / `Esc`       | Pause                                                                 |
 | `Enter`           | Start                                                                 |
 | Mouse             | Orbit the camera; eases back behind the car after a couple of seconds |
+
+### Gamepad
+
+| Input               | Action                                       |
+| ------------------- | -------------------------------------------- |
+| Left stick          | Steer                                        |
+| Right stick         | Orbit the camera                             |
+| `RT` / `LT`         | Throttle / brake (analog)                    |
+| `RB` / `LB`         | Shift up / down (manual mode)                |
+| `B`                 | Handbrake (tap to latch, hold to engage)     |
+| `A`                 | Start                                        |
+| `X` / `Y`           | Headlights / camera view                     |
+| `Back` / `Start`    | Put the car back on the road / pause         |
+| `L3` / `R3`         | Launch control / camera back behind the car  |
+| D-pad up / down     | Transmission mode / engine on and off        |
+| D-pad left / right  | Traction control / stability control         |
+
+ABS switches on when a pad connects; toggle it with `B` on the keyboard.
 
 ## Tech stack
 
