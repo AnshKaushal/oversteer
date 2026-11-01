@@ -65,9 +65,9 @@ export class Vehicle {
   private readonly forces: BodyForces
 
   autoMode = true
-  /** Traction control on or off (the X key). */
-  tractionControlOn = true
-  stabilityControlOn = true
+  /** Traction control on or off (the X key). Driver aids start off. */
+  tractionControlOn = false
+  stabilityControlOn = false
   private readonly rawFlareRpm: number
   /** Arcade shifts follow driving style; realistic shifts at a fixed style. */
   shiftMode: ShiftMode = DEFAULT_SHIFT_MODE

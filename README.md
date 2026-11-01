@@ -10,7 +10,7 @@ Grab the latest DMG (macOS) or Setup zip (Windows) from the [Releases page](../.
 
 - **Twelve cars, all data** — every car is one `CarSpec` file: mass, engine and torque curve, gearing, differential, tyres, suspension, aero, crash behaviour, dash scale. No per-car code. See [AddingCars.md](AddingCars.md).
 - **Vehicle model** — a single Rapier rigid body with per-wheel suspension, a Pacejka tyre model with relaxation and combined slip, wheel dynamics, engine with turbo and torque converter, automatic gearbox, differentials (open, limited-slip, centre), aero and impact damage. Each part is its own component under `physics/vehicle/components/`.
-- **Safety aids** — traction control, ESC, ABS, launch control and cruise control, each toggled in-game. The handbrake latches (tap) or holds.
+- **Safety aids** — traction control, ESC, ABS, launch control and cruise control, each toggled in-game (all off by default). The handbrake latches (tap) or holds.
 - **World** — deterministic road with elevation and banking, hills and trees, time of day with sun and moon, surfaces (asphalt, grass, dirt, gravel, sand) and weather (dry, damp, wet, storm) that scale tyre grip, tyre smoke, car lights, and aircraft fly-bys.
 - **Racing and traffic** — races of 1 to 10 km against 1 to 50 AI rivals, with a grid, countdown and standings; optional traffic (off, low, medium, high).
 - **Multiplayer** — peer-to-peer rooms over WebRTC (Trystero) or a LAN relay hosted by the app. Binary 72-byte car state at 60 Hz, sender-time interpolation with adaptive delay, Hermite smoothing, capped extrapolation, and solid-body collisions between cars. Peers share paint and car choice, and compare a hash of the car data.

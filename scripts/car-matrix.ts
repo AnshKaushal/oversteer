@@ -122,6 +122,10 @@ for (const def of CARS) {
     def.wheels,
     def.dash,
   )
+  // performance figures are measured with the aids on, as the thresholds were set
+  car.tractionControlOn = true
+  car.stabilityControlOn = true
+  car.abs.enabled = true
 
   const step = (inp: DriveInput, n: number) => {
     let t: any = null

@@ -36,6 +36,10 @@ function fresh() {
   r.car.update(FIXED_DT, idle)
   r.world.step()
   r.car.parkingBrake = false
+  // the scenarios below were written for a car with its aids on; the real default is off (see 1c)
+  r.car.tractionControlOn = true
+  r.car.stabilityControlOn = true
+  r.car.abs.enabled = true
   return r
 }
 type Rig = ReturnType<typeof fresh>
@@ -124,8 +128,10 @@ for (const auto of [true, false]) {
   check("aids on: rpm reaches the launch flare (or the wheels pull it higher)", on.rpm >= 0.85 * flare, `${on.rpm.toFixed(0)} vs ${flare}`)
 }
 
-// 1c. the driver can switch each aid with its key
+// 1c. aids start off, and the driver can switch each one with its key
 {
+  const raw = makeRig(RAPIER, def)
+  check("a new car starts with traction control, stability control and ABS off", !raw.car.tractionControlOn && !raw.car.stabilityControlOn && !raw.car.abs.enabled)
   const r = fresh()
   const press = (k: string) => stepVehicleOnce(r.world, () => r.car.update(FIXED_DT, { ...idle, [k]: true } as DriveInput))
   const absBefore = r.car.abs.enabled

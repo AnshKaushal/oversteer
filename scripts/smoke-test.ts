@@ -12,6 +12,10 @@ import type { DriveInput } from "../src/mainview/systems/InputManager"
 
 const RAPIER = await initPhysics()
 const { world, gb, body, car } = makeRig(RAPIER, activeCar())
+// these scenarios were written for a car with its aids on; the real default is off
+car.tractionControlOn = true
+car.stabilityControlOn = true
+car.abs.enabled = true
 
 /** Clamp a test gear to what this car has (5-speed cars have no gear 8). */
 const gearNo = (n: number) => Math.min(n, car.P.transmission.gearRatios.length)
