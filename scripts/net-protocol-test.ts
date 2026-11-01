@@ -18,6 +18,7 @@ import {
 } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
 import { MultiplayerManager } from "../src/mainview/systems/net/MultiplayerManager"
+import { NET } from "../src/mainview/data/net"
 import { getCar } from "../src/mainview/data/cars"
 
 /** Net tests only need some real car; they do not depend on which. */
@@ -354,7 +355,7 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
     type: "HELLO",
     senderId: "peerX",
     t: Date.now(),
-    payload: { name: "X", color: 1, session: "B", proto: 2 },
+    payload: { name: "X", color: 1, session: "B", proto: NET.protocolVersion },
   })
   H(makePkt({ id: "peerX", sess: "B", seq: 0, progress: 10 }))
   check("I rejoin accepted", prog() === 10, prog())

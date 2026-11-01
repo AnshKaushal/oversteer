@@ -2,7 +2,8 @@ import * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { DriveInput } from "./InputManager"
 import type { Vehicle } from "../physics/vehicle/Vehicle"
-import { roadCenterX, roadYaw } from "./WorldManager"
+import type { LinearRoad } from "../maps/types"
+import { highwayRoad } from "../maps/highway/road"
 
 export const ZERO_EDGES = {
   upshiftPressed: false,
@@ -42,6 +43,7 @@ function wrapPi(a: number) {
 }
 
 function farThreat(
+  road: LinearRoad,
   traffic: TrafficEntry[],
   selfBody: RAPIER.RigidBody,
   s: number,
@@ -57,7 +59,7 @@ function farThreat(
     const lv = t.body.linvel()
     const corr = Math.max(windowM, 25 + Math.hypot(lv.x, lv.z) * 3.6 * 1.1)
     if (ahead > corr) continue
-    const lat = (tp.x - roadCenterX(ts)) * Math.cos(roadYaw(ts))
+    const lat = (tp.x - road.centerX(ts)) * Math.cos(road.yaw(ts))
     if (lat * dir > -0.2) continue
     return true
   }
@@ -115,7 +117,14 @@ export function makeTrafficProfile(
 
 let crossingBody: RAPIER.RigidBody | null = null
 
-export class AIDriver {
+/** Anything that can steer a rival car around a race. */
+export interface RaceDriver {
+  readonly profile: AIProfile
+  readonly recovering: boolean
+  drive(car: Vehicle, traffic: TrafficEntry[], dt: number): DriveInput
+}
+
+export class AIDriver implements RaceDriver {
   throttle = 0
   brake = 0
   steer = 0
@@ -130,7 +139,10 @@ export class AIDriver {
   private ovtLat = 0
   private ovtBody: RAPIER.RigidBody | null = null
 
-  constructor(readonly profile: AIProfile) {}
+  constructor(
+    readonly profile: AIProfile,
+    private readonly road: LinearRoad = highwayRoad,
+  ) {}
 
   get recovering(): boolean {
     return this.mode !== "drive"
@@ -171,12 +183,12 @@ export class AIDriver {
     const cruising = this.profile.cruiseKmh
     const dir = this.profile.dir ?? 1
     const curv =
-      Math.abs(wrapPi(roadYaw(s + dir * 40) - roadYaw(s))) +
-      Math.abs(wrapPi(roadYaw(s + dir * 80) - roadYaw(s + dir * 40))) * 0.5
+      Math.abs(wrapPi(this.road.yaw(s + dir * 40) - this.road.yaw(s))) +
+      Math.abs(wrapPi(this.road.yaw(s + dir * 80) - this.road.yaw(s + dir * 40))) * 0.5
     const look = clamp((18 + speed * 0.85) / (1 + curv * 1.2), 10, 72)
     const targetS = s + dir * look
-    const cx = roadCenterX(targetS)
-    const yaw = roadYaw(targetS)
+    const cx = this.road.centerX(targetS)
+    const yaw = this.road.yaw(targetS)
     const nx = Math.cos(yaw)
     const nz = Math.sin(yaw)
     let tx = cx + nx * this.profile.laneBias
@@ -184,7 +196,7 @@ export class AIDriver {
 
     let clat = 0
     if (cruising != null) {
-      clat = (p.x - roadCenterX(s)) * Math.cos(roadYaw(s))
+      clat = (p.x - this.road.centerX(s)) * Math.cos(this.road.yaw(s))
     }
     if (cruising != null) {
       if (!this.offroad && Math.abs(clat) > 7.0) this.offroad = true
@@ -294,7 +306,7 @@ export class AIDriver {
           const oLong = dir * (obS - s)
           if (
             oLong < -3 ||
-            farThreat(traffic, body, s, dir, 18 + speed * 0.5)
+            farThreat(this.road, traffic, body, s, dir, 18 + speed * 0.5)
           ) {
             this.ovtT = Math.min(this.ovtT, 1.2)
             this.ovtLat = dir * 2.0
@@ -316,7 +328,7 @@ export class AIDriver {
         followV < cruising - 12 &&
         speed > 6 &&
         (crossingBody == null || crossingBody === body) &&
-        !farThreat(traffic, body, s, dir, 40 + speed * 1.2)
+        !farThreat(this.road, traffic, body, s, dir, 40 + speed * 1.2)
       ) {
         this.ovtBody = followBody
         this.ovtT = Math.min(22, 10 + followD / Math.max(6, speed))
@@ -527,8 +539,8 @@ export class AIDriver {
     const heading = Math.atan2(_fwd.x, -_fwd.z)
     const look = clamp(18 + speed * 0.85, 16, 72)
     const targetS = s + (this.profile.dir ?? 1) * look
-    const cx = roadCenterX(targetS)
-    const yaw = roadYaw(targetS)
+    const cx = this.road.centerX(targetS)
+    const yaw = this.road.yaw(targetS)
     const tx = cx + Math.cos(yaw) * this.profile.laneBias
     const tz = -targetS + Math.sin(yaw) * this.profile.laneBias
     const desired = Math.atan2(tx - p.x, -(tz - p.z))

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { colorHex } from "../systems/carTint"
 import {
   MULTIPLAYER_AI_COUNTS,
@@ -37,6 +37,10 @@ interface MultiplayerLobbyProps {
   onLeaveRoom: () => void
   onStartMultiplayerRace: (distanceKm: number, aiCount: number) => void
   onStartFreeDrive: () => void
+  /** Map picker shown to whoever starts the race. */
+  mapPicker?: ReactNode
+  /** Distance buttons count laps (circuit maps). */
+  lapMode?: boolean
   traffic: TrafficLevel
   onTraffic: (level: TrafficLevel) => void
   onBack: () => void
@@ -66,6 +70,8 @@ export function MultiplayerLobby({
   onLeaveRoom,
   onStartMultiplayerRace,
   onStartFreeDrive,
+  mapPicker,
+  lapMode = false,
   traffic,
   onTraffic,
   onBack,
@@ -450,8 +456,9 @@ export function MultiplayerLobby({
           {isConnected && (
             <div data-lobby-in className="space-y-3">
               <div>
+                {mapPicker && <div className="mb-4">{mapPicker}</div>}
                 <div className="text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
-                  RACE DISTANCE
+                  {lapMode ? "RACE LAPS" : "RACE DISTANCE"}
                 </div>
                 <div className="mt-2 flex gap-1.5">
                   {RACE_DISTANCES_KM.map((km) => (
@@ -464,7 +471,7 @@ export function MultiplayerLobby({
                           : "bg-[#51a7d5]/15 text-gray-300 hover:bg-[#51a7d5]/25"
                       }`}
                     >
-                      {km} km
+                      {lapMode ? `${km} ${km === 1 ? "lap" : "laps"}` : `${km} km`}
                     </button>
                   ))}
                 </div>

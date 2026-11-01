@@ -22,12 +22,14 @@ import {
   type CarTelemetry,
 } from "./physics/vehicle/Vehicle"
 import {
-  WorldManager,
-  groundSurfaceAt,
-  roadCenterX,
-  roadDirYaw,
-  roadYaw,
-} from "./systems/WorldManager"
+  DEFAULT_MAP_ID,
+  listMaps,
+  getMap,
+  createMap,
+  randomSeed,
+  type LinearRoad,
+  type MapWorld,
+} from "./maps"
 import {
   type TimeOfDayMode,
   TIME_OF_DAY_MODES,
@@ -42,6 +44,7 @@ import { InputManager, type DriveInput } from "./systems/InputManager"
 import {
   AIDriver,
   carProgress,
+  type RaceDriver,
   holdInput,
   makeProfile,
   makeTrafficProfile,
@@ -63,6 +66,13 @@ import {
 import Dashboard from "./ui/Dashboard"
 import { EASE, Screen, usePresence, Wipe } from "./ui/anim"
 import { RaceHud, RaceLiveBoard, RaceMenu, RaceResults } from "./ui/RaceOverlay"
+import { LapHud, type LapSnapshot } from "./ui/LapHud"
+import {
+  MapPicker,
+  DEFAULT_CIRCUIT_MENU,
+  circuitOptionsFor,
+  type CircuitMenuOptions,
+} from "./ui/MapPicker"
 import { RainEffect } from "./systems/RainEffect"
 import { SettingsModal } from "./ui/SettingsModal"
 import { ControllerToast } from "./ui/ControllerToast"
@@ -153,7 +163,7 @@ function shadowRange2(s: AppSettings): number {
   return r * r
 }
 
-function applyFog(wm: WorldManager, s: AppSettings) {
+function applyFog(wm: MapWorld, s: AppSettings) {
   wm.setShadowQuality(s.shadowQuality ?? 100)
   wm.setVegetation(s.vegetation ?? 100)
   wm.setStreetLights(s.streetLights !== false, s.streetLightsOn !== false)
@@ -221,7 +231,7 @@ export default function App() {
     timeOfDay,
   )
   conditions.timeOfDay = timeOfDay
-  const wmRef = useRef<WorldManager | null>(null)
+  const wmRef = useRef<MapWorld | null>(null)
   const flybyRef = useRef<AirplaneFlyby | null>(null)
   const rainRef = useRef<RainEffect | null>(null)
   const playerVisualRef = useRef<CarVisual | null>(null)
@@ -392,6 +402,50 @@ export default function App() {
     } catch {}
   }
 
+  const [mapId, setMapId] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem("oversteer_map")
+      if (raw && listMaps().some((m) => m.id === raw)) return raw
+    } catch {}
+    return DEFAULT_MAP_ID
+  })
+  const mapIdRef = useRef(mapId)
+  const [circuitOpts, setCircuitOpts] = useState<CircuitMenuOptions>(() => {
+    try {
+      const raw = localStorage.getItem("oversteer_circuit")
+      if (raw) return { ...DEFAULT_CIRCUIT_MENU, ...JSON.parse(raw), seed: randomSeed() }
+    } catch {}
+    return { ...DEFAULT_CIRCUIT_MENU, seed: randomSeed() }
+  })
+  const circuitOptsRef = useRef(circuitOpts)
+  const updateCircuitOpts = (patch: Partial<CircuitMenuOptions>, rebuild = true) => {
+    const next = { ...circuitOptsRef.current, ...patch }
+    circuitOptsRef.current = next
+    setCircuitOpts(next)
+    try {
+      const { seed: _seed, ...persist } = next
+      localStorage.setItem("oversteer_circuit", JSON.stringify(persist))
+    } catch {}
+    if (rebuild) rebuildSession()
+  }
+  const selectMap = (id: string) => {
+    if (id === mapIdRef.current) return
+    mapIdRef.current = id
+    setMapId(id)
+    try {
+      localStorage.setItem("oversteer_map", id)
+    } catch {}
+    rebuildSession()
+  }
+  const rerollTrack = () => {
+    if (mapIdRef.current === "circuit" && !circuitOptsRef.current.lockSeed) {
+      circuitOptsRef.current = { ...circuitOptsRef.current, seed: randomSeed() }
+      setCircuitOpts(circuitOptsRef.current)
+    }
+  }
+  const [lap, setLap] = useState<LapSnapshot | null>(null)
+  const mapFeatures = getMap(mapId).features
+
   const [showMultiplayerLobby, setShowMultiplayerLobby] = useState(false)
   const [wipe, setWipe] = useState<{
     token: number
@@ -447,7 +501,24 @@ export default function App() {
         setJoinError(msg)
         setNetConnected(false)
       },
-      onRaceStartSignal: (startTimeMs, distanceM, rivals = 0) => {
+      onRaceStartSignal: (startTimeMs, distanceM, rivals = 0, mapSpec) => {
+        if (mapSpec && getMap(mapSpec.id).features.multiplayer) {
+          mapIdRef.current = mapSpec.id
+          setMapId(mapSpec.id)
+          if (mapSpec.id === "circuit") {
+            circuitOptsRef.current = {
+              ...circuitOptsRef.current,
+              lengthKm: mapSpec.lengthKm ?? circuitOptsRef.current.lengthKm,
+              twistiness:
+                mapSpec.twistiness ?? circuitOptsRef.current.twistiness,
+              widthM: mapSpec.widthM ?? circuitOptsRef.current.widthM,
+              barriers: mapSpec.barriers ?? circuitOptsRef.current.barriers,
+              lockSeed: true,
+              seed: Math.floor(startTimeMs),
+            }
+            setCircuitOpts(circuitOptsRef.current)
+          }
+        }
         const next = {
           rivals,
           distanceM,
@@ -470,7 +541,18 @@ export default function App() {
 
   const handleStartMultiplayerRace = (distKm: number, aiCount: number) => {
     const distM = distKm * 1000
-    multiplayerRef.current?.startMultiplayerRace(distM, aiCount)
+    const o = circuitOptsRef.current
+    const spec =
+      mapIdRef.current === "circuit"
+        ? {
+            id: "circuit",
+            lengthKm: o.lengthKm,
+            twistiness: o.twistiness,
+            widthM: o.widthM,
+            barriers: o.barriers,
+          }
+        : { id: mapIdRef.current }
+    multiplayerRef.current?.startMultiplayerRace(distM, aiCount, spec)
   }
 
   const handleStartFreeDrive = () => {
@@ -522,6 +604,7 @@ export default function App() {
   }
 
   const startGame = () => {
+    rerollTrack()
     raceSetupRef.current = null
     startedRef.current = true
     pausedRef.current = false
@@ -535,6 +618,7 @@ export default function App() {
   }
 
   const startRace = () => {
+    rerollTrack()
     const next = {
       rivals,
       distanceM: distanceKm * 1000,
@@ -678,7 +762,9 @@ export default function App() {
         const R = await initPhysics()
         const world = createWorld()
 
-        const wm = new WorldManager()
+        const map = createMap(mapIdRef.current, circuitOptionsFor(circuitOptsRef.current))
+        const lin = map.linear as LinearRoad
+        const wm = map.world
         wmRef.current = wm
         const base = import.meta.env.BASE_URL || "./"
         const baseUrl = base.endsWith("/") ? base : base + "/"
@@ -699,12 +785,16 @@ export default function App() {
         }
         const groundBody = wm.createPhysicsGround(R, world)
 
-        const flyby = new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
+        const flyby = map.map.features.airport
+          ? new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
+          : null
         flybyRef.current = flyby
-        flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
-        flyby.setSunSource(() => wm.sunDirection())
-        flyby.setTimeOfDay(timeOfDayRef.current)
-        await flyby.init(scene, baseUrl)
+        if (flyby) {
+          flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
+          flyby.setSunSource(() => wm.sunDirection())
+          flyby.setTimeOfDay(timeOfDayRef.current)
+          await flyby.init(scene, baseUrl)
+        }
 
         const net = multiplayerRef.current
         if (net) {
@@ -717,12 +807,42 @@ export default function App() {
           Math.max(0, playerDef.physics.dimensions.height - 1.43) * 1.65
 
         const setup = raceSetupRef.current
-        const rivalCount = setup?.rivals ?? 0
-        const raceDistance = setup?.distanceM ?? 0
+        const racesOk = map.map.features.races
+        const rivalCount = racesOk ? (setup?.rivals ?? 0) : 0
+        const circuitLen = map.circuit?.lengthM ?? 0
+        const raceDistance = !racesOk
+          ? 0
+          : map.circuit && (setup?.distanceM ?? 0) > 0
+            ? Math.max(1, Math.round(setup!.distanceM / 1000)) * circuitLen
+            : (setup?.distanceM ?? 0)
+        const progressMap = new Map<unknown, (x: number, z: number) => number>()
+        const progressOf = (b: RAPIER.RigidBody): number => {
+          if (!map.circuit) return carProgress(b)
+          let f = progressMap.get(b)
+          if (!f) {
+            f = map.circuit.progressTracker()
+            progressMap.set(b, f)
+          }
+          const tr = b.translation()
+          return f(tr.x, tr.z)
+        }
+        const placeAt = (s: number, lateral: number) => {
+          if (map.circuit) {
+            const pz = map.road.spawnPose(-12 + s, lateral)
+            return { x: pz.x, z: pz.z, yaw: pz.yaw }
+          }
+          const nx = Math.cos(lin.yaw(s))
+          const nz = Math.sin(lin.yaw(s))
+          return {
+            x: lin.centerX(s) + nx * lateral,
+            z: -s + nz * lateral,
+            yaw: lin.dirYaw(s),
+          }
+        }
         const isNetRace = !!(net && net.roomId && raceDistance > 0)
         const netPeerCount = net?.peers.size ?? 0
         const netIds =
-          net && net.roomId
+          racesOk && net && net.roomId
             ? [net.localId, ...Array.from(net.peers.keys())].sort()
             : null
         const netIndex =
@@ -730,7 +850,7 @@ export default function App() {
         const netTotal = netIds ? netIds.length : 1
         const gridCount = 1 + rivalCount + (isNetRace ? netPeerCount : 0)
         const raceActiveInit = rivalCount > 0 || isNetRace
-        if (raceActiveInit) {
+        if (raceActiveInit && !map.circuit) {
           const fc = document.createElement("canvas")
           fc.width = 128
           fc.height = 32
@@ -750,8 +870,8 @@ export default function App() {
             stripGeo,
             new THREE.MeshBasicMaterial({ map: finishTex }),
           )
-          strip.position.set(roadCenterX(raceDistance), 0.04, -raceDistance)
-          strip.rotation.y = roadDirYaw(raceDistance)
+          strip.position.set(lin.centerX(raceDistance), 0.04, -raceDistance)
+          strip.rotation.y = lin.dirYaw(raceDistance)
           scene.add(strip)
         }
         const gridSlot = (slot: number, total: number) => {
@@ -780,19 +900,28 @@ export default function App() {
           aiByMerit.forEach((ai, i) => slotMap.set(ai, free[i]))
           aiSlotOf = (ai) => slotMap.get(ai) ?? ai + 1
         }
-        const yaw0 = roadDirYaw(0)
-        const nx0 = Math.cos(roadYaw(0))
-        const nz0 = Math.sin(roadYaw(0))
         const playerSlot = raceActiveInit
           ? gridSlot(playerSlotIdx, gridCount)
           : netIds
             ? gridSlot(netIndex, Math.max(netTotal, 2))
             : { s: 0, lateral: 0 }
         const spawned = raceActiveInit || !!netIds
-        const playerX = spawned
-          ? roadCenterX(playerSlot.s) + nx0 * playerSlot.lateral
-          : roadCenterX(0)
-        const playerZ = spawned ? -playerSlot.s + nz0 * playerSlot.lateral : 0
+        const spawnP = map.circuit
+          ? placeAt(spawned ? playerSlot.s : 0, spawned ? playerSlot.lateral : 0)
+          : null
+        const yaw0 = spawnP ? spawnP.yaw : lin.dirYaw(0)
+        const nx0 = spawnP ? 0 : Math.cos(lin.yaw(0))
+        const nz0 = spawnP ? 0 : Math.sin(lin.yaw(0))
+        const playerX = spawnP
+          ? spawnP.x
+          : spawned
+            ? lin.centerX(playerSlot.s) + nx0 * playerSlot.lateral
+            : lin.centerX(0)
+        const playerZ = spawnP
+          ? spawnP.z
+          : spawned
+            ? -playerSlot.s + nz0 * playerSlot.lateral
+            : 0
         const startX = playerX
         const body = createChassisBody(
           world,
@@ -817,7 +946,7 @@ export default function App() {
         interface Rival {
           car: Vehicle
           visual: CarVisual
-          ai: AIDriver
+          ai: RaceDriver
           name: string
           color: string
           progress: number
@@ -864,16 +993,19 @@ export default function App() {
           const slot = aiSlotOf(i)
           const g = gridSlot(slot, gridCount)
           const s0 = g.s
-          const yaw = roadDirYaw(s0)
-          const nx = Math.cos(roadYaw(s0))
-          const nz = Math.sin(roadYaw(s0))
-          const rb = createChassisBody(
-            world,
-            roadCenterX(s0) + nx * g.lateral,
-            0.72,
-            -s0 + nz * g.lateral,
-            rivalDef.physics,
-          )
+          const rpl = map.circuit
+            ? placeAt(s0, g.lateral)
+            : (() => {
+                const nx = Math.cos(lin.yaw(s0))
+                const nz = Math.sin(lin.yaw(s0))
+                return {
+                  x: lin.centerX(s0) + nx * g.lateral,
+                  z: -s0 + nz * g.lateral,
+                  yaw: lin.dirYaw(s0),
+                }
+              })()
+          const yaw = rpl.yaw
+          const rb = createChassisBody(world, rpl.x, 0.72, rpl.z, rivalDef.physics)
           const q = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(0, yaw, 0),
           )
@@ -907,10 +1039,12 @@ export default function App() {
           rivals.push({
             car: rc,
             visual: vis,
-            ai: new AIDriver(makeProfile(i)),
+            ai: map.rivalDriver
+              ? map.rivalDriver(makeProfile(i))
+              : new AIDriver(makeProfile(i), lin),
             name: `${rivalDef.shortName} ${seen}`,
             color: colorHex(color),
-            progress: s0,
+            progress: map.circuit ? -12 + s0 : s0,
             finished: false,
             finishTime: null,
             stuckT: 0,
@@ -924,7 +1058,7 @@ export default function App() {
         activeRivalsRef.current = rivals
         const trafficCars: Rival[] = []
         const trafficTarget =
-          startedRef.current && !raceActiveInit
+          startedRef.current && !raceActiveInit && map.map.features.traffic
             ? trafficCountFor(trafficRef.current)
             : 0
         const placed: { s: number; half: 1 | -1 }[] = [
@@ -947,12 +1081,12 @@ export default function App() {
           }
           placed.push({ s: ts0, half: thalf })
           const tprof = makeTrafficProfile(Math.random, tdir)
-          const tyaw = roadDirYaw(ts0) + (tdir === 1 ? 0 : Math.PI)
-          const tnx = Math.cos(roadYaw(ts0))
-          const tnz = Math.sin(roadYaw(ts0))
+          const tyaw = lin.dirYaw(ts0) + (tdir === 1 ? 0 : Math.PI)
+          const tnx = Math.cos(lin.yaw(ts0))
+          const tnz = Math.sin(lin.yaw(ts0))
           const tb = createChassisBody(
             world,
-            roadCenterX(ts0) + tnx * tprof.laneBias,
+            lin.centerX(ts0) + tnx * tprof.laneBias,
             0.72,
             -ts0 + tnz * tprof.laneBias,
             def.physics,
@@ -963,7 +1097,7 @@ export default function App() {
           tb.setRotation({ x: tq.x, y: tq.y, z: tq.z, w: tq.w }, true)
           const tv0 =
             ((tprof.cruiseKmh ?? 100) / 3.6) * (0.9 + Math.random() * 0.15)
-          const tslope = (roadCenterX(ts0 + 4) - roadCenterX(ts0 - 4)) / 8
+          const tslope = (lin.centerX(ts0 + 4) - lin.centerX(ts0 - 4)) / 8
           const tinv = 1 / Math.hypot(tslope, 1)
           tb.setLinvel(
             { x: tslope * tinv * tv0 * tdir, y: 0, z: -tinv * tv0 * tdir },
@@ -998,7 +1132,7 @@ export default function App() {
           trafficCars.push({
             car: tc,
             visual: tvis,
-            ai: new AIDriver(tprof),
+            ai: new AIDriver(tprof, lin),
             name: def.shortName,
             color: colorHex(tcolor),
             progress: ts0,
@@ -1163,7 +1297,7 @@ export default function App() {
         scene.add(smoke.points)
         smoke.wetnessAt = (x, z) =>
           Math.max(WEATHER_WETNESS[conditions.weather], wm.puddleAt(x, z))
-        smoke.grassAt = (x, z) => groundSurfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
+        smoke.grassAt = (x, z) => wm.surfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
         const smokeSpots: THREE.Vector3[] = []
         let smokeAcc = 0
 
@@ -1423,6 +1557,16 @@ export default function App() {
         renderer!.compile(scene, camera)
         setLoading(false)
 
+        const circuit = map.circuit
+        let lapPrevS = circuit ? circuit.progressAt(playerX, playerZ) : 0
+        let lapClock = 0
+        let lapStartClock: number | null = null
+        let lapsDone = 0
+        let lastLapT: number | null = null
+        let bestLapT: number | null = null
+        let lapHudAcc = 1
+        setLap(null)
+
         let cpuMax = 0
         let renderMax = 0
         const loop = (now: number) => {
@@ -1492,11 +1636,9 @@ export default function App() {
           if (doReset || fellOut || buriedTimer > 5) {
             buriedTimer = 0
             const p = body.translation()
-            const s = -p.z
-            car.reset(
-              new THREE.Vector3(roadCenterX(s), 0.72, p.z),
-              roadDirYaw(s),
-            )
+            const rp = map.road.nearestPose(p.x, p.z)
+            car.reset(new THREE.Vector3(rp.x, 0.72, rp.z), rp.yaw)
+            lapStartClock = null
             stepper.acc = 0
           }
 
@@ -1664,7 +1806,7 @@ export default function App() {
                 body.setAngvel(lockAv, true)
               }
               if (net && net.roomId)
-                net.onPhysicsTick(car, t, () => carProgress(body))
+                net.onPhysicsTick(car, t, () => progressOf(body))
               consumeSubstep(stepper)
               capturePose(car)
               if (raceActive) for (const rv of rivals) capturePose(rv.car)
@@ -1716,11 +1858,11 @@ export default function App() {
           syncVisual(visual, car, dt)
           visual.setBrake(Math.max(t?.brake ?? 0, t?.parkingBrake ? 1 : 0))
           if (net && net.roomId) {
-            playerProgress = carProgress(body)
+            playerProgress = progressOf(body)
             net.updateRemoteCars(dt, smoke)
           }
           if (raceActive) {
-            playerProgress = carProgress(body)
+            playerProgress = progressOf(body)
             if (!playerFinished && playerProgress >= raceDistance) {
               playerFinished = true
               playerFinishTime = raceElapsed
@@ -1739,7 +1881,7 @@ export default function App() {
             }
             for (const rival of rivals) {
               const rp = rival.car.body.translation()
-              rival.progress = carProgress(rival.car.body)
+              rival.progress = progressOf(rival.car.body)
               if (!rival.finished && rival.progress >= raceDistance) {
                 rival.finished = true
                 rival.finishTime = raceElapsed
@@ -1753,11 +1895,16 @@ export default function App() {
               }
               if (rp.y < -3 || rival.stuckT > 8) {
                 rival.stuckT = 0
-                const rs = -rp.z
-                rival.car.reset(
-                  new THREE.Vector3(roadCenterX(rs), 0.72, rp.z),
-                  roadDirYaw(rs),
-                )
+                if (map.circuit) {
+                  const np = map.road.nearestPose(rp.x, rp.z)
+                  rival.car.reset(new THREE.Vector3(np.x, 0.72, np.z), np.yaw)
+                } else {
+                  const rs = -rp.z
+                  rival.car.reset(
+                    new THREE.Vector3(lin.centerX(rs), 0.72, rp.z),
+                    lin.dirYaw(rs),
+                  )
+                }
               }
               syncVisual(rival.visual, rival.car, dt)
               rival.visual.setBrake(rival.brake)
@@ -1928,12 +2075,12 @@ export default function App() {
                   if (clear) break
                 }
                 const ntprof = makeTrafficProfile(Math.random, tdir)
-                const nyaw = roadDirYaw(aheadS) + (tdir === 1 ? 0 : Math.PI)
-                const nnx = Math.cos(roadYaw(aheadS))
-                const nnz = Math.sin(roadYaw(aheadS))
+                const nyaw = lin.dirYaw(aheadS) + (tdir === 1 ? 0 : Math.PI)
+                const nnx = Math.cos(lin.yaw(aheadS))
+                const nnz = Math.sin(lin.yaw(aheadS))
                 tc.car.reset(
                   new THREE.Vector3(
-                    roadCenterX(aheadS) + nnx * ntprof.laneBias,
+                    lin.centerX(aheadS) + nnx * ntprof.laneBias,
                     0.72,
                     -aheadS + nnz * ntprof.laneBias,
                   ),
@@ -1943,7 +2090,7 @@ export default function App() {
                   ((ntprof.cruiseKmh ?? 100) / 3.6) *
                   (0.9 + Math.random() * 0.15)
                 const nslope =
-                  (roadCenterX(aheadS + 4) - roadCenterX(aheadS - 4)) / 8
+                  (lin.centerX(aheadS + 4) - lin.centerX(aheadS - 4)) / 8
                 const ninv = 1 / Math.hypot(nslope, 1)
                 tc.car.body.setLinvel(
                   {
@@ -1953,7 +2100,7 @@ export default function App() {
                   },
                   true,
                 )
-                tc.ai = new AIDriver(ntprof)
+                tc.ai = new AIDriver(ntprof, lin)
                 tc.visual.group.visible = true
               }
               if (tc.visual.group.visible) {
@@ -2047,6 +2194,38 @@ export default function App() {
             }
           }
           wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))
+          if (circuit) {
+            const L = circuit.lengthM
+            const prog = circuit.progressAt(bp.x, bp.z)
+            if (startedRef.current && !pausedRef.current) {
+              lapClock += dt
+              if (lapPrevS > L * 0.75 && prog < L * 0.25) {
+                if (lapStartClock !== null) {
+                  const t = lapClock - lapStartClock
+                  lastLapT = t
+                  bestLapT = bestLapT === null ? t : Math.min(bestLapT, t)
+                  lapsDone++
+                }
+                lapStartClock = lapClock
+              } else if (lapPrevS < L * 0.25 && prog > L * 0.75) {
+                lapStartClock = null
+              }
+              lapHudAcc += dt
+              if (lapHudAcc >= 0.1) {
+                lapHudAcc = 0
+                setLap({
+                  lap: lapsDone + 1,
+                  running: lapStartClock !== null,
+                  currentS: lapStartClock === null ? 0 : lapClock - lapStartClock,
+                  lastS: lastLapT,
+                  bestS: bestLapT,
+                  progress: prog / L,
+                  lengthM: L,
+                })
+              }
+            }
+            lapPrevS = prog
+          }
           if (TIME_OF_DAY_PRESETS[timeOfDayRef.current].rain > 0) {
             const flash = rain.update(dt, camera.position)
             if (flash > 0 || lightningWasOn) wm.setLightning(flash)
@@ -2230,7 +2409,7 @@ export default function App() {
             }
           }
 
-          flyby.update(
+          flyby?.update(
             dt,
             -bp.z,
             car.forwardSpeed,
@@ -2283,7 +2462,7 @@ export default function App() {
           } catch {}
           flybyRef.current = null
           try {
-            flyby.dispose()
+            flyby?.dispose()
           } catch (e) {
             console.warn("[Teardown] flyby dispose failed:", e)
           }
@@ -2391,6 +2570,7 @@ export default function App() {
           exit={{ duration: 0.24, ease: EASE.in }}
         >
           <RaceHud race={race} />
+          {mapId === "circuit" && lap && !race.active && <LapHud lap={lap} />}
         </Screen>
       )}
       {hudVisible && (
@@ -2401,7 +2581,7 @@ export default function App() {
           to={{ duration: 0.4, delay: 0.35 }}
           exit={{ duration: 0.24, ease: EASE.in }}
         >
-          <RaceLiveBoard race={race} />
+          <RaceLiveBoard race={race} gapM={getMap(mapId).gapM} />
         </Screen>
       )}
       {hudVisible &&
@@ -2438,6 +2618,7 @@ export default function App() {
           distanceKm={distanceKm}
           onRivals={setRivals}
           onDistance={setDistanceKm}
+          lapMode={mapId === "circuit"}
           cars={CARS}
           carId={carId}
           onPrevCar={() => stepCar(-1)}
@@ -2448,6 +2629,18 @@ export default function App() {
           onTogglePool={togglePool}
           traffic={trafficLevel}
           onTraffic={selectTraffic}
+          racesEnabled={mapFeatures.races}
+          trafficEnabled={mapFeatures.traffic}
+          mapPicker={
+            <MapPicker
+              maps={listMaps()}
+              mapId={mapId}
+              onMap={selectMap}
+              circuit={circuitOpts}
+              onCircuit={(patch) => updateCircuitOpts(patch)}
+              onReroll={() => updateCircuitOpts({ seed: randomSeed() })}
+            />
+          }
           onFreeDrive={startGame}
           onStartRace={startRace}
           onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
@@ -2500,6 +2693,17 @@ export default function App() {
           onLeaveRoom={handleLeaveRoom}
           onStartMultiplayerRace={handleStartMultiplayerRace}
           onStartFreeDrive={handleStartFreeDrive}
+          lapMode={mapId === "circuit"}
+          mapPicker={
+            <MapPicker
+              maps={listMaps().filter((m) => m.features.multiplayer)}
+              mapId={mapId}
+              onMap={selectMap}
+              circuit={circuitOpts}
+              onCircuit={(patch) => updateCircuitOpts(patch)}
+              onReroll={() => updateCircuitOpts({ seed: randomSeed() })}
+            />
+          }
           traffic={trafficLevel}
           onTraffic={selectTraffic}
           joinError={joinError}

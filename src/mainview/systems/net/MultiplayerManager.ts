@@ -46,12 +46,22 @@ export function roomPasswordHash(roomId: string, password: string): string {
 
 export type MultiplayerMode = "p2p" | "lan"
 
+/** Which map a multiplayer race runs on; circuit seed comes from startTimeMs. */
+export interface RaceMapSpec {
+  id: string
+  lengthKm?: number
+  twistiness?: number
+  widthM?: number
+  barriers?: boolean
+}
+
 export interface MultiplayerCallbacks {
   onPeersUpdated?: (peers: PeerPlayer[]) => void
   onRaceStartSignal?: (
     startTimeMs: number,
     distanceM: number,
     rivals?: number,
+    map?: RaceMapSpec,
   ) => void
   onRaceFinishSignal?: (peerId: string, time: number) => void
   onPlayerJoined?: (peer: PeerPlayer) => void
@@ -797,6 +807,7 @@ export class MultiplayerManager {
           evt.payload?.startTimeMs ?? Date.now(),
           evt.payload?.distanceM ?? 5000,
           evt.payload?.rivals ?? 0,
+          evt.payload?.map,
         )
         break
       }
@@ -939,7 +950,11 @@ export class MultiplayerManager {
     }
   }
 
-  public startMultiplayerRace(distanceM: number, rivals = 0) {
+  public startMultiplayerRace(
+    distanceM: number,
+    rivals = 0,
+    map?: RaceMapSpec,
+  ) {
     this.markRaceStarted()
     this.notifyPeersChanged()
     const startTimeMs = Date.now() + 3200
@@ -951,9 +966,10 @@ export class MultiplayerManager {
         startTimeMs,
         distanceM,
         rivals,
+        map,
       },
     })
-    this.callbacks.onRaceStartSignal?.(startTimeMs, distanceM, rivals)
+    this.callbacks.onRaceStartSignal?.(startTimeMs, distanceM, rivals, map)
   }
 
   public notifyFinish(timeSeconds: number) {

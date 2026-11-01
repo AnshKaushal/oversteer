@@ -1,5 +1,5 @@
 import { enginePeaks } from "../physics/vehicle/components/Engine"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import {
   RACE_COUNTS,
   RACE_DISTANCES_KM,
@@ -47,6 +47,7 @@ export function RaceMenu({
   distanceKm,
   onRivals,
   onDistance,
+  lapMode = false,
   cars,
   carId,
   onPrevCar,
@@ -57,6 +58,9 @@ export function RaceMenu({
   onTogglePool,
   traffic,
   onTraffic,
+  racesEnabled = true,
+  trafficEnabled = true,
+  mapPicker,
   onFreeDrive,
   onStartRace,
   onOpenMultiplayer,
@@ -69,6 +73,8 @@ export function RaceMenu({
   distanceKm: number
   onRivals: (n: (typeof RACE_COUNTS)[number]) => void
   onDistance: (km: (typeof RACE_DISTANCES_KM)[number]) => void
+  /** Circuit maps: the distance buttons count laps instead of km. */
+  lapMode?: boolean
   cars: CarDefinition[]
   carId: string
   onPrevCar: () => void
@@ -79,6 +85,9 @@ export function RaceMenu({
   onTogglePool: (id: string) => void
   traffic: TrafficLevel
   onTraffic: (level: TrafficLevel) => void
+  racesEnabled?: boolean
+  trafficEnabled?: boolean
+  mapPicker?: ReactNode
   onFreeDrive: () => void
   onStartRace: () => void
   onOpenMultiplayer?: () => void
@@ -196,7 +205,10 @@ export function RaceMenu({
             </div>
           </div>
 
+          {mapPicker}
+
           <div className="mt-5 text-left">
+            {racesEnabled && (<>
             <div className="text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
               RIVALS (AI)
             </div>
@@ -243,7 +255,7 @@ export function RaceMenu({
               })}
             </div>
             <div className="mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
-              RACE DISTANCE
+              {lapMode ? "RACE LAPS" : "RACE DISTANCE"}
             </div>
             <div className="mt-2 flex gap-1.5">
               {RACE_DISTANCES_KM.map((km) => (
@@ -256,10 +268,12 @@ export function RaceMenu({
                       : "bg-[#51a7d5]/15 text-gray-300 hover:bg-[#51a7d5]/25"
                   }`}
                 >
-                  {km} km
+                  {lapMode ? `${km} ${km === 1 ? "lap" : "laps"}` : `${km} km`}
                 </button>
               ))}
             </div>
+            </>)}
+            {trafficEnabled && (<>
             <div className="mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
               FREE-ROAM TRAFFIC
             </div>
@@ -283,6 +297,7 @@ export function RaceMenu({
                 ? "Empty roads when free roaming."
                 : `${trafficCountFor(traffic)} AI cruisers share the road in free roam.`}
             </div>
+            </>)}
 
             <div className="mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
               TIME OF DAY
@@ -304,14 +319,14 @@ export function RaceMenu({
             </div>
           </div>
 
-          <button
+          {racesEnabled && (<button
             onClick={onStartRace}
             className="mt-6 w-full bg-[#51a7d5] px-10 py-3.5 text-[15px] font-semibold tracking-wide text-white transition hover:bg-[#51a7d5]/90 inline-flex gap-1 items-center justify-center"
           >
             <ArrowUpRight size={20} />
             Start Race (Singleplayer)
-          </button>
-          {onOpenMultiplayer && (
+          </button>)}
+          {racesEnabled && onOpenMultiplayer && (
             <button
               onClick={onOpenMultiplayer}
               className="mt-2.5 w-full border border-[#51a7d5] bg-[#51a7d5]/15 px-6 py-3 text-[14px] font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/25 active:scale-[0.98] inline-flex items-center justify-center gap-1"
@@ -325,7 +340,7 @@ export function RaceMenu({
             className="mt-2.5 w-full border border-white/12 bg-white/5 px-6 py-3 text-[14px] font-medium text-gray-100 transition hover:bg-white/10 active:scale-[0.98]  inline-flex items-center justify-center gap-1"
           >
             <LoaderPinwheel size={20} />
-            {traffic === "off"
+            {!trafficEnabled || traffic === "off"
               ? "Free Roam"
               : `Free Roam · ${TRAFFIC_OPTIONS.find((o) => o.id === traffic)?.label} traffic`}
           </button>
@@ -436,16 +451,26 @@ export function RaceHud({ race }: { race: RaceSnapshot }) {
 
 const BOARD_ROW_H = 34
 
-function gapText(s: RaceStanding, playerS: number): string {
+function gapText(
+  s: RaceStanding,
+  playerS: number,
+  gapM: (a: number, b: number) => number,
+): string {
   if (s.isPlayer) return "YOU"
   if (s.finished) return formatTime(s.finishTime)
-  const gap = roadGapM(s.progressM, playerS)
+  const gap = gapM(s.progressM, playerS)
   const a = Math.abs(gap)
   const v = a >= 1000 ? `${(a / 1000).toFixed(1)} km` : `${Math.round(a)} m`
   return gap >= 0 ? `+${v}` : `-${v}`
 }
 
-export function RaceLiveBoard({ race }: { race: RaceSnapshot }) {
+export function RaceLiveBoard({
+  race,
+  gapM = roadGapM,
+}: {
+  race: RaceSnapshot
+  gapM?: (a: number, b: number) => number
+}) {
   const [snap, setSnap] = useState<RaceStanding[]>([])
   const rootRef = usePop<HTMLDivElement>([])
   const lastRef = useRef(0)
@@ -506,7 +531,7 @@ export function RaceLiveBoard({ race }: { race: RaceSnapshot }) {
                 {s.name}
               </span>
               <span className="text-[11px] tabular-nums text-gray-300">
-                {gapText(s, playerS)}
+                {gapText(s, playerS, gapM)}
               </span>
             </div>
           ))}

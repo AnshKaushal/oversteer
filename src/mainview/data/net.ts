@@ -1,5 +1,5 @@
 export const NET = {
-  protocolVersion: 2,
+  protocolVersion: 3,
   sendHz: 60,
   interp: {
     minDelayMs: 50,
