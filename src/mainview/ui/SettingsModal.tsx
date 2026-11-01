@@ -13,15 +13,12 @@ import {
   ChevronUp,
   Sun,
   Gauge,
-  Droplets,
   RefreshCw,
   CloudFog,
   Activity,
   Lamp,
 } from "lucide-react"
-import { DEFAULT_WEATHER, WEATHER_GRIP, type WeatherId } from "../data/surfaces"
 
-const WEATHER_IDS = Object.keys(WEATHER_GRIP) as WeatherId[]
 import {
   type TimeOfDayMode,
   TIME_OF_DAY_MODES,
@@ -215,13 +212,6 @@ export function SettingsModal({
     onUpdateSettings({
       ...settings,
       fog,
-    })
-  }
-
-  const handleSelectWeather = (weather: WeatherId) => {
-    onUpdateSettings({
-      ...settings,
-      weather,
     })
   }
 
@@ -788,41 +778,6 @@ export function SettingsModal({
                   {val}%
                 </button>
               ))}
-            </div>
-          </div>
-
-          {}
-          <div
-            data-anim-item
-            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
-          >
-            <div>
-              <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
-                <Droplets size={14} className="text-[#51a7d5]" />
-                Weather
-              </div>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                Wet weather lowers tyre grip, most on tarmac
-              </p>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2">
-              {WEATHER_IDS.map((id) => {
-                const active = (settings.weather ?? DEFAULT_WEATHER) === id
-                return (
-                  <button
-                    key={id}
-                    onClick={() => handleSelectWeather(id)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded border text-xs font-semibold capitalize transition ${
-                      active
-                        ? "border-[#51a7d5] bg-[#51a7d5]/25 text-white"
-                        : "border-white/10 bg-black/30 text-gray-400 hover:border-white/25 hover:text-white"
-                    }`}
-                  >
-                    <span>{id}</span>
-                  </button>
-                )
-              })}
             </div>
           </div>
 

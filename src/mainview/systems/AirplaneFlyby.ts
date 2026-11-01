@@ -46,6 +46,9 @@ const MIN_ANGLE = 20
 const MAX_ANGLE = 90
 export const CRUISE_ALT = 145
 export const CRUISE_LEAD = 380
+/** The sun shadow map covers this far round the car, so the soft patch fades in between these. */
+const SHADOW_MAP_NEAR = 40
+const SHADOW_MAP_FAR = 75
 const SUN_SHADOW_X = 120 / 180
 const SUN_SHADOW_Z = 60 / 180
 
@@ -344,10 +347,12 @@ export function shadowState(
   st: PassState,
   terrainAt?: TerrainAt,
   span = TARGET_SPAN,
+  /** Ground shift of the shadow per metre of height, away from the light. */
+  slope = { x: SUN_SHADOW_X, z: SUN_SHADOW_Z },
 ): ShadowState {
   const h = Math.max(0, st.y)
-  const x = st.x + h * SUN_SHADOW_X
-  const z = st.z + h * SUN_SHADOW_Z
+  const x = st.x + h * slope.x
+  const z = st.z + h * slope.z
   const ground = terrainAt ? terrainAt(x, z) : 0
   return {
     x,
@@ -1020,6 +1025,11 @@ export class AirplaneFlyby {
 
         const { props, span, height, length } = prepareAircraft(model, spec)
         const mats = this.prepareFade(model)
+        // the aircraft throws a real shadow whenever it is inside the light's shadow map
+        model.traverse((o) => {
+          const mesh = o as THREE.Mesh
+          if (mesh.isMesh) mesh.castShadow = true
+        })
 
         if (this.disposed) return false
 
@@ -1187,7 +1197,7 @@ export class AirplaneFlyby {
     const spin = (f.speed / 0.6) * dt
     for (const w of ac.wheels) w.rotation.x += spin
 
-    this.updateShadow(st, ac.span)
+    this.updateShadow(st, ac.span, carX, carS)
 
     const turn = (16 + f.speed * 0.2) * dt
     for (const p of ac.props) {
@@ -1216,13 +1226,30 @@ export class AirplaneFlyby {
     }
   }
 
-  private updateShadow(st: PassState, span: number) {
-    const sh = shadowState(st, this.terrainAt, span)
+  private sunSource: (() => { x: number; y: number; z: number }) | null = null
+
+  /** Where the light (sun by day, moon by night) is, relative to the ground below it. */
+  setSunSource(fn: () => { x: number; y: number; z: number }) {
+    this.sunSource = fn
+  }
+
+  private updateShadow(st: PassState, span: number, carX: number, carS: number) {
+    let slope: { x: number; z: number } | undefined
+    const sun = this.sunSource?.()
+    if (sun) {
+      const up = Math.max(sun.y, 20)
+      slope = { x: -sun.x / up, z: -sun.z / up }
+    }
+    const sh = shadowState(st, this.terrainAt, span, slope)
     this.shadowRoot.visible = true
     this.shadowRoot.position.set(sh.x, sh.y, sh.z)
     this.shadowRoot.rotation.y = sh.heading
     this.shadow.scale.set(sh.span, sh.length, 1)
-    this.shadowMat.opacity = sh.alpha
+    // Near the car the light's own shadow map shows the aircraft's real
+    // shadow; the soft patch takes over where that does not reach.
+    const d = Math.hypot(sh.x - carX, sh.z + carS)
+    const k = Math.min(1, Math.max(0, (d - SHADOW_MAP_NEAR) / (SHADOW_MAP_FAR - SHADOW_MAP_NEAR)))
+    this.shadowMat.opacity = sh.alpha * k * k * (3 - 2 * k)
   }
 
   private startFlight(carS: number, carSpeed: number, carX: number) {

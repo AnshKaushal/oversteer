@@ -259,7 +259,7 @@ export class AirportStructures {
         this.pools.push(poolMat)
         const pool = new THREE.Mesh(poolGeo, poolMat)
         pool.rotation.x = -Math.PI / 2
-        pool.position.set(x, 0.07, z - sgn * 16)
+        pool.position.set(x, 0.032, z - sgn * 16)
         pool.frustumCulled = false
         this.group.add(pool)
       }

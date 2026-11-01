@@ -283,6 +283,11 @@ export class WorldManager {
   private sceneRef: THREE.Scene | null = null
   private starsPoints: THREE.Points | null = null
 
+  /** The light's offset from the ground it shines on: the sun by day, the moon by night. */
+  sunDirection(): { x: number; y: number; z: number } {
+    return this.sunOffset
+  }
+
   setShadowQuality(pct: number) {
     const sun = this.sunLight
     if (!sun) return
@@ -957,7 +962,7 @@ export class WorldManager {
     const g = R.RigidBodyDesc.fixed()
     const body = world.createRigidBody(g)
     const col = R.ColliderDesc.cuboid(3000, 5, 3000)
-      .setTranslation(0, -5.05, 0)
+      .setTranslation(0, -4.98, 0)
       .setFriction(1.0)
       .setRestitution(0)
     registerSurface(world, world.createCollider(col, body), groundSurfaceAt)

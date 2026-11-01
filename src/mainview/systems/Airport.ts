@@ -615,7 +615,7 @@ export class AirportView {
         polygonOffsetUnits: -2,
       })
       const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.y = 0.03
+      mesh.position.y = 0.024
       mesh.receiveShadow = true
       mesh.frustumCulled = false
       this.group.add(mesh)
@@ -632,7 +632,7 @@ export class AirportView {
       layout.cz,
       layout.ux,
       layout.uz,
-      0.04,
+      0.028,
     )
 
     const { ux, uz } = layout
@@ -661,7 +661,8 @@ export class AirportView {
       pos: small.pos,
       col: small.col,
       radius: (i) => (smallY(i) > 3 ? 0.4 : 0.26),
-      stem: (i) => smallY(i) > 0.3 && smallY(i) < 3,
+      stem: (i) => smallY(i) > 0.45 && smallY(i) < 3,
+      flat: (i) => smallY(i) <= 0.45,
       glow,
       haloScale: 9,
     })

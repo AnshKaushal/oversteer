@@ -217,7 +217,7 @@ export default function App() {
   const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
   timeOfDayRef.current = timeOfDay
   conditions.weather = effectiveWeather(
-    settings.weather ?? DEFAULT_WEATHER,
+    DEFAULT_WEATHER,
     timeOfDay,
   )
   conditions.timeOfDay = timeOfDay
@@ -702,6 +702,7 @@ export default function App() {
         const flyby = new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
         flybyRef.current = flyby
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
+        flyby.setSunSource(() => wm.sunDirection())
         flyby.setTimeOfDay(timeOfDayRef.current)
         await flyby.init(scene, baseUrl)
 

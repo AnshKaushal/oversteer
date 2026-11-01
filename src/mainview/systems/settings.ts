@@ -1,5 +1,4 @@
 import * as THREE from "three"
-import type { WeatherId } from "../data/surfaces"
 import type { TimeOfDayMode } from "../constants/timeOfDay"
 
 export type ResolutionId =
@@ -94,7 +93,6 @@ export interface AppSettings {
   shadows: boolean
   shadowQuality: number
   timeOfDay?: TimeOfDayMode
-  weather?: WeatherId
   dashStyle?: "modern" | "classic"
   fog?: FogLevel
   perfOverlay?: boolean
@@ -109,7 +107,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shadows: true,
   shadowQuality: 100,
   timeOfDay: "day",
-  weather: "dry",
   dashStyle: "modern",
   fog: "normal",
   perfOverlay: false,

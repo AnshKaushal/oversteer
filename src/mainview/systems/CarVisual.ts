@@ -112,6 +112,7 @@ export class CarVisual {
   private lastTint: number | undefined = undefined
   private hiMerged: THREE.Object3D[] = []
   private brakeLights: BrakeLight[] = []
+  private brakeHoldUntil = 0
   private brakeMeshes: THREE.Object3D[] = []
   private brakeLevel = 0
   private headlightsOn = false
@@ -485,7 +486,13 @@ export class CarVisual {
 
   setBrake(level: number) {
     if (this.brakeLights.length === 0) return
-    const want = Math.max(0, Math.min(1, level))
+    let want = Math.max(0, Math.min(1, level))
+    const now = performance.now()
+    if (want > 0.04) {
+      this.brakeHoldUntil = now + 150
+    } else if (now < this.brakeHoldUntil) {
+      want = this.brakeLevel
+    }
     if (want === this.brakeLevel) return
     this.brakeLevel = want
     for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn)

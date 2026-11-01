@@ -9,6 +9,7 @@ export interface LampSetOptions {
   col: Float32Array
   radius: (i: number) => number
   stem: (i: number) => boolean
+  flat?: (i: number) => boolean
   glow: THREE.Texture
   haloScale: number
 }
@@ -30,6 +31,9 @@ export class LampSet {
     const n = (this.count = o.pos.length / 3)
     this.base = o.col.slice()
     this.level = new Float32Array(n).fill(1)
+    const flat = o.flat ?? (() => false)
+    const pos = o.pos.slice()
+    for (let i = 0; i < n; i++) if (flat(i)) pos[i * 3 + 1] = 0.03
 
     const bezelGeo = new THREE.CylinderGeometry(1.0, 1.25, 0.5, 16)
     const lensGeo = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
@@ -55,20 +59,27 @@ export class LampSet {
     const p = new THREE.Vector3()
     for (let i = 0; i < n; i++) {
       const r = o.radius(i)
-      const x = o.pos[i * 3]
-      const y = o.pos[i * 3 + 1]
-      const z = o.pos[i * 3 + 2]
+      const x = pos[i * 3]
+      const y = pos[i * 3 + 1]
+      const z = pos[i * 3 + 2]
       p.set(x, y, z)
-      s.set(r, r * 0.5, r)
-      bezel.setMatrixAt(i, m.compose(p, q, s))
-      p.set(x, y + r * 0.12, z)
-      s.set(r * 0.88, r * 0.88, r * 0.88)
+      if (flat(i)) {
+        s.set(r * 1.05, 0.02, r * 1.05)
+        bezel.setMatrixAt(i, m.compose(p, q, s))
+        p.set(x, y + 0.008, z)
+        s.set(r * 0.9, 0.06, r * 0.9)
+      } else {
+        s.set(r, r * 0.5, r)
+        bezel.setMatrixAt(i, m.compose(p, q, s))
+        p.set(x, y + r * 0.12, z)
+        s.set(r * 0.88, r * 0.88, r * 0.88)
+      }
       this.lens.setMatrixAt(i, m.compose(p, q, s))
     }
     stems.forEach((i, k) => {
       const r = o.radius(i)
-      const y = o.pos[i * 3 + 1] - r * 0.25
-      p.set(o.pos[i * 3], y / 2, o.pos[i * 3 + 2])
+      const y = pos[i * 3 + 1] - r * 0.25
+      p.set(pos[i * 3], y / 2, pos[i * 3 + 2])
       s.set(0.05, y, 0.05)
       stem.setMatrixAt(k, m.compose(p, q, s))
     })
@@ -77,7 +88,7 @@ export class LampSet {
       this.group.add(im)
     }
     const hg = new THREE.BufferGeometry()
-    hg.setAttribute("position", new THREE.BufferAttribute(o.pos.slice(), 3))
+    hg.setAttribute("position", new THREE.BufferAttribute(pos.slice(), 3))
     this.haloColors = new THREE.BufferAttribute(o.col.slice(), 3)
     hg.setAttribute("color", this.haloColors)
     this.geoms.push(hg)

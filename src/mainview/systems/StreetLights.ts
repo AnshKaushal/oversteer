@@ -201,7 +201,7 @@ export class StreetLights {
       this.aim[i * 3] = hx + dx * reach
       this.aim[i * 3 + 1] = 0
       this.aim[i * 3 + 2] = hz + dz * reach
-      m.compose(p.set(this.aim[i * 3], 0.06, this.aim[i * 3 + 2]), q.identity(), poolScale)
+      m.compose(p.set(this.aim[i * 3], 0.03, this.aim[i * 3 + 2]), q.identity(), poolScale)
       this.pools!.setMatrixAt(i, m)
       this.colliders[i]?.setTranslation({ x: px, y: HEAD_HEIGHT / 2, z: pz })
     }
