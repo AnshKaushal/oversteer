@@ -23,7 +23,6 @@ export interface DriveInput {
   toggleStabilityPressed: boolean
   toggleSafetyPressed: boolean
   toggleIgnitionPressed: boolean
-  /** A tap of Space: latch the handbrake on or off. */
   toggleHandbrakePressed: boolean
   toggleAbsPressed: boolean
   resetPressed: boolean
@@ -37,10 +36,8 @@ export interface DriveInput {
   toggleHeadlightsPressed: boolean
 }
 
-/** A Space press longer than this is a hold (momentary), not a tap (latch). */
 const HANDBRAKE_HOLD_MS = 300
 const HANDBRAKE_TAP = "HandbrakeTap"
-/** Right-stick smoothing rate (1/s); higher follows the stick faster. */
 const LOOK_EASE = 9
 
 export class InputManager {
@@ -55,19 +52,14 @@ export class InputManager {
 
   private readonly pad = new GamepadInput()
   private padWasConnected = false
-  /** Called when a pad is plugged in (first button press) or removed. */
   onPadChange: ((connected: boolean, name: string) => void) | null = null
 
-  /** Right-stick camera orbit, -1..1 (x right, y down), eased so the camera never snaps; zero without a pad. */
   lookX = 0
   lookY = 0
-  /** True for the update in which R3 was pressed: put the camera back behind the car. */
   lookReset = false
-  /** True while a standard pad is connected. */
   padConnected = false
   private padHandbrakeDownAt = 0
 
-  // Cruise control hold-repeat: first extra tap after ~350ms, then every 150ms.
   private ccHold = new Map<string, number>()
   private ccRepeat = new Map<string, number>()
 
@@ -78,7 +70,6 @@ export class InputManager {
     this.onVisibility = this.onVisibility.bind(this)
   }
 
-  /** A key whose release the page never sees (focus lost, Cmd held) must not stay pressed. */
   private release() {
     this.keys.clear()
     this.ccHold.clear()
@@ -148,7 +139,6 @@ export class InputManager {
   }
 
   private onKeyUp(e: KeyboardEvent) {
-    // a short press latches the handbrake; holding only engages it while held
     if (this.normalize(e) === "Space" && e.timeStamp - this.spaceDownAt <= HANDBRAKE_HOLD_MS) {
       this.edgeQueue.add(HANDBRAKE_TAP)
     }
@@ -158,7 +148,6 @@ export class InputManager {
     this.ccRepeat.delete(this.normalize(e))
   }
 
-  /** Give back the edges of an update no physics step consumed (a frame shorter than one step). */
   requeue(out: DriveInput) {
     const edges: [boolean, string][] = [
       [out.upshiftPressed, "KeyE"],
@@ -189,7 +178,6 @@ export class InputManager {
 
   update(dt: number): DriveInput {
     const pad = this.pad.poll(dt)
-    // ease toward the stick so the camera starts and stops smoothly
     const ease = 1 - Math.exp(-dt * LOOK_EASE)
     this.lookX += ((pad?.lookX ?? 0) - this.lookX) * ease
     this.lookY += ((pad?.lookY ?? 0) - this.lookY) * ease
@@ -202,7 +190,6 @@ export class InputManager {
     }
     if (pad) {
       for (const code of pad.edges) this.edgeQueue.add(code)
-      // same tap-latches, hold-engages handbrake rule as Space
       const now = performance.now()
       if (pad.handbrakeEdge === "down") this.padHandbrakeDownAt = now
       else if (pad.handbrakeEdge === "up" && now - this.padHandbrakeDownAt <= HANDBRAKE_HOLD_MS) {
@@ -219,7 +206,6 @@ export class InputManager {
       (has("KeyA") || has("ArrowLeft") ? 1 : 0) -
       (has("KeyD") || has("ArrowRight") ? 1 : 0)
 
-    // BeamNG-style keyboard temporal slew rate filtering (inRate / outRate)
     const throttleInRate = 3.2
     const throttleOutRate = 4.0
     const tDelta = throttleTarget - this.throttle
@@ -264,7 +250,6 @@ export class InputManager {
       }
     }
 
-    // an analog pad adds to the keyboard, so either can drive and neither fights the other
     const out: DriveInput = {
       throttle: Math.max(this.throttle, pad?.throttle ?? 0),
       brake: Math.max(this.brake, pad?.brake ?? 0),

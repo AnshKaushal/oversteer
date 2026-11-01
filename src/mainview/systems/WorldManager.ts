@@ -26,9 +26,6 @@ export function roadDirYaw(s: number): number {
 }
 
 const ARC_STEP = 5
-// The road is periodic (sin(0.004 s) and sin(0.0013 s) realign every ROAD_PERIOD
-// metres), so arc length is one table over a single period plus whole periods.
-// That keeps it exact and unbounded in both driving directions.
 export const ROAD_PERIOD = (2 * Math.PI * 40) / 0.004
 let arcTable: Float64Array | null = null
 let periodArc = 0
@@ -70,21 +67,16 @@ export function roadGapM(a: number, b: number): number {
 
 const RIB_DIV = 16
 
-// 40 clouds, 80 m apart in s, repeat every ring; hills and clouds shrink out of sight over fade distances.
-/** How far out the sun/moon disk is drawn, beyond every cloud. */
 const SKY_DISK_DISTANCE = 1200
 const CLOUD_GAP = 80
 const CLOUD_RING = 40 * CLOUD_GAP
-/** 1 up to `from` metres away, easing to 0 at `to`. */
 function fadeOut(d: number, from: number, to: number): number {
   const x = Math.min(1, Math.max(0, (d - from) / (to - from)))
   return 1 - x * x * (3 - 2 * x)
 }
 
-// 22 hills share a ring of 44 segments; hill i owns every segment = hillResidue(i) (mod 44).
 const HILL_PERIOD = 44
 const hillResidue = (i: number) => -2 + i * 2
-/** The widest a hill can be, before its rim noise. */
 const HILL_MAX_RADIUS = 220
 
 
@@ -123,8 +115,14 @@ function makeRibbonGeometry(
   return geo
 }
 
-/** Flat-ground surface at a world point: the road and its shoulder are asphalt, the rest is grass. */
+let pavedZones: ClearZone[] = []
+
 export function groundSurfaceAt(x: number, z: number): SurfaceId {
+  for (const c of pavedZones) {
+    const dx = x - c.x
+    const dz = z - c.z
+    if (Math.abs(dx * c.ux + dz * c.uz) < c.hl && Math.abs(-dx * c.uz + dz * c.ux) < c.hw) return "asphalt"
+  }
   const s = -z
   const tx = (roadCenterX(s + 2) - roadCenterX(s - 2)) / 4
   const across = Math.abs(x - roadCenterX(s)) / Math.hypot(tx, 1)
@@ -213,7 +211,6 @@ interface CloudEntry {
   pos: THREE.Vector3
   rot: number
   variantIdx: number
-  /** Which repeat of its ring the cloud is standing on. */
   k: number
 }
 
@@ -222,7 +219,6 @@ interface Hill {
   seg: number
   rotY: number
   radius: number
-  /** Peak height, used to bound hills that have not been placed yet. */
   height: number
   body?: RAPIER.RigidBody
 }
@@ -279,7 +275,6 @@ export class WorldManager {
   private streetLightsShown = true
   private streetLightsPower = true
   private fogEnabled = true
-  /** 1 is the preset's own fog; 2 is twice as thick (half the view distance). */
   private fogIntensity = 1
   private sunLight: THREE.DirectionalLight | null = null
   private hemiLight: THREE.HemisphereLight | null = null
@@ -288,12 +283,10 @@ export class WorldManager {
   private sceneRef: THREE.Scene | null = null
   private starsPoints: THREE.Points | null = null
 
-  /** Shadow detail, 25 to 100: sharper maps and a wider shadowed area as it rises. */
   setShadowQuality(pct: number) {
     const sun = this.sunLight
     if (!sun) return
     const q = Math.min(100, Math.max(25, pct)) / 100
-    // at full, 4096 px over 140 m is about 29 px/m, roughly four times the original density
     const size = Math.max(1024, Math.round((4096 * q) / 256) * 256)
     const half = 50 + 20 * q
     this.shadowTexel = (2 * half) / size
@@ -304,7 +297,6 @@ export class WorldManager {
       sun.shadow.mapSize.set(size, size)
       sun.shadow.needsUpdate = true
     }
-    // the filter blur, in shadow pixels: wider as the map gets coarser, so edges never look blocky
     sun.shadow.radius = 2.5 + (1 - q) * 2
     cam.left = cam.bottom = -half
     cam.right = cam.top = half
@@ -316,7 +308,6 @@ export class WorldManager {
   private readonly lightUp = new THREE.Vector3()
   private readonly snapped = new THREE.Vector3()
 
-  /** The car's position moved onto the shadow map's pixel grid, so edges don't crawl as it drives. */
   private snapToShadowGrid(carPos: THREE.Vector3): THREE.Vector3 {
     const dir = this.sunOffset
     const right = this.lightRight.set(0, 1, 0).cross(dir).normalize()
@@ -339,7 +330,6 @@ export class WorldManager {
     }
   }
 
-  /** Lightning flash, 0 (none) to 1: lifts the light and washes the sky and fog toward white. */
   setLightning(f: number) {
     const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
     if (!preset) return
@@ -355,12 +345,10 @@ export class WorldManager {
     if (scene.fog instanceof THREE.Fog) scene.fog.color.setHex(this.fogEnabled ? preset.fogColor : preset.skyColor).lerp(white, f * 0.5)
   }
 
-  /** 1 where a visible puddle lies at (x, z), else 0. */
   puddleAt(x: number, z: number): number {
     return this.puddles?.coverageAt(x, z) ?? 0
   }
 
-  /** Where a puddle disc of radius r at (x, z) may lie: wholly on the tarmac, wholly on open grass, or nowhere. */
   private puddleSurface(x: number, z: number, r: number): "road" | "grass" | null {
     const road = WORLD_CONFIG.road
     const s = -z
@@ -368,7 +356,6 @@ export class WorldManager {
     const across = Math.abs(x - roadCenterX(s)) / Math.hypot(tx, 1)
     if (across + r <= road.width / 2) return "road"
     if (across - r < (road.width + 2 * road.shoulderWidth) / 2 + 1) return null
-    // keep out of hills: their surface is above the flat ground the puddle lies on
     for (const hill of this.hills) {
       const dx = x - hill.mesh.position.x
       const dz = z - hill.mesh.position.z
@@ -382,14 +369,8 @@ export class WorldManager {
     return this.timeOfDay
   }
 
-  /** User settings: show the street lamps, and let them light up in every sky but day. */
-  /** Ground kept free of trees and grass, such as under a runway. */
   private clearZones: ClearZone[] = []
 
-  /**
-   * Sets the ground that must stay free of roadside props. Segments the old
-   * or new zones touch are rebuilt, so only they refill.
-   */
   setClearZones(zones: ClearZone[]) {
     const segs = new Set<number>()
     const mark = (list: ClearZone[]) => {
@@ -405,6 +386,7 @@ export class WorldManager {
     mark(this.clearZones)
     mark(zones)
     this.clearZones = zones
+    pavedZones = zones.filter((z) => z.paved)
     for (const k of segs) {
       if (!this.segProps.has(k)) continue
       this.freeSeg(k)
@@ -423,25 +405,17 @@ export class WorldManager {
     return false
   }
 
-  /** Share of trees and grass kept, 0..1. */
   private vegetation = 1
 
-  /**
-   * Thins out trees and grass, 0 (none) to 100 (everything). Kept props are
-   * always a subset of the denser setting, so dragging the slider only adds
-   * or removes plants rather than reshuffling them.
-   */
   setVegetation(percent: number) {
     const v = Math.min(100, Math.max(0, percent)) / 100
     if (v === this.vegetation) return
     this.vegetation = v
-    // Roadside props are generated per segment: drop them and let them refill.
     for (const k of [...this.segProps.keys()]) {
       this.freeSeg(k)
       this.segProps.delete(k)
     }
     this.primed = false
-    // Hill dressing was placed once, so show or hide it by rank.
     for (const hill of this.hills) {
       for (const child of hill.mesh.children) {
         const rank = child.userData?.vegRank as number | undefined
@@ -460,14 +434,12 @@ export class WorldManager {
     this.streetLights?.setLit(power && this.timeOfDay !== "day")
   }
 
-  /** User fog setting: off, or a thickness multiplier on the time-of-day fog. */
   setFog(enabled: boolean, intensity: number) {
     this.fogEnabled = enabled
     this.fogIntensity = Math.max(0.1, intensity)
     this.applyFogRange()
   }
 
-  /** Sky colour, drawn toward the fog colour as fog thickens so thick fog hides the sky too. */
   private hazedSky(out: THREE.Color, preset: (typeof TIME_OF_DAY_PRESETS)[TimeOfDayMode]) {
     out.setHex(preset.skyColor)
     if (!this.fogEnabled) return out
@@ -475,18 +447,15 @@ export class WorldManager {
     return out.lerp(new THREE.Color(preset.fogColor), haze)
   }
 
-  /** False when something this far away is entirely hidden by fog. */
   private withinFog(d: number): boolean {
     const fog = this.sceneRef?.fog
     return !this.fogEnabled || !(fog instanceof THREE.Fog) || d < fog.far + 20
   }
 
-  /** Full stars at night, faint ones at sunrise and in the evening; unfogged when fog is off. */
   private applyStars() {
     const sp = this.starsPoints
     if (!sp) return
     const m = this.timeOfDay
-    // thick fog hides the stars along with the rest of the sky; the stars are too far for scene fog
     const haze = this.fogEnabled ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7)) : 0
     const a = (m === "night" ? 0.6 : m === "sunrise" || m === "evening" ? 0.6 : 0) * (1 - haze)
     sp.visible = a > 0
@@ -502,8 +471,6 @@ export class WorldManager {
     this.cloudLastCarS = -999999
     this.applyStars()
     if (!this.fogEnabled) {
-      // Never truly off: a faint fade in the sky's own colour over the last
-      // stretch before the camera's far plane, so the ground never ends in a line.
       fog.color.setHex(preset.skyColor)
       fog.near = 1300
       fog.far = 2350
@@ -543,8 +510,6 @@ export class WorldManager {
     if (this.sunVisual) {
       const mat = this.sunVisual.material as THREE.MeshBasicMaterial
       this.sunVisual.visible = preset.rain === 0
-      // The disk sits far out in the sky, scaled to look the same size, so
-      // the clouds (all nearer than that) always pass in front of it.
       const k = SKY_DISK_DISTANCE / this.sunOffset.length()
       if (mode === "night") {
         mat.color.setHex(0xdde6ff)
@@ -638,7 +603,6 @@ export class WorldManager {
   private hills: Hill[] = []
   private puddles: Puddles | null = null
   private hillRay = new THREE.Raycaster()
-  /** Segments of props kept each side of the car: all of them, or just what the fog leaves visible. */
   private get segRange() {
     const fog = this.sceneRef?.fog
     if (!this.fogEnabled || !(fog instanceof THREE.Fog)) return 18
@@ -652,11 +616,6 @@ export class WorldManager {
   private cloudLastCarS = -999999
   private readonly GRASS_ENABLED = true
 
-  /**
-   * +1 when the car is advancing along s, -1 when reversing. Streaming,
-   * recycling and respawn all key off this instead of assuming forward travel,
-   * which is what makes the world generate identically in both directions.
-   */
   travelDir = 1
   private lastCarS = Number.NaN
 
@@ -690,12 +649,10 @@ export class WorldManager {
     this.hemiLight = hemi
     ;(this.group as any)._sun = sun
 
-    // Visible sun / moon disk so the light source is apparent in the sky.
     const sunGeo = new THREE.SphereGeometry(14, 24, 24)
     const sunMat = new THREE.MeshBasicMaterial({
       color: W.environment.sunColor,
       fog: false,
-      // drawn after the stars (transparent pass, higher order) so they never show over the disk
       transparent: true,
       depthWrite: false,
     })
@@ -705,13 +662,11 @@ export class WorldManager {
     this.group.add(sunVisual)
     this.sunVisual = sunVisual
 
-    // Night starry sky dome (single-draw-call, zero FPS impact)
     const starGeo = new THREE.BufferGeometry()
-    const starCount = 1400
+    const starCount = 1000
     const starPos = new Float32Array(starCount * 3)
     for (let i = 0; i < starCount; i++) {
       const theta = Math.random() * Math.PI * 2
-      // polar angle from straight up to just past the horizon, spread evenly over the sky
       const phi = Math.acos(1 - Math.random() * 1.02)
       const r = 900 + Math.random() * 200
       starPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta)
@@ -754,7 +709,6 @@ export class WorldManager {
       const radius = far
         ? 120 + this.rand(i * 613 + 7) * 100
         : 35 + this.rand(i * 613 + 7) * 35
-      // Height is capped against the radius so no flank is steeper than a tyre can climb.
       const height = Math.min(
         far
           ? 80 + this.rand(i * 977 + 13) * 80
@@ -976,9 +930,6 @@ export class WorldManager {
 
   private updateClouds(carS: number, _carPos: THREE.Vector3) {
     if (this.cloudVariants.length === 0) return
-    // Cloud i owns s = i * CLOUD_GAP (mod CLOUD_RING) and stands on whichever of
-    // those is nearest the car, so the sky is the same from either direction.
-    // Clouds shrink to nothing toward that half-ring distance, so the hop is unseen.
     let dirty = Math.abs(carS - this.cloudLastCarS) > 25
     for (let i = 0; i < this.cloudEntries.length; i++) {
       const c = this.cloudEntries[i]
@@ -1032,7 +983,6 @@ export class WorldManager {
       )
       hill.body = hb
       this.syncHillBody(hill)
-      // Colliders for trees/rocks dressed onto the hill.
       for (const child of hill.mesh.children) {
         const cm = child as any
         if (!cm.isMesh) continue
@@ -1067,7 +1017,6 @@ export class WorldManager {
         if (!cm.visible) made.setEnabled(false)
       }
     }
-    // Props generated before the physics world existed have no colliders yet
     this.syncPropColliders()
     return body
   }
@@ -1122,7 +1071,6 @@ export class WorldManager {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 
-  /** Where a hill stands when it holds `seg`. */
   private hillSpot(hill: Hill, seg: number): { x: number; z: number } {
     const sMid = seg * this.segLen + this.segLen / 2
     const cx = roadCenterX(sMid)
@@ -1194,7 +1142,6 @@ export class WorldManager {
       return x * x * (3 - 2 * x)
     }
 
-    // Noise features scale with the hill, so a big hill is not bumpier ring to ring.
     const nr = Math.min(radius, 60)
     const nTop = this.hillNoise(seed, 0, 0)
     positions.push(0, height + nTop * height * 0.05, 0)
@@ -1538,9 +1485,6 @@ export class WorldManager {
     for (let s = minSeg; s <= maxSeg; s++) {
       if (!this.segProps.has(s)) missing.push(s)
     }
-    // Nearest to the car first. Building in axis order starved whichever end
-    // the per-frame budget never reached, so the segments right under the car
-    // stayed empty whenever the car was moving toward that end.
     missing.sort((a, b) => Math.abs(a - carSeg) - Math.abs(b - carSeg))
     const budget = this.primed ? this.SEGS_PER_FRAME : missing.length
     for (let i = 0; i < Math.min(budget, missing.length); i++) {
@@ -1614,8 +1558,6 @@ export class WorldManager {
     const W = WORLD_CONFIG
     this.carPos.copy(carPos)
     this.puddles?.update(carPos)
-    // Dead-band keeps travelDir stable while parked or crawling, so recycling
-    // does not oscillate between the two ends of the window.
     if (Number.isFinite(this.lastCarS)) {
       const delta = carS - this.lastCarS
       if (delta > 1e-3) this.travelDir = 1
@@ -1667,15 +1609,11 @@ export class WorldManager {
       carSeg + this.segRange,
       carSeg,
     )
-    // Hill i only ever stands on segments congruent to hillResidue(i), so a place
-    // always holds the same hill whichever way the car arrives. A hill moves to
-    // its nearest such segment, half a period (>1 km) from the car: out of sight.
     for (let i = 0; i < this.hills.length; i++) {
       const h = this.hills[i]
       const r = hillResidue(i)
       const seg = r + HILL_PERIOD * Math.round((carSeg - r) / HILL_PERIOD)
       if (seg !== h.seg) this.placeHill(h, seg)
-      // Shrink into the ground toward the hop distance, so the hop is never seen.
       const f = fadeOut(Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z), 800, 1050)
       h.mesh.visible = f > 0.01 && this.withinFog(Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z) - h.radius)
       const sc = Math.max(f, 0.01)
@@ -1708,21 +1646,13 @@ export class WorldManager {
     return -p.z
   }
 
-  /**
-   * Height of the ground at a world position: zero out on the flat plane,
-   * or the surface of whichever hill covers it. The flyby uses this to
-   * keep its flight path off the terrain.
-   */
   terrainHeightAt(x: number, z: number): number {
     let h = 0
     for (const hill of this.hills) {
       const dx = x - hill.mesh.position.x
       const dz = z - hill.mesh.position.z
-      // The noise can push the rim out past the nominal radius.
       const r = hill.radius * 1.4
       if (dx * dx + dz * dz > r * r) continue
-      // The hill may have been recycled since the last render, so its
-      // world matrix cannot be trusted to be current.
       hill.mesh.updateWorldMatrix(true, false)
       this.hillRay.set(
         new THREE.Vector3(x, 400, z),
@@ -1731,9 +1661,6 @@ export class WorldManager {
       const hit = this.hillRay.intersectObject(hill.mesh, false)
       if (hit.length > 0 && hit[0].point.y > h) h = hit[0].point.y
     }
-    // Hills only stand near the car; the rest wait out of sight and move in as
-    // it comes. A hill that is not here yet still has a fixed place, so count
-    // it too, or an airfield could be laid where one is about to rise.
     const g0 = Math.floor(-z / this.segLen)
     const reach = Math.ceil((HILL_MAX_RADIUS * 1.3) / this.segLen)
     for (let g = g0 - reach; g <= g0 + reach; g++) {

@@ -9,12 +9,6 @@ export interface TractionInput {
   slipRatioAvg: number
 }
 
-/**
- * Two actions on spinning driven wheels, whatever the steering or body angle is,
- * so a slide is the driver's to hold: `factor` cuts engine torque on the average
- * slip, `brakeFraction` brakes the one wheel that spins, which also moves torque
- * across an open differential.
- */
 export class TractionControl {
   constructor(
     private readonly gain: Assists["tractionControl"],
@@ -46,7 +40,6 @@ export class TractionControl {
     return this.p.brakeDriveShare
   }
 
-  /** Share of the axle's brake torque to put on one driven wheel (0..1). */
   brakeFraction(wheelSpeed: number, groundSpeed: number, direction: 1 | -1): number {
     const p = this.p
     const slip = (direction * (wheelSpeed - groundSpeed)) / Math.max(Math.abs(groundSpeed), p.slipSpeedFloor)

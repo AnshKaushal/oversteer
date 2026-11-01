@@ -1,19 +1,11 @@
 import * as THREE from "three"
 import { sharedTexture, releaseTexture } from "./Airport"
+import { makeGlowTexture } from "./GlowTexture"
 
-/**
- * The buildings and fences of an airfield, drawn in the runway's own frame:
- * x along the runway (the way a landing aircraft rolls), z across it, y up.
- * The group that holds them is placed on the runway centre and turned to
- * match, so nothing in here needs to know where in the world it is.
- */
 
-/** Half the fenced length, past each end of the runway. */
 export const FENCE_PAST_ENDS = 40
-/** Distance from the runway centre line to the long fences. */
 export const FENCE_OFFSET = 60
 
-/** Light towers stand clear of the widest wingspan (35 m each side). */
 const TOWER_Z = FENCE_OFFSET - 6
 const TOWER_HEIGHT = 18
 
@@ -25,12 +17,10 @@ export interface LocalLamp {
 }
 
 export interface StructureInput {
-  /** Half the runway length. */
   half: number
-  /** Where the access road leaves the runway centre line, along it. */
-  connectorA: number
-  /** Direction of the access road, in the runway's frame (x along, z across). */
-  connectorDir: { x: number; z: number }
+  road: { x: number; z: number }[]
+  towerA: number
+  towerB: number
 }
 
 function makeChainLinkTexture(): THREE.CanvasTexture {
@@ -54,40 +44,26 @@ function makeChainLinkTexture(): THREE.CanvasTexture {
   return t
 }
 
-function makeGlowTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas")
-  c.width = 64
-  c.height = 64
-  const g = c.getContext("2d")!
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32)
-  grad.addColorStop(0, "rgba(255,255,255,1)")
-  grad.addColorStop(0.4, "rgba(255,255,255,0.4)")
-  grad.addColorStop(1, "rgba(255,255,255,0)")
-  g.fillStyle = grad
-  g.fillRect(0, 0, 64, 64)
-  return new THREE.CanvasTexture(c)
+function makeTowerGlow(): THREE.Texture {
+  return makeGlowTexture([[0, 1], [0.4, 0.4], [1, 0]])
 }
 
-/** Draws the fence and tower textures ahead of time, while loading. */
 export function warmStructureTextures() {
   releaseTexture(sharedTexture("chainLink", makeChainLinkTexture))
-  releaseTexture(sharedTexture("towerGlow", makeGlowTexture))
+  releaseTexture(sharedTexture("towerGlow", makeTowerGlow))
 }
 
 export class AirportStructures {
   private shares: THREE.Texture[] = []
-  private share(key: string, make: () => THREE.CanvasTexture) {
+  private share(key: string, make: () => THREE.Texture) {
     const t = sharedTexture(key, make)
     this.shares.push(t)
     return t
   }
 
   readonly group = new THREE.Group()
-  /** Small lamps the airfield draws with the rest of its lights. */
   readonly lamps: LocalLamp[] = []
-  /** Bright lamps on the towers, drawn big. */
   readonly towerLamps: LocalLamp[] = []
-  /** The beacon's two lamps, white and green, in that order. */
   beacon: { white: LocalLamp; green: LocalLamp } | null = null
 
   private solid: THREE.MeshStandardMaterial[] = []
@@ -98,9 +74,7 @@ export class AirportStructures {
 
   constructor(input: StructureInput) {
     const { half } = input
-    const cu = input.connectorDir.x
-    const cn = input.connectorDir.z
-    const glow = this.share("towerGlow", makeGlowTexture)
+    const glow = this.share("towerGlow", makeTowerGlow)
 
     const std = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => {
       const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.1, ...extra })
@@ -139,9 +113,6 @@ export class AirportStructures {
       return m
     }
 
-    // ------------------------------------------------------------------
-    // Fence: round the sides of the field that face the road, with a gate
-    // where the access road goes through.
     const X = half + FENCE_PAST_ENDS
     const Z = FENCE_OFFSET
     const postMat = std(0x7b8087, { metalness: 0.5 })
@@ -157,7 +128,7 @@ export class AirportStructures {
     })
     this.solid.push(meshMat)
 
-    const posts: [number, number, number][] = [] // x, z, height
+    const posts: [number, number, number][] = []
     const sides = [
       { nx: 0, nz: 1 },
       { nx: 0, nz: -1 },
@@ -165,20 +136,34 @@ export class AirportStructures {
       { nx: -1, nz: 0 },
     ]
     for (const side of sides) {
-      const facing = cu * side.nx + cn * side.nz
-      if (facing <= 0.35) continue
-      const along = side.nx === 0 // runs along x when the side is a long one
+      const along = side.nx === 0
       const extent = along ? X : Z
-      // Where the access road crosses this side, and how wide the gap is.
-      const t = along
-        ? (side.nz * Z) / (Math.abs(cn) < 1e-6 ? 1e-6 : cn)
-        : (side.nx * X - input.connectorA) / (Math.abs(cu) < 1e-6 ? 1e-6 : cu)
-      const gateAt = along ? input.connectorA + t * cu : t * cn
-      const gapHalf = 4.5 / Math.max(0.3, facing) + 2
-      const segs: [number, number][] = [
-        [-extent, Math.max(-extent, gateAt - gapHalf)],
-        [Math.min(extent, gateAt + gapHalf), extent],
-      ]
+      const fixed = along ? side.nz * Z : side.nx * X
+      const gaps: [number, number][] = []
+      const rd = input.road
+      for (let i = 1; i < rd.length; i++) {
+        const p = rd[i - 1]
+        const q = rd[i]
+        const pc = (along ? p.z : p.x) - fixed
+        const qc = (along ? q.z : q.x) - fixed
+        if (pc * qc > 0 || pc === qc) continue
+        const u = pc / (pc - qc)
+        const sAt = (along ? p.x : p.z) + u * ((along ? q.x : q.z) - (along ? p.x : p.z))
+        const dx = q.x - p.x
+        const dz = q.z - p.z
+        const cross = Math.abs(along ? dz : dx) / Math.max(Math.hypot(dx, dz), 1e-6)
+        const half = 4.5 / Math.max(0.3, cross) + 2
+        gaps.push([sAt - half, sAt + half])
+      }
+      gaps.sort((g, h) => g[0] - h[0])
+      const segs: [number, number][] = []
+      let cursor = -extent
+      for (const [g0, g1] of gaps) {
+        if (g0 > cursor) segs.push([cursor, Math.min(extent, g0)])
+        cursor = Math.max(cursor, g1)
+      }
+      if (cursor < extent) segs.push([cursor, extent])
+      const gateEnds = gaps.flatMap(([g0, g1]) => [g0, g1])
       for (const [s0, s1] of segs) {
         const len = s1 - s0
         if (len < 2) continue
@@ -218,12 +203,10 @@ export class AirportStructures {
           posts.push(along ? [s, fixed, 2.4] : [fixed, s, 2.4])
         }
       }
-      // Taller gate posts either side of the opening.
-      for (const sgn of [-1, 1]) {
-        const s = gateAt + sgn * gapHalf
-        if (Math.abs(s) > extent) continue
-        const gx = along ? s : side.nx * X
-        const gz = along ? side.nz * Z : s
+      for (const e of gateEnds) {
+        if (Math.abs(e) > extent) continue
+        const gx = along ? e : side.nx * X
+        const gz = along ? side.nz * Z : e
         box(0.3, 3.2, 0.3, gateMat, gx, 1.6, gz)
       }
     }
@@ -241,8 +224,6 @@ export class AirportStructures {
       this.group.add(im)
     }
 
-    // ------------------------------------------------------------------
-    // Light towers: tall masts with a lamp head, clear of the wingtips.
     const towerMat = std(0x8d9297, { metalness: 0.6, roughness: 0.6 })
     const headMat = std(0x2a2d31)
     const poolGeo = new THREE.PlaneGeometry(64, 64)
@@ -251,7 +232,6 @@ export class AirportStructures {
       for (const sgn of [-1, 1]) {
         const z = sgn * TOWER_Z
         cyl(0.2, 0.36, TOWER_HEIGHT, 8, towerMat, x, TOWER_HEIGHT / 2, z)
-        // Catwalk and head, with the lamps pointing in at the runway.
         box(4.2, 0.18, 1.2, towerMat, x, TOWER_HEIGHT - 0.2, z)
         const head = box(4, 0.7, 0.5, headMat, x, TOWER_HEIGHT + 0.3, z - sgn * 0.4)
         head.castShadow = false
@@ -263,7 +243,6 @@ export class AirportStructures {
             color: [1, 0.9, 0.7],
           })
         }
-        // The pool of light the lamps throw on the ground below.
         const poolMat = new THREE.MeshBasicMaterial({
           map: glow,
           color: 0xffe2b4,
@@ -286,10 +265,8 @@ export class AirportStructures {
       }
     }
 
-    // ------------------------------------------------------------------
-    // The control tower, on the apron side of the access road.
-    const ax = input.connectorA + 20
-    const az = (cn >= 0 ? -1 : 1) * 44
+    const ax = input.towerA
+    const az = input.towerB
     const concrete = std(0xbfc2c6)
     const shaftMat = std(0xe0e2e4)
     const roofMat = std(0x4a4e55)
@@ -309,7 +286,6 @@ export class AirportStructures {
     cyl(0.07, 0.07, 6, 5, towerMat, ax, 26.8, az)
     box(2.4, 0.15, 0.5, towerMat, ax, 25.5, az)
     box(0.5, 1.3, 1.6, shaftMat, ax + 2.2, 24.4, az)
-    // Obstruction lights on the roof edge and the mast, and the beacon.
     for (const [dx, dz] of [
       [4.6, 0],
       [-4.6, 0],
@@ -325,7 +301,6 @@ export class AirportStructures {
     }
   }
 
-  /** Fades the solid parts in and out, blending only while fading. */
   fade(alpha: number) {
     const fading = alpha < 0.999
     for (const m of this.solid) {
@@ -335,7 +310,6 @@ export class AirportStructures {
     this.group.visible = alpha > 0.001
   }
 
-  /** Lights the tower pools and the control tower windows. */
   setLit(lit: boolean, alpha: number) {
     for (const p of this.pools) p.opacity = lit ? 0.3 * alpha : 0
     this.windows.emissiveIntensity = lit ? 1.6 : 0

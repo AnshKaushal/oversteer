@@ -34,11 +34,6 @@ import { WheelSolver } from "./WheelSolver"
 
 export type { CarTelemetry, Gear } from "./types"
 
-/**
- * One car. Builds every component from its spec and runs them in a fixed
- * order each physics step. Components never call each other; this class
- * passes values between them. App, AI and multiplayer talk to this API.
- */
 export class Vehicle {
   readonly wheelbase: number
   readonly trackWidth: number
@@ -65,19 +60,15 @@ export class Vehicle {
   private readonly forces: BodyForces
 
   autoMode = true
-  /** Traction control on or off (the X key). Driver aids start off. */
   tractionControlOn = false
   stabilityControlOn = false
   private readonly rawFlareRpm: number
-  /** Arcade shifts follow driving style; realistic shifts at a fixed style. */
   shiftMode: ShiftMode = DEFAULT_SHIFT_MODE
   autoShiftEnabled = true
   private simTime = 0
-  /** Wheels on the ground at the last step; the stability control reads it a step late. */
   private groundedWheels = 0
   private readonly noBrake: number[]
   private readonly totalMass: number
-  /** Traction control is cutting engine torque this step. */
   private engineCut = false
 
   constructor(
@@ -146,7 +137,6 @@ export class Vehicle {
     )
   }
 
-  // ---- state other code reads or sets ---------------------------------
   get gear(): Gear {
     return this.gearbox.gear
   }
@@ -201,7 +191,6 @@ export class Vehicle {
   get aggressionLevel(): number {
     return this.aggression.value
   }
-  /** Angular speed of the driven axle (rad/s). */
   get spinOmega(): number {
     return this.driveline.drivenOmega
   }
@@ -231,32 +220,24 @@ export class Vehicle {
     return [a ?? 0, b ?? 0, c ?? 0, d ?? 0]
   }
 
-  /** Traction and stability control both on: the car manages its own launch. */
   get safetyAidsOn(): boolean {
     return this.tractionControlOn && this.stabilityControlOn
   }
 
-  /** Handbrake latched on by a tap of the key. */
   handbrakeLatched = false
 
-  /** One switch for the safety dynamics: all on, or (if any is on) the lot off. */
   toggleSafety() {
     const on = !(this.tractionControlOn || this.stabilityControlOn)
     this.tractionControlOn = on
     this.stabilityControlOn = on
   }
 
-  /** Revs while the clutch slips: the managed flare, or peak torque when raw. */
   private flareRpm(): number {
     return this.safetyAidsOn ? this.P.engine.dynamics.launchFlareRPM : this.rawFlareRpm
   }
 
   private stallT = 0
 
-  /**
-   * Starting off in a gear too tall to pull the car from rest: the converter slips at its
-   * stall speed, but with too little wheel force the engine just labours and then dies.
-   */
   private checkStall(dt: number, gear: number, throttle: number, speedKmh: number, gearRatio: number) {
     const P = this.P
     const d = P.engine.dynamics
@@ -274,7 +255,6 @@ export class Vehicle {
     }
   }
 
-  /** Tyre grip left after a recent hit (1 undisturbed). */
   get impactGrip(): number {
     return this.forces.impact.gripScale
   }
@@ -315,7 +295,6 @@ export class Vehicle {
     }
   }
 
-  // ---- one physics step -------------------------------------------------
   update(dt: number, raw: DriveInput): CarTelemetry {
     const P = this.P
     const g = this.gearbox
@@ -323,7 +302,6 @@ export class Vehicle {
     const origThrottle = raw.throttle
     const origBrake = raw.brake
     let input = raw
-    // In reverse, auto mode keeps S as throttle. Manual keeps W as throttle.
     if (g.gear === -1 && this.autoMode) {
       input = { ...input, throttle: input.brake, brake: input.throttle }
     }
@@ -332,8 +310,6 @@ export class Vehicle {
     if (input.toggleTractionPressed) this.tractionControlOn = !this.tractionControlOn
     if (input.toggleSafetyPressed) this.toggleSafety()
     if (input.toggleIgnitionPressed) this.engine.toggleIgnition()
-    // Handbrake: a tap latches it, a hold only engages it while held. A latched
-    // handbrake lets go once the driver pulls away on the throttle.
     if (input.toggleHandbrakePressed) this.handbrakeLatched = !this.handbrakeLatched
     else if (input.throttle > this.P.brakes.parkingReleaseThrottle) this.handbrakeLatched = false
     if (this.handbrakeLatched) input = { ...input, handbrake: true }
@@ -383,8 +359,6 @@ export class Vehicle {
     input = { ...input, throttle: cruised.throttle, brake: cruised.brake }
 
     const gearRatio = g.ratio(g.gear)
-    // Spinning driven wheels drag the engine up with them, so wheelspin loads
-    // and limits the engine instead of leaving it at the ground-speed rpm.
     const coupled = Math.max(
       Math.abs(((k.fwdSpeed / P.wheels.radius) * gearRatio * SECONDS_PER_MINUTE) / TWO_PI),
       g.gear !== 0 ? Math.abs((this.driveline.drivenOmega * gearRatio * SECONDS_PER_MINUTE) / TWO_PI) : 0,
@@ -417,7 +391,6 @@ export class Vehicle {
       dt,
       gear: g.gear,
       gearCount: g.count,
-      // while the clutch slips, flared revs say nothing about the wheels
       rpm: this.engine.slipping ? coupled : this.engine.rpm,
       throttle: input.throttle,
       aggressionCoef: coef,
@@ -539,7 +512,6 @@ export class Vehicle {
     return lateralSpeedOf(this.body)
   }
 
-  /** Paddle shift, with the high-rpm clutch dump from neutral. */
   private manualShift(dir: 1 | -1) {
     const g = this.gearbox
     const prevRpm = this.engine.rpm

@@ -28,10 +28,6 @@ const ALL_CARS: CarSpec[] = [
   mercedesSl65,
 ]
 
-/**
- * Specs are validated at load. In a production build an invalid car is
- * logged and left out of the registry; anywhere else it throws.
- */
 export const CARS: CarSpec[] = ALL_CARS.filter((car) => {
   const errs = validateCar(car)
   if (!errs.length) return true

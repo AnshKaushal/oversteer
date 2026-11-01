@@ -1,11 +1,6 @@
 import type { Engine, ShiftLogicSpec, Transmission } from "../../../data/schema"
 import { curveLookup, lerp } from "../../math"
 
-/**
- * Upshift rpm per gear, from where the next gear delivers at least as much
- * wheel torque as the current one. Index 0 is 1st. Gears never shift above
- * `ceiling`, and the top gear always gets the ceiling.
- */
 export function optimalUpshiftRpms(
   engine: Pick<Engine, "idleRPM" | "torqueCurve">,
   ratios: readonly number[],
@@ -30,7 +25,6 @@ export interface ShiftInput {
   gearCount: number
   rpm: number
   throttle: number
-  /** Quadratic driver aggression, 0..1. */
   aggressionCoef: number
   speedKmh: number
   autoMode: boolean
@@ -38,28 +32,18 @@ export interface ShiftInput {
   changeDelayActive: boolean
   launchArmed: boolean
   limiterCut: boolean
-  /** TC or stability control is cutting torque right now. */
   assistCutting: boolean
   slipRatioAvg: number
   lateralVelocity: number
-  /** Rpm the driven wheels would impose in a given forward gear. */
   predictedRpm: (gear: number) => number
 }
 
-/**
- * Automatic gear selection. Shift points come from the engine's idle and
- * redline and the driver's aggression; returns how many gears to change
- * (0 for none). Executing the shift is the gearbox's job.
- */
 export class ShiftLogic {
-  /** Seconds left of a kickdown wind-up, 0 if none. */
   kickdownTimer = 0
   private kickdownTarget: number | null = null
   private lastGear = 0
   private sinceUpshift = Infinity
-  /** Seconds rpm has stayed over the upshift point in the current gear. */
   private overRevTime = 0
-  /** Computed upshift rpm per gear, used when the car gives no override. */
   readonly optimal: number[]
 
   constructor(
@@ -76,14 +60,12 @@ export class ShiftLogic {
     )
   }
 
-  /** Upshift rpm that forces a shift in this gear. */
   private upLimit(gear: number): number {
     const redline = this.engine.redlineRPM
     const pick = this.autoUpshiftRpm ?? this.optimal[Math.max(0, gear - 1)]
     return Math.min(pick, redline - this.p.upMargin)
   }
 
-  /** Throttle lifted or braking: drop any pending kickdown. */
   cancelIfRelaxed(throttle: number, brake: number) {
     if (throttle < this.p.cancelThrottle || brake > this.p.cancelBrake) {
       this.kickdownTimer = 0
@@ -122,18 +104,11 @@ export class ShiftLogic {
 
     if (antiStall) return 1 - i.gear
 
-    // Revs flare past the shift point in 1st under wheelspin; make the box wait
-    // so the engine hits the limiter and stutters before 2nd goes in.
-    // In any gear, keep holding while the wheels are spinning, up to a cap so a
-    // burnout or slide cannot pin the box forever; shift once grip returns.
-    // TC/ESC keep slip high and pull revs back under the shift point, so the
-    // slip hold would never release; leave shifting to the assists then.
     const hold = slipping && !i.assistCutting
       ? (p.slipShiftHoldMax ?? 1)
       : i.gear === 1
         ? (p.firstGearHold ?? 0.45)
         : 0
-    // decay rather than reset: assists dip rpm under the point for a frame
     this.overRevTime = i.rpm > upRpm ? this.overRevTime + i.dt : Math.max(0, this.overRevTime - i.dt)
 
     if (
@@ -175,7 +150,6 @@ export class ShiftLogic {
     return 0
   }
 
-  /** Scan up from 1st for the lowest gear that does not over-rev. */
   private kickdown(i: ShiftInput, idle: number, redline: number): number {
     const p = this.p
     const headroom = Math.max(

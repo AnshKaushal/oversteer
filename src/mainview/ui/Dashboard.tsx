@@ -81,10 +81,6 @@ function useDialRefs(): DialRefs {
   }
 }
 
-// Decluttering budgets. The dial sweeps 78° (START→END); whatever the
-// per-car max (260–380 km/h speedo, 7k–15k rpm tach), minor ticks stay
-// ≥ ~2.6° apart and labelled majors ≥ ~8.7° apart. Steps snap to nice
-// 1/2/4/5×10ⁿ values so tick marks and labels never pile up.
 const MAX_MINOR_TICKS = 30
 const MAX_MAJOR_LABELS = 9
 
@@ -98,12 +94,9 @@ function smallestNiceStep(maxValue: number, maxCount: number) {
   return maxValue
 }
 
-// Subdivide the major step into the densest subdivision whose tick count
-// still fits the budget (½, ¼ or ⅕ subdivisions — classic gauge hierarchies).
 function subdivideStep(maxValue: number, major: number, maxTicks: number) {
   for (const d of [4, 5, 2, 1]) {
     const minor = major / d
-    // Keep tick marks on whole units for integer dial maxes (no 12.5 ticks).
     if (Number.isInteger(maxValue) && !Number.isInteger(minor)) continue
     if (Math.ceil(maxValue / minor - 1e-9) <= maxTicks) return minor
   }
@@ -120,8 +113,6 @@ function buildScale(
   const out: React.ReactNode[] = []
   const isRpm = kind === "rpm"
   const unitMax = isRpm ? maxValue : maxValue
-  // Scale is dial-geometry driven, not driven by arbitrary maxValue
-  // thresholds — see the decluttering budgets above.
   const major = smallestNiceStep(unitMax, MAX_MAJOR_LABELS)
   const minor = subdivideStep(unitMax, major, MAX_MINOR_TICKS)
   const n = Math.floor(unitMax / minor + 1e-6)
@@ -208,11 +199,9 @@ function ParkIcon() {
   )
 }
 
-/** rpm-dial telltale arc: icon size and spacing along the arc, in dial units. */
 const ICON_SIZE = 22
 const ICON_PITCH = 26
 
-/** Gauge with a needle: cruise control. */
 function CruiseIcon() {
   return (
     <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -241,7 +230,6 @@ function DriftIcon() {
   )
 }
 
-/** Circled text: traction control (TC) and ABS telltales. */
 function TextIcon({ label }: { label: string }) {
   return (
     <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
@@ -253,7 +241,6 @@ function TextIcon({ label }: { label: string }) {
   )
 }
 
-/** Shield with a tick: stability / traction control. */
 function SafetyIcon() {
   return (
     <g
@@ -462,7 +449,6 @@ function Dial({
             [refs.icon2, <SafetyIcon key="safe" />],
           ] as const)
       ).map(([ref, icon], i, row) => {
-        // icons sit on an arc concentric with the dial, each turned to follow it
         const r = Math.hypot(iconPos.x + 12 - cx, iconPos.y + 12 - S)
         const a0 = Math.atan2(iconPos.y + 12 - S, iconPos.x + 12 - cx)
         const a = a0 + ((i - (row.length - 1) / 2) * ICON_PITCH) / r
@@ -657,8 +643,6 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
 
       const blink = Math.floor(now / 170) % 2 === 0
       paintTelltale(spd.icon.current, booting || t.parkingBrake, RED, true)
-      // aids light steadily while on, blink while intervening, and go dark when switched off
-      // shield = stability control (G), TC = traction control (X); N switches both
       paintTelltale(spd.icon2.current, booting || !!t.cruiseOn, BLUE, true)
       if (spd.cruiseTxt.current) {
         const ct = t.cruiseOn ? String(Math.round(t.cruiseTargetKmh ?? 0)) : ""

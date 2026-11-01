@@ -1,7 +1,6 @@
 import type { Wheels } from "../../../data/schema"
 import { clamp } from "../../math"
 
-/** Speed-sensitive steering with a grip-based angle cap and slew limit. */
 export class Steering {
   angle = 0
 
@@ -11,11 +10,6 @@ export class Steering {
     private readonly trackWidth: number,
   ) {}
 
-  /**
-   * Road-wheel angle of one front wheel for a centre angle. Full Ackermann
-   * turns the inside wheel more so both circle one point; the factor blends
-   * from parallel steering (0) to full Ackermann (1). Rear wheels do not steer.
-   */
   wheelAngle(front: boolean, left: boolean, centre: number): number {
     if (!front || centre === 0) return 0
     const t = Math.tan(Math.abs(centre))

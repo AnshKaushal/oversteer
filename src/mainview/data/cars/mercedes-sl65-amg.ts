@@ -434,8 +434,6 @@ export const mercedesSl65: CarSpec = {
     maxKmh: 360,
   },
   defaultTint: null,
-  // The shell is the one material named "Cylinder": a flat grey (53,54,55) with the badges and
-  // shut lines baked in. Tyres, rims, trim, lamps and glass use other materials and stay as modelled.
   paintMatch: ["^Cylinder$"],
   paintTexture: { keepMap: true, neutralize: { color: [53, 54, 55], tol: 6 } },
   tested: {

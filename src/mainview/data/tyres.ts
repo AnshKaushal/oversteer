@@ -1,6 +1,5 @@
 import type { LoadedPacejkaCurve, PacejkaCurve, TireSpec, Wheels } from "./schema"
 
-/** A tyre compound: grip, curve shape and patch dynamics. A car picks one and overrides what differs. */
 export interface TyrePreset {
   frictionMu: number
   rollingResist: number
@@ -21,7 +20,6 @@ const loaded = (B: number, C: number, E: number, loadSensitivity: number): Loade
 })
 
 export const TYRES = {
-  /** All-round road tyre. */
   sport: {
     frictionMu: 1.4,
     rollingResist: 0.012,
@@ -34,7 +32,6 @@ export const TYRES = {
       aligning: curve(8, 1.2, 0.97),
     },
   },
-  /** Economy / touring: lower grip, soft onset. */
   street: {
     frictionMu: 1.1,
     rollingResist: 0.01,
@@ -47,7 +44,6 @@ export const TYRES = {
       aligning: curve(7, 1.2, 0.95),
     },
   },
-  /** Track compound: high grip, sharp peak, more rolling loss. */
   race: {
     frictionMu: 1.7,
     rollingResist: 0.015,
@@ -60,7 +56,6 @@ export const TYRES = {
       aligning: curve(9, 1.2, 0.9),
     },
   },
-  /** Winter / all-season: moderate grip, long and forgiving. */
   allSeason: {
     frictionMu: 1.2,
     rollingResist: 0.012,
@@ -73,7 +68,6 @@ export const TYRES = {
       aligning: curve(6, 1.2, 0.9),
     },
   },
-  /** Knobbly off-road tyre: low grip on tarmac, wide gentle peak, large patch lag. */
   offRoad: {
     frictionMu: 1.0,
     rollingResist: 0.02,
@@ -90,7 +84,6 @@ export const TYRES = {
 
 export type TyrePresetName = keyof typeof TYRES
 
-/** The tyre fields of `Wheels` from a preset, with per-car overrides on top. */
 export function tyre(
   name: TyrePresetName,
   override: Partial<Pick<Wheels, "frictionMu" | "rollingResist" | "relaxationLength" | "slipDampRate">> = {},

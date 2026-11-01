@@ -1,11 +1,6 @@
 import * as THREE from "three"
 import { WORLD } from "../../data/world"
 
-/**
- * Previous and current physics pose of one body. The renderer draws
- * `lerp/slerp(prev, curr, alpha)` so motion stays smooth at any refresh
- * rate, whatever the fixed physics rate is.
- */
 export class PoseHistory {
   readonly prevPos = new THREE.Vector3()
   readonly currPos = new THREE.Vector3()
@@ -15,12 +10,10 @@ export class PoseHistory {
   private currComp: number[] = []
   private primed = false
 
-  /** True once at least one pose has been captured. */
   get ready(): boolean {
     return this.primed
   }
 
-  /** Call once after every physics step. */
   capture(
     pos: { x: number; y: number; z: number },
     rot: { x: number; y: number; z: number; w: number },
@@ -42,14 +35,12 @@ export class PoseHistory {
     this.currRot.set(rot.x, rot.y, rot.z, rot.w)
     this.currComp = []
     this.storeComp(compressions)
-    // A teleport (reset, respawn) must not be smeared across a frame.
     if (this.prevPos.distanceTo(this.currPos) > WORLD.teleportDistance) {
       this.snap()
       this.prevComp = this.currComp.slice()
     }
   }
 
-  /** Make prev equal curr (no blending until the next capture). */
   snap() {
     this.prevPos.copy(this.currPos)
     this.prevRot.copy(this.currRot)

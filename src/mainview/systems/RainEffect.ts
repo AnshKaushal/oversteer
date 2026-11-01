@@ -1,19 +1,13 @@
 import * as THREE from "three"
 
 const MAX_DROPS = 3200
-/** Half-size (m) of the box of rain that follows the camera. */
 const BOX = 34
 const HEIGHT = 26
 const FALL_SPEED = 26
-/** Streak length (m) at rest, and extra length per m/s of speed relative to the air (capped). */
 const STREAK = 0.9
 const STREAK_PER_SPEED = 0.03
 const STREAK_MAX = 4.5
 
-/**
- * Rain as thin streaks in a box that follows the camera, plus lightning flashes. The streaks live in
- * world space and wrap around the camera, so a moving car sees them rush past.
- */
 export class RainEffect {
   private readonly pos = new Float32Array(MAX_DROPS * 6)
   private readonly geo = new THREE.BufferGeometry()
@@ -57,7 +51,6 @@ export class RainEffect {
     this.bolt = []
   }
 
-  /** Moves the rain and returns the current lightning flash, 0 (none) to 1. */
   update(dt: number, cam: THREE.Vector3): number {
     if (this.intensity <= 0) return 0
     const p = this.pos
@@ -75,7 +68,6 @@ export class RainEffect {
     const fall = fallSpeed * dt
     const windSpeed = this.lightning ? 7 : 3
     const wind = windSpeed * dt
-    // a drop streaks along its motion relative to the camera, so driving fast lays the rain back
     const rx = windSpeed - this.camVel.x
     const ry = -fallSpeed - this.camVel.y
     const rz = -this.camVel.z
@@ -105,7 +97,6 @@ export class RainEffect {
     return this.lightning ? this.flash(dt) : 0
   }
 
-  /** Camera velocity from its movement, smoothed; a jump (respawn, teleport) is not speed. */
   private trackCamera(dt: number, cam: THREE.Vector3) {
     if (this.haveLastCam && dt > 0) {
       const raw = cam.clone().sub(this.lastCam).divideScalar(dt)
@@ -116,7 +107,6 @@ export class RainEffect {
     this.haveLastCam = true
   }
 
-  /** A bolt is a quick double flash; bolts come every few seconds. */
   private flash(dt: number): number {
     this.boltClock += dt
     if (this.bolt.length === 0 && this.boltClock >= this.nextBolt) {
@@ -125,7 +115,6 @@ export class RainEffect {
       this.nextBolt = 4 + Math.random() * 9
     }
     if (this.bolt.length === 0) return 0
-    // each pulse lasts about 60 ms and decays
     const level = this.bolt[0]
     this.bolt[0] -= dt * 14
     if (this.bolt[0] <= 0.02) this.bolt.shift()

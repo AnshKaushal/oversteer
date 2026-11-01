@@ -8,18 +8,11 @@ export interface Vec3Like {
 }
 
 export interface ImpactResult {
-  /** Replacement velocities when the hit would have launched or spun the car too hard. */
   linvel?: Vec3Like
   angvel?: Vec3Like
 }
 
-/**
- * Crash handling on a rigid body with no damage model. A sudden velocity change between two steps while
- * the body touches something is a hit: the car keeps its stopping power but cannot be thrown upward or spun past the data limits, and
- * its tyres lose grip for a while, recovering over `gripRecovery`.
- */
 export class Impact {
-  /** Tyre grip scale, 1 when undisturbed. */
   gripScale = 1
   private lost = 0
   private prevLin: Vec3Like | null = null
@@ -27,7 +20,6 @@ export class Impact {
 
   constructor(private readonly p: CrashSpec) {}
 
-  /** Called at the start of a step with the velocities the physics step produced. */
   update(dt: number, lin: Vec3Like, ang: Vec3Like, touching: () => boolean): ImpactResult {
     const p = this.p
     this.lost = Math.max(0, this.lost - (p.gripLoss / p.gripRecovery) * dt)
@@ -36,7 +28,6 @@ export class Impact {
     const out: ImpactResult = {}
     if (prev && this.prevAng) {
       const dv = Math.hypot(lin.x - prev.x, lin.y - prev.y, lin.z - prev.z)
-      // only a body in contact can have been hit; a teleport or a set velocity is not a crash
       if (dv > p.detectDeltaV && touching()) {
         const severity = clamp((dv - p.detectDeltaV) / p.severeDeltaV, 0, 1)
         this.lost = Math.max(this.lost, p.gripLoss * severity)
@@ -52,7 +43,6 @@ export class Impact {
     return out
   }
 
-  /** Called at the end of a step with the velocities the car leaves it with. */
   record(lin: Vec3Like, ang: Vec3Like) {
     this.prevLin = { x: lin.x, y: lin.y, z: lin.z }
     this.prevAng = { x: ang.x, y: ang.y, z: ang.z }

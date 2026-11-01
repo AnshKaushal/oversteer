@@ -1,6 +1,5 @@
 import type { ContactSpec, KinematicsSpec } from "../../../data/schema"
 
-/** Averaged driven-wheel slip and the drift flag. */
 export class SlipTracker {
   slipRatioAvg = 0
   rearSlip = 0

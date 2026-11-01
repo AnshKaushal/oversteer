@@ -23,37 +23,21 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDayMode, string> = {
 export interface TimeOfDayPreset {
   id: TimeOfDayMode
   name: string
-  /** Sky background color */
   skyColor: number
-  /** Horizon / distant blend color */
   horizonColor: number
-  /** Fog tint */
   fogColor: number
-  /** Distance where fog begins */
   fogNear: number
-  /** Distance where fog fully saturates */
   fogFar: number
-  /** Directional sun / moon color */
   sunColor: number
-  /** Sun / moon light intensity */
   sunIntensity: number
-  /** Sun / moon position relative to the camera/car */
   sunPosition: { x: number; y: number; z: number }
-  /** Hemisphere ambient sky color */
   hemiSkyColor: number
-  /** Hemisphere ambient ground bounce color */
   hemiGroundColor: number
-  /** Hemisphere light intensity */
   hemiIntensity: number
-  /** Terrain ground plane base color */
   groundColor: number
-  /** Whether headlights should be automatically active */
   isLowLight: boolean
-  /** Rain intensity, 0 (none) to 1 (downpour). */
   rain: number
-  /** Whether lightning flashes in this sky. */
   lightning: boolean
-  /** Grip this sky implies; the settings weather can only make it worse. */
   weather: WeatherId
 }
 
@@ -180,17 +164,12 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
   },
 }
 
-/**
- * Returns true if the selected time of day is low-light (evening / night)
- * where real-world vehicles turn their headlights on.
- */
 export function isLowLight(mode: TimeOfDayMode): boolean {
   return TIME_OF_DAY_PRESETS[mode]?.isLowLight ?? false
 }
 
 const WEATHER_SEVERITY: readonly WeatherId[] = ["dry", "damp", "wet", "storm"]
 
-/** The worse of the chosen weather and what the sky implies, so a rainy sky is never dry underfoot. */
 export function effectiveWeather(chosen: WeatherId, mode: TimeOfDayMode): WeatherId {
   const sky = TIME_OF_DAY_PRESETS[mode]?.weather ?? "dry"
   return WEATHER_SEVERITY.indexOf(sky) > WEATHER_SEVERITY.indexOf(chosen) ? sky : chosen

@@ -37,20 +37,16 @@ export interface RemoteCarOptions {
   paintTexture?: PaintTextureRule
   pivots?: CarVisualOptions["pivots"]
   wheelSpots?: CarVisualOptions["wheelSpots"]
-  /** Start already placed, with collisions on (tests that stage the body by hand). */
   startPlaced?: boolean
-  /** Show the model's own paint instead of a tint (the peer's car is unpainted). */
   stock?: boolean
 }
 
-/** The car's whole mass (wheels included) times the data's grip allowance: a ghost has no tyres or driver to hold its line. */
 function ghostMass(p: CarPhysicsConfig): number {
   const m = p.mass
   return (m.chassis + 2 * (m.frontWheel + m.rearWheel)) * NET.remote.massScale
 }
 
 const SOLID_GROUPS = 0xffffffff
-/** Member of group 1, collides with nothing. */
 const GHOST_GROUPS = 0x00010000
 const REMOTE_DEFAULT_MODEL = "models/bmw_m3.glb"
 const POS_GAIN = NET.remote.posGain
@@ -76,9 +72,7 @@ export class RemoteCar {
   private world: RAPIER.World | null = null
   private collider: RAPIER.Collider | null = null
   private cabinCollider: RAPIER.Collider | null = null
-  /** False until the body has been put on its first target. */
   private placed = false
-  /** Collisions are off while the ghost overlaps another body, so a peer appearing inside you shoves nobody. */
   private solid = false
   private rapier: typeof RAPIER | null = null
 
@@ -183,7 +177,6 @@ export class RemoteCar {
     }
   }
 
-  /** The ghost's shape: the car's lower box and cabin, with its real mass. */
   private attachColliders(phys: CarPhysicsConfig) {
     const world = this.world
     const body = this.colliderBody
@@ -296,7 +289,6 @@ export class RemoteCar {
     this.cabinCollider?.setCollisionGroups(g)
   }
 
-  /** True when the ghost's footprint, with a margin, touches another moving body. */
   private overlapsOthers(): boolean {
     const w = this.world
     const b = this.colliderBody
@@ -325,7 +317,6 @@ export class RemoteCar {
     return hit
   }
 
-  /** Interpolation delay (ms) from the peer's clock sync. */
   delayMs: number = NET.interp.minDelayMs
   throttleIn = 0
   smokeLevel = 0
@@ -333,7 +324,6 @@ export class RemoteCar {
   private wheelOmegaIn: number[] | null = null
   private compressionIn: number[] | null = null
 
-  /** `timelineMs` is the packet's send time on our clock; `arrivalMs` is when it came. */
   onPacket(
     state: ValidatedState,
     timelineMs: number,
@@ -411,7 +401,6 @@ export class RemoteCar {
     netDiagContact(this.id, touching, impulse, this.corr.mode, support)
   }
 
-  /** The peer's paint: a colour, or null for the model's own. Switching between the two reloads the visual. */
   setPaint(paint: number | null) {
     const wantStock = paint === null
     if (wantStock !== this.stock) {
@@ -473,7 +462,6 @@ export class RemoteCar {
     this.targetVel.set(this.interpOut.vx, this.interpOut.vy, this.interpOut.vz)
 
     if (!this.placed) {
-      // first sample: appear at the car's real place, never drift in from the origin through other cars
       try {
         b.setTranslation(
           { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z },
@@ -499,7 +487,6 @@ export class RemoteCar {
     if (!this.solid && this.placed && !this.overlapsOthers()) this.setSolid(true)
 
     const ageS = Math.max(0, (now - this.lastPacketTime) / 1000)
-    // the interpolated target is already at the right moment; no extra lead
     _goal.copy(this.targetPos)
 
     const authority = ageS < 0.2 ? 1 : Math.max(0, 1 - (ageS - 0.2) / 0.3)
@@ -707,7 +694,6 @@ export class RemoteCar {
     _pos.set(bp.x, bp.y, bp.z)
     _quat.set(bq.x, bq.y, bq.z, bq.w)
 
-    // the sender's real wheel spin and suspension travel; rolling speed only for packets without them
     let omegas: number[]
     if (this.wheelOmegaIn) {
       omegas = this.wheelOmegaIn
@@ -733,7 +719,6 @@ export class RemoteCar {
       if (this.smokePosBuf.length === 0) {
         this.smokeAcc = 0
       } else {
-        // same emission rate as the local car
         this.smokeAcc += dt * this.smokeLevel * 90
         while (this.smokeAcc >= 1) {
           this.smokeAcc -= 1

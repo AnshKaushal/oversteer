@@ -1,14 +1,5 @@
 import { NET } from "../../data/net"
 
-/**
- * Binary car state. 72 bytes, little endian:
- *   0 u8 magic  1 u8 flags  2 u32 seq  6 u32 sender ms  10 u32 session
- *   14 f32 x y z  26 u32 quat (2 bit index of the largest, three 10 bit)
- *   30 i16 v xyz  36 i16 w xyz  42 i16 steer  44 i16 speed  46 u16 rpm
- *   48 i8 gear  49 u8 throttle  50 u8 brake  51 f32 progress
- *   55 i16 wheel omega x4 (rad/s)  63 i16 suspension compression x4 (m)
- *   71 u8 tyre smoke level
- */
 export const STATE_BYTES = 72
 const MAGIC = 0xa0 | (NET.protocolVersion & 0x0f)
 const SQRT1_2 = Math.SQRT1_2
@@ -21,9 +12,7 @@ const COMP_SCALE = 4000
 
 export interface WireState {
   seq: number
-  /** Sender simulation time, ms. */
   t: number
-  /** Session hash. */
   sess: number
   x: number
   y: number
@@ -48,18 +37,14 @@ export interface WireState {
   smoke: boolean
   handbrake: boolean
   progress: number
-  /** Wheel spin (rad/s), in wheel order. */
   wheelOmega: [number, number, number, number]
-  /** Suspension compression (m). */
   compression: [number, number, number, number]
-  /** Tyre smoke strength, 0 to 1. */
   smokeLevel: number
 }
 
 const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : v
 
-/** FNV-1a over a string. */
 export function fnv1a(s: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) {
@@ -192,7 +177,6 @@ export function decodeState(data: ArrayBuffer | ArrayBufferView): DecodeResult {
   }
 }
 
-/** Stable JSON with sorted keys, for hashing car data. */
 export function canonicalJson(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null"
   if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`
@@ -204,7 +188,6 @@ export function canonicalJson(v: unknown): string {
     .join(",")}}`
 }
 
-/** Hash of a car's physics data; peers with a different value run different physics. */
 export function specHash(spec: unknown): string {
   return hex32(fnv1a(canonicalJson(spec)))
 }

@@ -136,7 +136,8 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) <= tol * Math
   const ctx = { wheelIndex: 0, omega: 0, dt: 1 / 120, front: true, reverse: false, brake: 1, handbrake: false, steer: 0, throttle: 0, speedKmh: 50 }
   check("brakes: front torque is the front brake force", near(b.torque(ctx), P.wheels.brakeForce.front))
   check("brakes: rear torque is the rear brake force", near(b.torque({ ...ctx, front: false }), P.wheels.brakeForce.rear))
-  check("brakes: handbrake adds rear torque only", near(b.torque({ ...ctx, brake: 0, handbrake: true, front: false }), P.wheels.handbrakeForce) && b.torque({ ...ctx, brake: 0, handbrake: true }) === 0)
+  check("brakes: handbrake adds rear torque only", near(b.torque({ ...ctx, brake: 0, handbrake: true, front: false, speedKmh: 0 }), P.wheels.handbrakeForce) && b.torque({ ...ctx, brake: 0, handbrake: true }) === 0)
+  check("brakes: handbrake locks the rears on a rolling car", b.torque({ ...ctx, brake: 0, handbrake: true, front: false, speedKmh: 50 }) > P.wheels.handbrakeForce * 10)
   b.parking = true
   check("brakes: parking brake holds a minimum torque", b.torque({ ...ctx, brake: 0 }) >= P.brakes.parkingTorque)
   b.parking = true

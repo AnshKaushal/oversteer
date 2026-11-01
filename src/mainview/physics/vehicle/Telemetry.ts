@@ -19,23 +19,18 @@ export interface TelemetrySources {
   parking: boolean
   autoMode: boolean
   aggression: number
-  /** Traction and stability control both on. */
   safetyAids: boolean
   tractionControl: boolean
   stabilityControl: boolean
   absOn: boolean
-  /** An aid is intervening right now (the dash flashes its light). */
   tractionActive: boolean
   stabilityActive: boolean
   absActive: boolean
-  /** Force-feedback level -1..1 from the front tyres' self-aligning torque. */
   steerFeedback: number
-  /** Engine is running (not stalled or switched off). */
   engineOn: boolean
   dash: CarDashConfig
 }
 
-/** Reads component state into the telemetry the dashboard and AI use. */
 export function buildTelemetry(s: TelemetrySources): CarTelemetry {
   return {
     speedKmh: Math.abs(s.k.fwdSpeed) * KMH_PER_MS * Math.sign(s.k.fwdSpeed || 1),

@@ -54,8 +54,6 @@ export interface PeerPlayer {
   progress: number
   finished: boolean
   finishTime: number | null
-  /** The peer's car data differs from ours, so its car feels different here. */
   specMismatch?: boolean
-  /** Garage paint: a colour, null for the model's own, undefined when not announced yet. */
   paint?: number | null
 }

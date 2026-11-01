@@ -5,7 +5,6 @@ import { KMH_PER_MS } from "../../data/units"
 import { clamp } from "../math"
 import type { Kinematics } from "./types"
 
-/** Signed speed along the body's forward axis (m/s). */
 export function forwardSpeedOf(body: RAPIER.RigidBody): number {
   const v = body.linvel()
   const q = body.rotation()
@@ -15,7 +14,6 @@ export function forwardSpeedOf(body: RAPIER.RigidBody): number {
   return v.x * fwd.x + v.y * fwd.y + v.z * fwd.z
 }
 
-/** Speed along the body's right axis (m/s), not flattened. */
 export function lateralSpeedOf(body: RAPIER.RigidBody): number {
   const v = body.linvel()
   const q = body.rotation()
@@ -25,7 +23,6 @@ export function lateralSpeedOf(body: RAPIER.RigidBody): number {
   return v.x * right.x + v.z * right.z
 }
 
-/** Body kinematics measured once at the top of a physics step. */
 export function measureKinematics(
   body: RAPIER.RigidBody,
   spec: KinematicsSpec,

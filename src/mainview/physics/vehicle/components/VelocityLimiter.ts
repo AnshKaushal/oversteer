@@ -1,6 +1,5 @@
 import type { LimitsSpec } from "../../../data/schema"
 
-/** Safety clamps on linear and angular speed. Return a scale (1 = no-op). */
 export class VelocityLimiter {
   constructor(private readonly p: LimitsSpec) {}
 

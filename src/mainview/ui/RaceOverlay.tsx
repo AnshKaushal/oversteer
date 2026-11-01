@@ -125,7 +125,7 @@ export function RaceMenu({
         },
       ]}
     >
-      {/* 3D Viewport Controls */}
+      {}
       <div className="relative min-h-[30vh] flex-1">
         {onOpenSettings && (
           <button

@@ -45,22 +45,13 @@ export interface WheelStepInput {
   gearRatio: number
   drive: DriveOutput
   engineFriction: number
-  /** Engine is running: creep and engine drag need it. */
   engineOn: boolean
-  /** Brake share per wheel the stability control asks for. */
   stabilityBrake: readonly number[]
-  /** Traction control may brake a spinning driven wheel. */
   tractionBrake: boolean
   weather: WeatherId
-  /** Grip left after a recent hit (1 undisturbed). */
   gripScale: number
 }
 
-/**
- * Runs the per-wheel loop of one step: suspension, brake and drive torque,
- * tire forces with relaxation, creep, wheel spin, and the force on the body.
- * It owns no tuning of its own; every part comes from a component.
- */
 export class WheelSolver {
   readonly relaxation: TireRelaxation
   readonly centerDiff: CenterDiff
@@ -69,10 +60,8 @@ export class WheelSolver {
   readonly lastLoad: number[]
   readonly lastLong: number[]
   lastTireDiag: TireResult[] = []
-  /** Traction control braked a spinning wheel in the last step. */
   tractionBraking = false
 
-  /** Steering feedback torque (N m): the front tyres' self-aligning torques summed. */
   steerTorque(): number {
     let sum = 0
     this.wheels.forEach((w, i) => {
@@ -81,7 +70,6 @@ export class WheelSolver {
     return sum
   }
 
-  /** Largest self-aligning torque the fronts can give (N m), to normalise force feedback. */
   steerTorqueScale(): number {
     const p = this.P.wheels
     const fronts = this.wheels.filter((w) => w.front).length
@@ -120,7 +108,6 @@ export class WheelSolver {
     this.rearDiff.reset()
   }
 
-  /** Returns the number of wheels on the ground. */
   step(c: WheelStepInput): number {
     const { dt, k, pedals } = c
     const radius = this.P.wheels.radius
@@ -144,7 +131,6 @@ export class WheelSolver {
       const heading = new THREE.Vector3(Math.sin(steer) * -1, 0, -Math.cos(steer)).applyQuaternion(k.quat)
       heading.y = 0
       heading.normalize()
-      // Engine drag cannot spin a stopped wheel backwards: the engine only drags toward standstill
       const spin = this.dynamics.wheels[wi].omega
       const raw = driveTorque[wi]
       const driveT = (c.gear === -1 ? raw > 0 && spin >= 0 : raw < 0 && spin <= 0) ? 0 : raw
@@ -155,7 +141,6 @@ export class WheelSolver {
         c.tractionBrake && st.grounded && this.driveline.isDriven(w.front)
           ? this.traction.brakeFraction(wheelSpeed, groundSpeed, c.gear === -1 ? -1 : 1)
           : 0
-      // the brake on a spinning wheel only has to cancel the torque that spins it
       const tcTorque = Math.min(tcFraction * axleMax, Math.abs(driveT) * this.traction.brakeDriveShare)
       if (tcTorque > 0) this.tractionBraking = true
       const assist = c.stabilityBrake[wi] * this.stability.gripScale(wheelSpeed, groundSpeed)
@@ -215,7 +200,6 @@ export class WheelSolver {
     return n > 0 ? sum / n : 0
   }
 
-  /** Drive torque per wheel after each axle's differential. */
   private axleTorques(c: WheelStepInput): number[] {
     const frontShare = this.centerDiff.step(c.dt, this.axleOmega(true), this.axleOmega(false))
     const out = this.wheels.map((w) =>
@@ -290,8 +274,6 @@ export class WheelSolver {
     })
     this.lastTireDiag[wi] = res
     if (driven) this.slip.addDriven(res.sx)
-    // the patch deflection follows wheel speed within a step, so the tire torque
-    // is as stiff as slope * R^2 / L: integrate that part implicitly
     const patchGain = radius * dt / (1 + dt * (Math.abs(rollSpeed) + this.P.contact.relaxationSpeedFloor) / this.P.wheels.relaxationLength)
     const torqueSlope = (res.slopeX / this.P.wheels.relaxationLength) * patchGain * radius
     this.dynamics.step(wi, dt, s.driveT, s.brakeM, res.fx * radius, res.vx, torqueSlope, res.fmax * radius)

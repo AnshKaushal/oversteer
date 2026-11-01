@@ -41,7 +41,6 @@ function TextIcon({ label }: { label: string }) {
   )
 }
 
-/** Telltale arc under the readout: icon size, angular step and radius from the dial centre (dial units). */
 const ICON_SIZE = 15
 const ICON_ARC_STEP_DEG = 15
 const ICON_ARC_R = 70
@@ -55,7 +54,6 @@ function SafetyIcon() {
   )
 }
 
-/** Gauge with a needle: cruise control. */
 function CruiseIcon() {
   return (
     <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -142,16 +140,11 @@ function Dial({
     CY = 100,
     CR = 78
   const ticks: React.ReactNode[] = []
-  // Tick counts are derived so labelled ticks always land on integers:
-  // rpm dials get one label per 1000 rpm (maxLabel must be whole), speed
-  // dials one per 20 km/h. (A 7000-rpm dial with the old fixed 40 steps
-  // labelled 3.5→"4" twice — hence this.)
   const steps = isRpm
     ? Math.round(maxLabel * 5)
     : maxLabel % 20 === 0
       ? (maxLabel / 20) * 4
       : 68
-  // speed dials label every 20 km/h up to 200, every 40 beyond, so the numbers never crowd
   const labelEvery = isRpm ? (maxLabel > 10 ? 10 : 5) : maxLabel % 20 === 0 ? (maxLabel > 200 ? 8 : 4) : 8
 
   for (let i = 0; i <= steps; i++) {
@@ -307,7 +300,7 @@ function Dial({
         {modeLabel ?? unit}
       </text>
 
-      {/* Telltale lights: parking brake (speed dial) / traction control / drift (rpm dial) */}
+      {}
       {(isRpm
         ? ([
             [refs.iconRef, <DriftIcon key="drift" />],
@@ -320,7 +313,6 @@ function Dial({
             [refs.icon2Ref, <CruiseIcon key="cruise" />],
           ] as const)
       ).map(([ref, icon], i, row) => {
-        // icons sit on an arc concentric with the dial, each turned to follow it
         const a = 180 + ((row.length - 1) / 2 - i) * ICON_ARC_STEP_DEG
         const pt = polar(CX, CY, ICON_ARC_R, a)
         return (
@@ -396,8 +388,6 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
     let last = performance.now()
     let dRpm = 0,
       dKmh = 0
-    // Digital readout: the needle sweeps live, but the number
-    // steps at 2 Hz off the damped speed — no flickering last digit.
     let lastNumT = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
@@ -458,8 +448,6 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
             : "none"
       }
 
-      // Telltales: parking brake (steady red) and traction control / drift
-      // (blinking amber), same behaviour as the modern cluster.
       paintTelltale(spdIcon.current, !!t.parkingBrake, RED, true)
       const blink = Math.floor(now / 170) % 2 === 0
       paintTelltale(rpmIcon.current, !!t.drift, AMBER, blink)

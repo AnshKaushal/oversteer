@@ -1,25 +1,18 @@
 import * as THREE from "three"
 
-/** Grid cell (m) holding at most one puddle; also the size of the hash lattice. */
 const CELL = 12
-/** Cells kept around the car in each direction. */
 const REACH = 7
 const MAX = (REACH * 2 + 1) ** 2
-/** Wetness is at most 1 (a storm); a full-strength wetting dries after this long, or this far driven, whichever comes first. */
 const DRY_SECONDS = 75
 const DRY_METRES = 1200
-/** Wetness gained per second while it rains. */
 const WET_RATE = 0.14
-/** Most puddles any cell can have is set by this chance at full wetness. */
 const MAX_CHANCE = 0.52
 
-/** Puddle heights: just above the road, and just above the grass ground plane. */
 const ROAD_Y = 0.018
 const GRASS_Y = -0.055
 
 export type PuddleSurface = "road" | "grass" | null
 
-/** Decides whether a disc of radius r at (x, z) lies wholly on the road, wholly on open grass, or neither. */
 export type PuddleSurfaceFn = (x: number, z: number, r: number) => PuddleSurface
 
 function hash(a: number, b: number, salt: number): number {
@@ -37,7 +30,6 @@ function makeSoftDisc(): THREE.DataTexture {
       const dx = ((x + 0.5) / size) * 2 - 1
       const dy = ((y + 0.5) / size) * 2 - 1
       const ang = Math.atan2(dy, dx)
-      // an uneven rim so no two puddles read as perfect ellipses
       const rim = 0.8 + 0.1 * Math.sin(ang * 3 + 1.3) + 0.06 * Math.sin(ang * 5 + 0.4) + 0.04 * Math.sin(ang * 9)
       const d = Math.hypot(dx, dy) / rim
       const v = Math.round(Math.max(0, Math.min(1, (1 - d) / 0.22)) * 255)
@@ -56,7 +48,6 @@ function makeSoftDisc(): THREE.DataTexture {
   return t
 }
 
-/** A puddle that could exist in a cell; how much of it shows depends on the current wetness. */
 interface Spot {
   x: number
   z: number
@@ -65,19 +56,9 @@ interface Spot {
   yaw: number
   y: number
   road: boolean
-  /** Hash in 0..1: the puddle shows once the wetness-based chance passes it, so puddles come and go in a fixed random order. */
   rank: number
 }
 
-/**
- * Standing water in rain: flat dark discs scattered deterministically over the road and the grass
- * around the car. They mirror the sky (emissive in the fog colour), so they read as wet and
- * reflective, and they flash with lightning.
- *
- * The ground has a wetness that rises while it rains and, once the rain stops, falls with time and
- * with distance driven. Puddles shrink and disappear in a random order as it falls, so leaving a
- * storm leaves wet ground behind for a while instead of switching it off.
- */
 export class Puddles {
   private readonly mesh: THREE.InstancedMesh
   private readonly mat: THREE.MeshStandardMaterial
@@ -86,7 +67,6 @@ export class Puddles {
   private cellX = Number.NaN
   private cellZ = Number.NaN
   private dirty = true
-  /** Wetness of the ground, 0..1, and the wetness the sky is working toward. */
   private wet = 0
   private target = 0
   private shown = -1
@@ -133,16 +113,10 @@ export class Puddles {
     parent.add(this.mesh)
   }
 
-  /** The sky the water mirrors: the fog colour is what the wet road shades toward in the distance. */
   setSky(fogColor: number) {
     this.mat.emissive.setHex(fogColor).multiplyScalar(1.6)
   }
 
-  /**
-   * The rain the sky now has, 0 (none) to 1 (storm). More rain wets the ground over a few seconds;
-   * less rain, or none, lets it dry out slowly as time passes and the car drives on. The first call
-   * sets the ground to match, so starting in the rain starts wet.
-   */
   setRain(rain: number) {
     this.target = rain
     if (!this.haveRain) {
@@ -151,12 +125,10 @@ export class Puddles {
     }
   }
 
-  /** Lightning brightens the water as it does the sky. */
   setFlash(f: number) {
     this.mat.emissiveIntensity = this.baseGlow + f * 2.2
   }
 
-  /** dt defaults to the wall clock (capped, so a pause does not dry the road). */
   update(carPos: THREE.Vector3, dt?: number) {
     if (dt === undefined) {
       const now = performance.now() / 1000
@@ -167,7 +139,6 @@ export class Puddles {
     if (this.haveLastPos) dist = this.lastPos.distanceTo(carPos)
     this.lastPos.copy(carPos)
     this.haveLastPos = true
-    // a respawn or teleport is not driving
     if (dist > 60) dist = 0
 
     if (this.wet < this.target) this.wet = Math.min(this.target, this.wet + WET_RATE * dt)
@@ -195,7 +166,6 @@ export class Puddles {
     this.place()
   }
 
-  /** Every spot that could hold a puddle around this cell, whatever the wetness. */
   private rebuild(cx: number, cz: number) {
     const spots: Spot[] = []
     for (let i = cx - REACH; i <= cx + REACH; i++) {
@@ -206,8 +176,6 @@ export class Puddles {
         const x = (i + 0.15 + hash(i, j, 3) * 0.7) * CELL
         const z = (j + 0.15 + hash(i, j, 4) * 0.7) * CELL
         const stretch = 1 + hash(i, j, 5) * 0.9
-        // tarmac puddles are long along the road and tilt a little, so their reach across it is about
-        // 1.25 r; grass puddles turn any way, so their long axis can point at the road
         let surf = this.surfaceAt(x, z, r * 1.25 * 1.3)
         if (surf === "grass" && this.surfaceAt(x, z, r * stretch * 1.3) !== "grass") surf = null
         if (!surf) continue
@@ -227,7 +195,6 @@ export class Puddles {
     this.spots = spots
   }
 
-  /** 1 if (x, z) is inside a visible puddle, else 0. */
   coverageAt(x: number, z: number): number {
     if (this.wet <= 0 || !this.mesh.visible) return 0
     const w = this.wet
@@ -242,7 +209,6 @@ export class Puddles {
       const r = sp.r * grow * (0.35 + 0.65 * k)
       const c = Math.cos(sp.yaw)
       const s = Math.sin(sp.yaw)
-      // the instance is rotated by yaw about y, so undo that to get the puddle's own axes
       const lx = c * dx - s * dz
       const lz = s * dx + c * dz
       const ex = r * 0.85
@@ -252,7 +218,6 @@ export class Puddles {
     return 0
   }
 
-  /** Lays out the puddles the current wetness allows: fewer and smaller as the ground dries. */
   private place() {
     const w = this.wet
     this.shown = w
@@ -260,7 +225,6 @@ export class Puddles {
     const grow = 0.85 + 0.45 * w
     let n = 0
     for (const sp of this.spots) {
-      // each puddle shrinks to nothing as the chance falls past its rank
       const k = Math.max(0, Math.min(1, (chance - sp.rank) / 0.05))
       if (k <= 0) continue
       const r = sp.r * grow * (0.35 + 0.65 * k)
@@ -269,7 +233,6 @@ export class Puddles {
       this.scl.set(r, 1, r * sp.stretch)
       this.m.compose(this.pos, this.q, this.scl)
       this.mesh.setMatrixAt(n, this.m)
-      // grass water is muddier and lighter than water lying on dark tarmac
       this.col.setHex(sp.road ? 0x10161b : 0x3a3a2c)
       this.mesh.setColorAt(n, this.col)
       n++

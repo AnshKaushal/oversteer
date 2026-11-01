@@ -113,8 +113,6 @@ async function runUpdate(manual: boolean): Promise<UpdateResult> {
 
   updateRunning = true
 
-  // A manual check shows the window straight away; the automatic startup
-  // check only opens it once an update is actually found.
   let updateWin: BrowserWindow | null = null
 
   if (manual) {
@@ -286,7 +284,6 @@ try {
       },
 
       message(ws, msg) {
-        // state packets are binary frames and pass through untouched
         const message = msg
 
         for (const client of lanClients) {
@@ -422,9 +419,6 @@ const mainWindow = createWindow(url, isWindowed)
 let wantFullscreen = !isWindowed
 let macCancelOp: any = null
 
-// macOS: pressing Escape exits native fullscreen by default. Override the
-// window's cancelOperation: (AppKit) so Escape is delivered to web content
-// instead of leaving fullscreen. Mirrors Wails' DisableEscapeExitsFullscreen.
 if (process.platform === "darwin") {
   try {
     const { dlopen, JSCallback, CFunction } = await import("bun:ffi")
@@ -437,8 +431,6 @@ if (process.platform === "darwin") {
     let originalCancelOpFn: any = null
     macCancelOp = new JSCallback(
       (self: any, _cmd: any, sender: any) => {
-        // Decide from our own flag: a synchronous window query from inside this AppKit
-        // callback can throw, and falling through to the original would leave fullscreen.
         if (wantFullscreen) return
         if (originalCancelOpFn) originalCancelOpFn(self, _cmd, sender)
       },
@@ -470,7 +462,6 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   }
 
   if (data?.action === "new-window") {
-    // extra windows are always windowed so two can sit side by side
     createWindow(url, true)
     return
   }

@@ -44,8 +44,6 @@ export function createChassisBody(
     .setLinearDamping(c.linearDamping)
     .setAngularDamping(c.angularDamping)
     .setCcdEnabled(true)
-  // Mass comes from data, not the collider volumes: the centre of mass sits at its stated
-  // height and the inertia is that of a solid box of the car's dimensions.
   const rideHeight = (physics.wheels.suspension.front.rideHeight + physics.wheels.suspension.rear.rideHeight) / 2
   bodyDesc.setAdditionalMassProperties(
     mass.chassis,
@@ -70,7 +68,6 @@ export function createChassisBody(
 
 const BOX_INERTIA_DIVISOR = 12
 
-/** Principal moments (kg m^2) of a solid box of mass m with the car's width, height and length. */
 export function boxInertia(m: number, d: { width: number; height: number; length: number }) {
   const k = m / BOX_INERTIA_DIVISOR
   return {
@@ -126,12 +123,10 @@ export function pushFrameTime(stepper: FixedStepper, frameDt: number): number {
   return steps
 }
 
-/** Fraction of the next fixed step already accumulated, for render blending. */
 export function stepperAlpha(stepper: FixedStepper): number {
   return Math.min(1, Math.max(0, stepper.acc / FIXED_DT))
 }
 
-/** Drop whole steps of backlog (frame budget exhausted) and count them. */
 export function dropBacklog(stepper: FixedStepper): void {
   const keep = stepper.acc % FIXED_DT
   stepper.droppedTotal += stepper.acc - keep

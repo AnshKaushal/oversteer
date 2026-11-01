@@ -1,15 +1,9 @@
 import type { CarSpec } from "./schema"
 
-/**
- * Structural and cross-field checks for a car spec. There are no defaults:
- * a missing or non-finite number is an error, never a silent fallback.
- * Returns human-readable problems; empty means valid.
- */
 export function validateCar(car: CarSpec): string[] {
   const errs: string[] = []
   const err = (m: string) => errs.push(`${car.id}: ${m}`)
 
-  // Every leaf number must exist and be finite.
   const walk = (v: unknown, path: string) => {
     if (v === undefined || v === null) {
       if (path !== "defaultTint") err(`${path} is missing`)
@@ -51,7 +45,6 @@ export function validateCar(car: CarSpec): string[] {
     if (a.reboundDamping < a.bumpDamping) err(`suspension.${ax}.reboundDamping should be at least bumpDamping`)
   }
 
-  // wheels
   if (car.wheels.length !== 4) err("needs exactly 4 wheels")
   const fronts = car.wheels.filter((w) => w.front)
   const rears = car.wheels.filter((w) => !w.front)
@@ -59,7 +52,6 @@ export function validateCar(car: CarSpec): string[] {
   else if (!(Math.min(...rears.map((w) => w.z)) > Math.max(...fronts.map((w) => w.z))))
     err("front wheels must have smaller z than rear wheels (forward is -z)")
 
-  // engine
   const e = p.engine
   const c = e.torqueCurve
   if (c.length < 2) err("torqueCurve needs at least 2 points")
@@ -72,7 +64,6 @@ export function validateCar(car: CarSpec): string[] {
   if (!(e.idleRPM < e.redlineRPM)) err("idleRPM must be below redlineRPM")
   if (e.revLimiterRPM < e.redlineRPM) err("revLimiterRPM below redlineRPM")
 
-  // transmission
   const t = p.transmission
   if (t.gearRatios.length < 1) err("needs at least one gear")
   for (let i = 1; i < t.gearRatios.length; i++)
@@ -132,7 +123,6 @@ export function validateCar(car: CarSpec): string[] {
     if (!(tb.spoolUpRate > 0) || !(tb.spoolDownRate > 0)) err("turbo spool rates must be > 0")
   }
 
-  // alignment and steering geometry
   const al = p.wheels.alignment
   for (const ax of ["front", "rear"] as const) {
     if (Math.abs(al[ax].camberDeg) > 6) err(`alignment.${ax}.camberDeg beyond +-6 degrees`)
@@ -141,7 +131,6 @@ export function validateCar(car: CarSpec): string[] {
   if (!(al.camberThrust >= 0 && al.camberThrust <= 0.5)) err("alignment.camberThrust must be in 0..0.5")
   if (!(p.wheels.steering.pneumaticTrail > 0)) err("steering.pneumaticTrail must be > 0")
   if (!(p.wheels.steering.ackermannFactor >= 0 && p.wheels.steering.ackermannFactor <= 1)) err("steering.ackermannFactor must be in 0..1")
-  // suspension / chassis
   const s = p.wheels.suspension
   if (!(s.travel > 0)) err("suspension.travel must be > 0")
   if (!(s.bumpStart < s.travel + s.travelMargin)) err("suspension.bumpStart beyond travel limit")
@@ -171,7 +160,6 @@ export function validateCar(car: CarSpec): string[] {
     if (!(fd.minFraction > 0 && fd.minFraction <= 1)) err("brakes.fade.minFraction must be within 0..1")
   }
 
-  // dash
   if (car.dash.redFromRpm > car.dash.maxRpm) err("dash.redFromRpm above dash.maxRpm")
   return errs
 }

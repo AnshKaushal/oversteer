@@ -15,7 +15,6 @@ export interface SnapshotIn {
 }
 
 export interface Snapshot extends SnapshotIn {
-  /** Position on the receive timeline (sender time mapped to our clock), ms. */
   arrivalMs: number
   seq: number
 }
@@ -37,7 +36,6 @@ export type InterpMode = "empty" | "hold" | "interp" | "extrap"
 
 import { NET } from "../../data/net"
 
-/** Delay before the clock has measured the link. */
 export const INTERP_DELAY_MS = NET.interp.minDelayMs
 export const EXTRAP_MAX_MS = NET.interp.extrapMaxMs
 export const SNAPSHOT_CAP = NET.interp.snapshotCap
@@ -208,7 +206,6 @@ export class SnapshotBuffer {
         Math.min(EXTRAP_MAX_MS, renderTimeMs - newest.arrivalMs),
       )
       const dt = overMs / 1000
-      // velocity fades to zero over the window, so a lost run settles instead of overshooting
       const reach = dt - (dt * dt) / (2 * (EXTRAP_MAX_MS / 1000))
       out.x = newest.x + newest.vx * reach
       out.y = newest.y + newest.vy * reach
@@ -224,7 +221,6 @@ export class SnapshotBuffer {
         const dy = wy * k
         const dz = wz * k
         const dw = Math.cos(half)
-        // world-frame spin: q' = dq * q
         out.qx = dw * newest.qx + dx * newest.qw + dy * newest.qz - dz * newest.qy
         out.qy = dw * newest.qy - dx * newest.qz + dy * newest.qw + dz * newest.qx
         out.qz = dw * newest.qz + dx * newest.qy - dy * newest.qx + dz * newest.qw
@@ -251,7 +247,6 @@ export class SnapshotBuffer {
     const span = b.arrivalMs - a.arrivalMs
     const t = span > 0 ? (renderTimeMs - a.arrivalMs) / span : 1
     const tc = t < 0 ? 0 : t > 1 ? 1 : t
-    // cubic Hermite through both snapshots using their velocities
     const h = span / 1000
     const t2 = tc * tc
     const t3 = t2 * tc

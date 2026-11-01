@@ -3,22 +3,16 @@ import * as THREE from "three"
 const CAP = 260
 const SPRAY_CAP = 420
 const TURF_CAP = 360
-/** Smoke left on fully wet ground: most of it is water, not rubber. */
 const WET_SMOKE_LEFT = 0.15
 const GRAVITY = 9.8
 
-/** How wet the ground is at a point, 0 (dry) to 1 (standing water). */
 export type WetnessFn = (x: number, z: number) => number
 
-/** Whether a point is on grass, where a sliding tyre throws turf instead of smoke. */
 export type GrassFn = (x: number, z: number) => boolean
 
 export class TireSmoke {
-  /** Smoke and spray, added to the scene together. */
   points = new THREE.Group()
-  /** Set by the app: wet ground thins the smoke and throws spray instead. */
   wetnessAt: WetnessFn | null = null
-  /** Set by the app: on grass the tyres throw clods and blades, not smoke. */
   grassAt: GrassFn | null = null
   private turf = new Turf()
   private smokePoints: THREE.Points
@@ -141,7 +135,6 @@ export class TireSmoke {
   }
 }
 
-/** Water thrown up by a sliding tyre on wet ground: small, fast droplets that arc and fall back. */
 class Spray {
   points: THREE.Points
   private pos = new Float32Array(SPRAY_CAP * 3)
@@ -238,7 +231,6 @@ class Spray {
   }
 }
 
-/** Grass and dirt flung up by a sliding tyre: dark green blades and brown clods that arc and fall. */
 class Turf {
   points: THREE.Points
   private pos = new Float32Array(TURF_CAP * 3)

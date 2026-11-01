@@ -42,7 +42,6 @@ export class SuspensionSystem {
   private R: typeof RAPIER
   private wheels: WheelDef[]
   private params: SuspensionParams
-  /** Spring free length per wheel, from ride height plus the static squat. */
   private readonly restLengths: number[]
 
   constructor(
@@ -58,8 +57,6 @@ export class SuspensionSystem {
     this.R = R
     this.wheels = wheels
     this.params = params
-    // Static load per wheel from where the wheels sit about the centre of mass
-    // (the body origin): rear share is the front lever over the wheelbase.
     const zFront = wheels.find((w) => w.front)?.z ?? 0
     const zRear = wheels.find((w) => !w.front)?.z ?? 0
     const frontShare = zRear / (zRear - zFront)

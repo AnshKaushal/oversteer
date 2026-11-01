@@ -6,7 +6,6 @@ export function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
 }
 
-/** Piecewise-linear lookup of `[x, y]` points; 0 past the last point. */
 export function curveLookup(
   curve: readonly (readonly number[])[],
   x: number,
@@ -22,7 +21,6 @@ export function curveLookup(
   return 0
 }
 
-/** Eases 0..1 in and out (zero slope at both ends). */
 export function smoothstep(t: number): number {
   const rest = 1 - t
   return t * t * (1 + rest + rest)

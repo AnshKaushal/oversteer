@@ -64,7 +64,6 @@ export class MultiplayerManager {
   public localName: string
   public localColor: number
   public localColorHex: string
-  /** The garage paint of the selected car; null shows the model's own colour. */
   public localPaint: number | null = null
   public localCarId: string = DEFAULT_CAR_ID
   public roomId: string | null = null
@@ -415,7 +414,6 @@ export class MultiplayerManager {
     let opened = false
 
     ws.binaryType = "arraybuffer"
-    // frame: [id length][id utf8][state bytes]
     const idBytes = new TextEncoder().encode(this.localId)
     this.sendStateAction = (pkt: Uint8Array) => {
       if (ws.readyState !== WebSocket.OPEN) return
@@ -870,7 +868,6 @@ export class MultiplayerManager {
     }, 400)
   }
 
-  /** Called once per fixed physics step; sends on every Nth tick, stamped with sim time. */
   public onPhysicsTick(
     car: Vehicle,
     tele: CarTelemetry | null,
@@ -886,7 +883,6 @@ export class MultiplayerManager {
     const v = body.linvel()
 
     const w = body.angvel()
-    // the same measure the local car smokes by
     const smokeLevel = Math.min(
       1,
       Math.max(

@@ -8,25 +8,18 @@ export interface CreepInput {
   throttle: number
   brake: number
   fwdSpeed: number
-  /** Longitudinal patch speed of this wheel (m/s). */
   slipSpeed: number
   speedKmh: number
   engineFriction: number
   gearRatio: number
   efficiency: number
   wheelRadius: number
-  /** Converter creep, the standstill hold and engine drag all need a running engine. */
   engineOn: boolean
 }
 
-/**
- * Engine braking off the throttle. Creep itself is not modelled here: it
- * emerges from the clutch / converter drag at the governed idle rpm.
- */
 export class CreepForces {
   constructor(private readonly p: CreepSpec) {}
 
-  /** Force on one wheel along its heading (N). */
   force(i: CreepInput): number {
     if (!i.engineOn) return 0
     const p = this.p

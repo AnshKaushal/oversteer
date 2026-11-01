@@ -1,7 +1,3 @@
-/**
- * Rolling frame counters for the measurement overlay: rendered frames per
- * second, physics steps per second, and the wall time physics took.
- */
 export class FrameStats {
   fps = 0
   stepsPerSec = 0

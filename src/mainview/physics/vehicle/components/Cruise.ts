@@ -16,10 +16,6 @@ export interface CruiseState {
   parkingBrake: boolean
 }
 
-/**
- * Cruise control. Set locks a speed, brake/handbrake/park pause it, driver
- * throttle always wins, and a PI controller injects pedal input otherwise.
- */
 export class Cruise {
   active = false
   targetKmh: number | null = null
@@ -31,7 +27,6 @@ export class Cruise {
     private readonly maxKmh: number,
   ) {}
 
-  /** Buttons and automatic pausing. Runs before pedal injection. */
   handleButtons(b: CruiseButtons, s: CruiseState) {
     const p = this.p
     if (this.active) {
@@ -71,7 +66,6 @@ export class Cruise {
     }
   }
 
-  /** Returns pedal values after cruise injection. */
   inject(
     dt: number,
     throttle: number,
@@ -88,7 +82,6 @@ export class Cruise {
       if (!overridden) {
         const raw = err * p.throttleGain + this.trim
         const u = clamp(raw, 0, p.throttleMax)
-        // Anti-windup: only integrate while the output can still move.
         if ((u < p.throttleMax || err < 0) && (u > 0 || err > 0)) {
           this.trim = clamp(this.trim + err * dt * p.trimGain, p.trimMin, p.trimMax)
         }

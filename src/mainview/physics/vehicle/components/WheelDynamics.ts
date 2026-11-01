@@ -60,9 +60,7 @@ export class WheelDynamics {
     brakeTorqueMag: number,
     tireTorque: number,
     roadSpeed?: number,
-    /** Tire torque change per rad/s of wheel speed (N m s), treated implicitly. */
     torqueSlope = 0,
-    /** Most torque the tire can push back with (N m); keeps the implicit term from out-gripping the tire. */
     tireTorqueMax = Infinity,
   ): WheelSpinState {
     const w = this.wheels[wi]
@@ -83,8 +81,6 @@ export class WheelDynamics {
           ? 0
           : ((dt * this.slipDampRate * w.radius) / w.inertia) * roadSpeed)) /
       (1 + stiff + implicit)
-    // The linear tire slope ignores saturation: past the tire's limit the wheel
-    // sees only the limit torque, so a strong drive can still spin it up
     const predicted = tireTorque + torqueSlope * (omega - w.omega)
     if (Math.abs(predicted) > tireTorqueMax) {
       const sat = Math.sign(predicted) * tireTorqueMax

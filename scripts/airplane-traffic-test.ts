@@ -220,7 +220,13 @@ check(propTurned > 0, "a propeller turned")
     const { AirportView } = await import("../src/mainview/systems/Airport")
     const lay = layoutAirport(makePath(900, 60 * DEG, 1, 1))
     const view = new AirportView(lay)
-    const lamps = view.group.children.find((c) => c.type === "Points") as THREE.Points
+    // The runway lamps' halo is the biggest set of points in the airfield.
+    const halos: THREE.Points[] = []
+    view.group.traverse((o) => {
+      if (o.type === "Points") halos.push(o as THREE.Points)
+    })
+    halos.sort((a, b) => b.geometry.getAttribute("position").count - a.geometry.getAttribute("position").count)
+    const lamps = halos[0]
     for (let i = 0; i < 120; i++) view.step(1 / 60)
     const day = lamps.visible
     view.lit = true

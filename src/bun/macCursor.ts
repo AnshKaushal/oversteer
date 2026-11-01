@@ -1,6 +1,3 @@
-// macOS cursor grab for the game, the way native games do it: hide the cursor,
-// stop it following the mouse, and read the raw movement instead. Nothing in the
-// system settings is touched, and every exit path gives the cursor back.
 import { dlopen, FFIType, ptr } from "bun:ffi"
 
 type Cg = {
@@ -28,7 +25,6 @@ function load(): Cg | null {
       CGMainDisplayID: { args: [], returns: FFIType.u32 },
       CGDisplayPixelsWide: { args: [FFIType.u32], returns: FFIType.u64 },
       CGDisplayPixelsHigh: { args: [FFIType.u32], returns: FFIType.u64 },
-      // CGPoint passed by value is two doubles, which ride in float registers
       CGWarpMouseCursorPosition: { args: [FFIType.f64, FFIType.f64], returns: FFIType.i32 },
     })
     const s = lib.symbols
@@ -54,11 +50,6 @@ let timer: ReturnType<typeof setInterval> | null = null
 const dxBuf = new Int32Array(1)
 const dyBuf = new Int32Array(1)
 
-/**
- * Grab the cursor and report movement to `send` about 120 times a second.
- * `centre` first moves the cursor to the middle of the main display, so a
- * fullscreen game never starts with it parked on a hot corner or the dock edge.
- */
 export function grabCursor(send: (dx: number, dy: number) => void, centre: boolean): boolean {
   const c = load()
   if (!c) return false
@@ -67,7 +58,7 @@ export function grabCursor(send: (dx: number, dy: number) => void, centre: boole
   if (centre) c.warp(c.wide(d) / 2, c.high(d) / 2)
   c.associate(false)
   c.hide(d)
-  c.lastDelta(ptr(dxBuf), ptr(dyBuf)) // drop movement from before the grab
+  c.lastDelta(ptr(dxBuf), ptr(dyBuf))
   grabbed = true
   timer = setInterval(() => {
     c.lastDelta(ptr(dxBuf), ptr(dyBuf))

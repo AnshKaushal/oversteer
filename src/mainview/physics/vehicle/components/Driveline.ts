@@ -11,7 +11,6 @@ export interface DriveInput {
   launchArmed: boolean
   launching: boolean
   clutchDumping: boolean
-  /** True with traction and stability control off: no launch ramp, all torque at once. */
   rawPower: boolean
 }
 
@@ -21,11 +20,8 @@ export interface DriveOutput {
   feed: number
 }
 
-/** Splits engine torque to the driven wheels and caps it in low gears. */
 export class Driveline {
-  /** Throttle at the previous step, shared with the shift logic. */
   prevThrottle = 0
-  /** Angular speed of the driven axle (rad/s), set after each step. */
   drivenOmega = 0
   private feedT = Infinity
   private prevLaunching = false
@@ -49,7 +45,6 @@ export class Driveline {
     return front ? this.frontDriven : this.rearDriven
   }
 
-  /** Total drive torque at the wheels for this step. */
   prepare(i: DriveInput): DriveOutput {
     const p = this.p
     let total = 0
@@ -81,7 +76,6 @@ export class Driveline {
     return { total, dir, feed }
   }
 
-  /** Torque on one wheel. */
   wheelTorque(
     front: boolean,
     d: DriveOutput,

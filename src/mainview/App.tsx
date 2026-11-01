@@ -134,7 +134,6 @@ const _vNpcFront = new THREE.Vector3()
 const _vNpcTarget = new THREE.Vector3()
 const _vNpcPos = new THREE.Vector3()
 
-/** The one stats overlay for the page, made on first use and reused by every run of the game loop. */
 function perfOverlay(): HTMLPreElement {
   const old = document.getElementById("perf-overlay")
   if (old) return old as HTMLPreElement
@@ -148,7 +147,6 @@ function perfOverlay(): HTMLPreElement {
   return el
 }
 
-/** Squared distance within which cars cast shadows: 40 m at the lowest setting, 120 m at full. */
 function shadowRange2(s: AppSettings): number {
   const q = Math.min(100, Math.max(25, s.shadowQuality ?? 100)) / 100
   const r = 40 + 80 * q
@@ -194,7 +192,6 @@ export default function App() {
   }
   const startedRef = useRef(false)
   const pausedRef = useRef(false)
-  // While the error dialog is up the mouse belongs to the user.
   const errorRef = useRef(false)
   useEffect(() => {
     errorRef.current = !!error
@@ -327,7 +324,6 @@ export default function App() {
     if (picked !== undefined) return picked ?? undefined
     return getCar(id).defaultTint ?? undefined
   }
-  /** In a room your car shows its garage paint to everyone; unpainted cars keep the profile colour. */
   const pushNetColor = () => {
     const m = multiplayerRef.current
     if (!m) return
@@ -505,8 +501,6 @@ export default function App() {
       ;(navigator as any).keyboard?.lock?.(["Escape"])?.catch?.(() => {})
     } catch {}
   }
-  // Escape stays locked for the whole session: releasing it on pause made
-  // Escape (e.g. to close Settings) leave fullscreen.
   const unlockEscapeKey = () => {}
   useEffect(() => {
     lockEscapeKey()
@@ -598,7 +592,6 @@ export default function App() {
     rebuildSession()
   }
 
-  /** Back to the start: the grid and countdown in a race, the spawn point in free roam. */
   const restart = () => {
     if (raceSetupRef.current && lastRaceRef.current) {
       raceAgain()
@@ -943,8 +936,6 @@ export default function App() {
           const thalf: 1 | -1 = tdir === 1 ? 1 : -1
           let ts0 = 0
           for (let attempt = 0; attempt < 8; attempt++) {
-            // Straddle the start line so traffic is populated on both sides
-            // whichever way the player sets off.
             const cand =
               (Math.random() < 0.5 ? -1 : 1) * (250 + Math.random() * 600)
             ts0 = cand
@@ -1169,7 +1160,6 @@ export default function App() {
 
         const smoke = new TireSmoke()
         scene.add(smoke.points)
-        // wet weather and standing water thin the smoke and throw spray
         smoke.wetnessAt = (x, z) =>
           Math.max(WEATHER_WETNESS[conditions.weather], wm.puddleAt(x, z))
         smoke.grassAt = (x, z) => groundSurfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
@@ -1198,7 +1188,6 @@ export default function App() {
         const onWinBlur = () => {
           input.clear()
           cmdHeld = false
-          // give the cursor back at once; the loop re-grabs it when focus returns
           if (nativeWant) {
             nativeWant = false
             nativeActive = false
@@ -1226,7 +1215,6 @@ export default function App() {
         let substepTick = 0
         const stats = new FrameStats(WORLD.statsWindowMs)
         const statsEl = perfOverlay()
-        // Shown when Settings says so; F3 flips whatever Settings chose.
         let f3Flip = false
         const onStatsKey = (e: KeyboardEvent) => {
           if (e.code === "F3") f3Flip = !f3Flip
@@ -1286,11 +1274,8 @@ export default function App() {
         let lastPX = 0,
           lastPY = 0
         const e0 = { lastMovementX: 0, lastMovementY: 0 }
-        // macOS: the main process holds the cursor and sends raw movement, so the
-        // pointer can't wander onto the dock or a hot corner.
         let nativeActive = false
         let nativeWant = false
-        // Holding Cmd hands the cursor back, so Cmd+Shift+3/4/5 screenshots work
         let cmdHeld = false
         const onCmdKey = (e: KeyboardEvent) => {
           cmdHeld = e.metaKey
@@ -1368,7 +1353,6 @@ export default function App() {
         }
         const onPointerMove = (e: PointerEvent) => {
           if (nativeActive) {
-            // raw movement arrives from the main process instead
           } else if (document.pointerLockElement === dom) {
             e0.lastMovementX += e.movementX || 0
             e0.lastMovementY += e.movementY || 0
@@ -1464,7 +1448,6 @@ export default function App() {
           }
 
           const inp = input.update(dt)
-          // a connected pad drives with ABS on; the keyboard (B) can still switch it off
           if (input.padConnected) {
             if (!padAbsApplied) {
               car.abs.enabled = true
@@ -1926,10 +1909,6 @@ export default function App() {
                 tS > playerS + TRAFFIC_AHEAD
               ) {
                 tc.stuckT = 0
-                // Respawn ahead of the player along the axis they are
-                // actually travelling. Spawning at a fixed +s offset meant
-                // reversing pushed every car behind you and left the road you
-                // were driving into empty.
                 const travelDir = wm.travelDir
                 let aheadS = playerS + travelDir * 900
                 const myHalf = tdir
@@ -1997,11 +1976,10 @@ export default function App() {
                 tc.visual.setCastShadow(d < shadowRange2(settingsRef.current))
 
                 if (d > 193600) {
-                  // >440m completely culled (beyond fog range)
                   tc.visual.group.visible = false
                 } else {
                   tc.visual.group.visible = true
-                  const shouldBeHi = d < 36100 // 190m
+                  const shouldBeHi = d < 36100
                   if (tc.hi !== shouldBeHi) {
                     tc.hi = shouldBeHi
                     tc.visual.setDetail(shouldBeHi)
@@ -2157,7 +2135,6 @@ export default function App() {
                 camPitch = Math.max(-0.5, Math.min(0.5, camPitch + my * 0.0022))
                 lastOrbit = nowS
               }
-              // right stick orbits the same way a mouse drag does
               if (input.lookX !== 0 || input.lookY !== 0) {
                 camYaw -= input.lookX * 2.6 * dt
                 camPitch = Math.max(-0.5, Math.min(0.5, camPitch + input.lookY * 1.2 * dt))
@@ -2165,7 +2142,6 @@ export default function App() {
                 recentering = false
               }
               if (mx !== 0 || my !== 0) recentering = false
-              // R3: glide back behind the car, even when parked
               if (input.lookReset) recentering = true
             }
             e0.lastMovementX = 0
@@ -2253,8 +2229,6 @@ export default function App() {
             }
           }
 
-          // After the camera, so the flyby can fade with the distance the
-          // player is actually seeing it from.
           flyby.update(
             dt,
             -bp.z,

@@ -1,24 +1,17 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { makeGlowTexture } from "./GlowTexture"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 
-/** One lamp every SPACING metres along the road, alternating sides. */
 const SPACING = 50
-/** The model is 16.6 m tall; this brings it to about 15 m. */
 const SCALE = 0.9
-/** Distance from the road centre to the pole: just outside the white edge line, on the shoulder. */
 const SIDE_OFFSET = 9.4
-/** Where the lamp head sits along the arm (model units, +Z), and how high. */
 const HEAD_REACH = 3.7 * SCALE
-/** The pole base is buried this far, so it never looks like it hovers over the grass. */
 const SINK = 0.6
 const HEAD_HEIGHT = 16.1 * SCALE - SINK
-/** The light is aimed this far past the lamp head, so it pools close to the pole, on the road edge. */
 const AIM_REACH = 3
-/** How far each way from the car lamps are kept. */
 const RANGE = 700
 const MAX_LAMPS = Math.ceil((RANGE * 2) / SPACING) + 4
-/** Real lights are few and shared out among the nearest lamps. */
 const LIGHTS = 6
 const FULL_BY = 55
 const GONE_BY = 120
@@ -27,12 +20,6 @@ const GLOW = 0xffd9a0
 
 export type RoadXFn = (s: number) => number
 
-/**
- * Street lamps beside the road, lit whenever it is not day. Every lamp glows and
- * pools light on the ground; the six nearest also cast real light, the way the
- * car's headlights do. Lamp positions depend only on where they are along the
- * road, so the road looks the same whichever way you drive it.
- */
 export class StreetLights {
   private poles: THREE.InstancedMesh | null = null
   private heads: THREE.InstancedMesh | null = null
@@ -44,7 +31,6 @@ export class StreetLights {
   private lit = false
   private firstK = Number.NaN
   private count = 0
-  /** Lamp head positions (world), for choosing which lamps get real light. */
   private readonly head = new Float32Array(MAX_LAMPS * 3)
   private readonly aim = new Float32Array(MAX_LAMPS * 3)
   private colliders: RAPIER.Collider[] = []
@@ -90,7 +76,6 @@ export class StreetLights {
         this.group.add(im)
       }
 
-      // soft pool of light on the road under each lamp, for the lamps with no real light
       this.poolMat = new THREE.MeshBasicMaterial({
         map: glowTexture(),
         color: GLOW,
@@ -112,7 +97,6 @@ export class StreetLights {
 
       for (let i = 0; i < LIGHTS; i++) {
         const s = new THREE.SpotLight(GLOW, 0, GONE_BY, 0.6, 0.9, 1.1)
-        // the two nearest lamps cast shadows from cars and trees; more would cost too much
         s.castShadow = i < 2
         s.shadow.mapSize.set(1024, 1024)
         s.shadow.radius = 3
@@ -129,7 +113,6 @@ export class StreetLights {
     }
   }
 
-  /** Fixed pole colliders, one per lamp slot, parked out of the way until used. */
   attachPhysics(R: typeof RAPIER, world: RAPIER.World) {
     const body = world.createRigidBody(R.RigidBodyDesc.fixed())
     for (let i = 0; i < MAX_LAMPS; i++) {
@@ -149,7 +132,6 @@ export class StreetLights {
     this.apply()
   }
 
-  /** True in every sky but day. */
   setLit(on: boolean) {
     if (on === this.lit) return
     this.lit = on
@@ -161,10 +143,8 @@ export class StreetLights {
     if (this.headMat) this.headMat.emissiveIntensity = this.lit ? 2 : 0
     if (this.poolMat) this.poolMat.opacity = this.lit ? 0.25 : 0
     if (!this.enabled || !this.lit) for (const s of this.spots) s.intensity = 0
-    // no point redrawing the shadow maps while the lamps are dark
     for (const s of this.spots) {
       s.shadow.autoUpdate = this.enabled && this.lit
-      // draw the map once even when idle, so the shader never samples a missing shadow texture
       if (!s.shadow.autoUpdate) s.shadow.needsUpdate = true
     }
     if (!this.enabled) this.park()
@@ -201,12 +181,10 @@ export class StreetLights {
       const cx = this.roadX(s)
       const tx = (this.roadX(s + 2) - this.roadX(s - 2)) / 4
       const len = Math.hypot(tx, 1)
-      // unit normal to the road in the ground plane (x, z); z runs against s
       const nx = 1 / len
       const nz = tx / len
       const px = cx + side * SIDE_OFFSET * nx
       const pz = -s + side * SIDE_OFFSET * nz
-      // the arm points back across the road
       const dx = -side * nx
       const dz = -side * nz
       q.setFromAxisAngle(y, Math.atan2(dx, dz))
@@ -219,7 +197,6 @@ export class StreetLights {
       this.head[i * 3] = hx
       this.head[i * 3 + 1] = HEAD_HEIGHT
       this.head[i * 3 + 2] = hz
-      // the light lands close to the pole, mostly on the road
       const reach = AIM_REACH
       this.aim[i * 3] = hx + dx * reach
       this.aim[i * 3 + 1] = 0
@@ -257,7 +234,6 @@ export class StreetLights {
       const i = c.i
       s.position.set(this.head[i * 3], this.head[i * 3 + 1], this.head[i * 3 + 2])
       s.target.position.set(this.aim[i * 3], this.aim[i * 3 + 1], this.aim[i * 3 + 2])
-      // fade with distance so a lamp swapping out of the nearest six is never seen
       const f = 1 - smooth((c.d - FULL_BY) / (GONE_BY - FULL_BY))
       s.intensity = 260 * f
     }
@@ -270,18 +246,5 @@ function smooth(t: number): number {
 }
 
 function glowTexture(): THREE.Texture {
-  const c = document.createElement("canvas")
-  c.width = c.height = 128
-  const g = c.getContext("2d")
-  if (g) {
-    const r = g.createRadialGradient(64, 64, 0, 64, 64, 64)
-    r.addColorStop(0, "rgba(255,255,255,1)")
-    r.addColorStop(0.35, "rgba(255,255,255,0.45)")
-    r.addColorStop(1, "rgba(255,255,255,0)")
-    g.fillStyle = r
-    g.fillRect(0, 0, 128, 128)
-  }
-  const t = new THREE.CanvasTexture(c)
-  t.colorSpace = THREE.SRGBColorSpace
-  return t
+  return makeGlowTexture([[0, 1], [0.35, 0.45], [1, 0]], 128, true)
 }

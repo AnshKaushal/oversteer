@@ -1,11 +1,5 @@
 import { NET } from "../../data/net"
 
-/**
- * Maps a sender's clock onto ours and sizes the interpolation delay.
- * Packets are placed by when they were sent, so network jitter does not
- * become motion jitter. The offset is the smallest (arrival - sent) seen
- * lately, which is the delivery with the least queueing.
- */
 export class NetClock {
   private deltas: number[] = []
   private offset = 0
@@ -42,7 +36,6 @@ export class NetClock {
     this.loss = 0
   }
 
-  /** True when the sender's clock jumped, so the timeline restarted. */
   observe(senderT: number, seq: number, arrivalMs: number): boolean {
     let restarted = false
     if (
@@ -92,7 +85,6 @@ export class NetClock {
     return restarted
   }
 
-  /** The sender time on our clock (ms). */
   toLocal(senderT: number): number {
     return senderT + this.offset
   }

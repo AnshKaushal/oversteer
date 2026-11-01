@@ -1,4 +1,3 @@
-/** Standard-mapping button indices (Xbox layout; PlayStation pads report the same slots). */
 const BTN = {
   a: 0,
   b: 1,
@@ -20,13 +19,10 @@ const BTN = {
 
 const STICK_DEADZONE = 0.12
 const TRIGGER_DEADZONE = 0.05
-/** Steering response exponent: above 1 softens the centre of the stick for fine corrections. */
 const STEER_EXPO = 1.5
 
-/** Edge code for "put the camera back behind the car"; not a keyboard key. */
 export const LOOK_RESET = "PadLookReset"
 
-/** A button press that maps to the same edge code the keyboard uses. */
 const EDGES: [number, string][] = [
   [BTN.a, "Enter"],
   [BTN.x, "KeyH"],
@@ -46,15 +42,11 @@ const EDGES: [number, string][] = [
 export interface PadState {
   throttle: number
   brake: number
-  /** Positive steers left, as in `DriveInput`. */
   steer: number
   handbrakeHeld: boolean
-  /** Right stick, camera orbit: x positive looks right, y positive looks down (mouse-drag convention). */
   lookX: number
   lookY: number
-  /** Edge codes pressed since the previous poll. */
   edges: string[]
-  /** The handbrake button went down (true) or up (false) this poll. */
   handbrakeEdge: "down" | "up" | null
 }
 
@@ -65,7 +57,6 @@ function stick(v: number): number {
   return Math.sign(v) * Math.pow(n, STEER_EXPO)
 }
 
-/** Trigger rise and fall rates (1/s) used while a trigger only reports 0 or 1. */
 const DIGITAL_TRIGGER_RISE = 4
 const DIGITAL_TRIGGER_FALL = 9
 
@@ -75,11 +66,6 @@ function trigger(b: GamepadButton | undefined): number {
   return Math.min(1, (v - TRIGGER_DEADZONE) / (1 - TRIGGER_DEADZONE))
 }
 
-/**
- * Some macOS web views report pressure-sensitive triggers as plain on/off. A trigger that has never
- * shown an in-between value is treated as digital and eased like a key, so it ramps instead of
- * jumping; one that does report analog values is passed through untouched.
- */
 class TriggerChannel {
   private analogSeen = false
   private out = 0
@@ -106,12 +92,10 @@ export class GamepadInput {
   private prevHandbrake = false
   private readonly rt = new TriggerChannel()
   private readonly lt = new TriggerChannel()
-  /** Pads the browser has announced. While zero, nothing is polled at all. */
   private announced = 0
 
   constructor() {
     if (typeof window === "undefined") return
-    // a pad that was already plugged in when the game started
     if (typeof navigator !== "undefined" && navigator.getGamepads?.().some((p) => p)) this.announced = 1
     window.addEventListener("gamepadconnected", () => this.announced++)
     window.addEventListener("gamepaddisconnected", () => {
@@ -119,7 +103,6 @@ export class GamepadInput {
     })
   }
 
-  /** The first connected standard-mapping pad, or null. */
   private active(): Gamepad | null {
     if (this.announced === 0) return null
     if (typeof navigator === "undefined" || !navigator.getGamepads) return null
@@ -129,7 +112,6 @@ export class GamepadInput {
     return null
   }
 
-  /** Short display name of the active pad, e.g. "Xbox Wireless Controller". */
   get name(): string {
     const id = this.active()?.id ?? ""
     return id.replace(/\s*\(.*$/, "").trim() || "Controller"

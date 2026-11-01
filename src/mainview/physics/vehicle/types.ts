@@ -22,7 +22,6 @@ export interface CarTelemetry {
   drift: boolean
   dash: CarDashConfig
   aggression?: number
-  /** Traction and stability control both on. */
   safetyAids?: boolean
   tractionControl?: boolean
   stabilityControl?: boolean
@@ -34,7 +33,6 @@ export interface CarTelemetry {
   engineOn?: boolean
 }
 
-/** What a component may read and write of the gearbox state. */
 export interface GearAccess {
   gear: Gear
   shiftTimer: number
@@ -46,20 +44,16 @@ export interface Vec3Like {
   z: number
 }
 
-/** Body kinematics measured once at the top of a physics step. */
 export interface Kinematics {
   dt: number
   fwdSpeed: number
   speedKmh: number
-  /** Side-slip estimate, clamped. */
   beta: number
   linvel: Vec3Like
   angvel: Vec3Like
   pos: THREE.Vector3
-  /** World centre of mass: the point linvel belongs to. */
   com: THREE.Vector3
   quat: THREE.Quaternion
-  /** Flat (y = 0) unit forward and right. */
   fwd: THREE.Vector3
   right: THREE.Vector3
 }

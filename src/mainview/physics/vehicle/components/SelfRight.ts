@@ -1,13 +1,8 @@
 import type { SelfRightSpec } from "../../../data/schema"
 
-/** Roll torque that lets the driver rock a flipped, slow car back upright. */
 export class SelfRight {
   constructor(private readonly p: SelfRightSpec) {}
 
-  /**
-   * Torque magnitude about the car's forward axis, 0 when not applicable.
-   * `rollRate` is angular speed about that axis.
-   */
   torque(
     upY: number,
     speed: number,

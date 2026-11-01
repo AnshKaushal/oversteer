@@ -14,7 +14,7 @@ export type ResolutionId =
 export interface ResolutionPreset {
   id: ResolutionId
   name: string
-  height: number | null // null for native
+  height: number | null
   badge: string
   tier: "ultra" | "quality" | "balanced" | "performance" | "max-fps"
   description: string
@@ -81,7 +81,6 @@ export const RESOLUTION_PRESETS: ResolutionPreset[] = [
 
 export type FogLevel = "off" | "light" | "normal" | "heavy"
 export const FOG_LEVELS: FogLevel[] = ["off", "light", "normal", "heavy"]
-/** Thickness multiplier on each time of day's own fog; undefined when off. */
 export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
   off: 0.75,
   light: 1,
@@ -91,20 +90,16 @@ export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
 
 export interface AppSettings {
   resolution: ResolutionId
-  renderScale: number // 50 to 100
+  renderScale: number
   shadows: boolean
-  /** 25 to 100: shadow sharpness and how far from the car shadows reach. */
   shadowQuality: number
   timeOfDay?: TimeOfDayMode
   weather?: WeatherId
   dashStyle?: "modern" | "classic"
   fog?: FogLevel
   perfOverlay?: boolean
-  /** Show the lamp posts at all. */
   streetLights?: boolean
-  /** Whether the lamps light up outside daytime. */
   streetLightsOn?: boolean
-  /** 0 to 100: share of trees and grass, 100 being the full world. */
   vegetation?: number
 }
 

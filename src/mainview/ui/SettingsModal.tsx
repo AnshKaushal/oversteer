@@ -70,7 +70,6 @@ export function SettingsModal({
     setUpdateChecking(false)
   }
 
-  // Track client viewport dimensions for preview
   const [viewport, setViewport] = useState({
     w: typeof window !== "undefined" ? window.innerWidth : 1920,
     h: typeof window !== "undefined" ? window.innerHeight : 1080,
@@ -87,7 +86,6 @@ export function SettingsModal({
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  // Mount/unmount lifecycle with GSAP transitions
   useLayoutEffect(() => {
     if (open) {
       setMounted(true)
@@ -104,7 +102,6 @@ export function SettingsModal({
     animRef.current?.kill()
 
     if (open) {
-      // Entrance animation
       const tl = gsap.timeline({ defaults: { ease: EASE.out } })
       animRef.current = tl
 
@@ -129,7 +126,6 @@ export function SettingsModal({
           "-=0.22",
         )
     } else {
-      // Exit animation
       const tl = gsap.timeline({
         onComplete: () => {
           setMounted(false)
@@ -150,7 +146,6 @@ export function SettingsModal({
     }
   }, [open, mounted])
 
-  // Escape key handler
   useEffect(() => {
     if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
@@ -167,7 +162,6 @@ export function SettingsModal({
 
   if (!mounted) return null
 
-  // Native baseline pixel count for comparison
   const nativeDims = calculateResolution("native", viewport.w, viewport.h, 100)
   const nativePixels = nativeDims.width * nativeDims.height
 
@@ -310,7 +304,7 @@ export function SettingsModal({
 
           <div className="max-w-3xl space-y-4">
             <div className={tab === "graphics" ? "space-y-4" : "hidden"}>
-          {/* Active Resolution Live Status Card */}
+          {}
           <div
             data-anim-item
             className="rounded border border-[#51a7d5]/40 bg-[#51a7d5]/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -358,7 +352,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Resolution Presets */}
+          {}
           <div data-anim-item className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
@@ -442,7 +436,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Fine-Tuning Render Scale */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3"
@@ -462,7 +456,7 @@ export function SettingsModal({
               </span>
             </div>
 
-            {/* Slider */}
+            {}
             <input
               type="range"
               min={50}
@@ -474,7 +468,7 @@ export function SettingsModal({
               className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#51a7d5]"
             />
 
-            {/* Quick Presets */}
+            {}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {[100, 85, 75, 67, 50].map((val) => (
                 <button
@@ -492,7 +486,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Graphics Quality: Shadows */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between"
@@ -521,7 +515,7 @@ export function SettingsModal({
             </button>
           </div>
 
-          {/* Shadow quality */}
+          {}
           <div
             data-anim-item
             className={`rounded border border-white/10 bg-white/[0.02] p-4 space-y-3 ${
@@ -571,7 +565,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Upscaling Tech Info Accordion (MetalFX / DLSS / FSR) */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] overflow-hidden"
@@ -632,7 +626,7 @@ export function SettingsModal({
 
             </div>
             <div className={tab === "world" ? "space-y-4" : "hidden"}>
-          {/* Time of Day */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
@@ -667,7 +661,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Street lights */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3.5"
@@ -714,7 +708,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Fog */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
@@ -749,7 +743,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Vegetation */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3"
@@ -797,7 +791,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Weather */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
@@ -834,7 +828,7 @@ export function SettingsModal({
 
             </div>
             <div className={tab === "interface" ? "space-y-4" : "hidden"}>
-          {/* Performance metrics */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between"
@@ -865,7 +859,7 @@ export function SettingsModal({
             </button>
           </div>
 
-          {/* Cluster Style */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-2.5"
@@ -922,7 +916,7 @@ export function SettingsModal({
 
             </div>
             <div className={tab === "about" ? "space-y-4" : "hidden"}>
-          {/* Updates */}
+          {}
           <div
             data-anim-item
             className="rounded border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between gap-4"

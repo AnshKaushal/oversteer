@@ -1,10 +1,6 @@
 import type { ShiftLogicSpec } from "../../../data/schema"
 import { clamp } from "../../math"
 
-/**
- * Driver aggression for the auto gearbox: smoothed pedal demand plus tip-in
- * speed, rising fast, held through lifts, then decaying slowly.
- */
 export class Aggression {
   value = 0
   private decisionThrottle = 0
@@ -12,7 +8,6 @@ export class Aggression {
 
   constructor(private readonly p: ShiftLogicSpec) {}
 
-  /** Returns the quadratic aggression coefficient used by shift points. */
   step(dt: number, throttle: number, brake: number, prevThrottle: number) {
     const p = this.p
     const rate = throttle > this.decisionThrottle ? p.decisionRateUp : p.decisionRateDown

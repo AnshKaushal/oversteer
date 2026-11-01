@@ -21,7 +21,6 @@ export interface TireParams {
   rollingV0: number
   combinedWeight: number
   camberThrust: number
-  /** Pneumatic trail (m). */
   trail: number
   long: PacejkaShape
   lat: PacejkaShape
@@ -34,17 +33,12 @@ export interface TireContact {
   normal: Vec3
   patchVel: Vec3
   wheelOmega: number
-  /** Longitudinal slip ratio (wheel speed over ground speed, minus one) from the contact patch state. */
   slipRatio: number
-  /** Tangent of the slip angle from the contact patch state. */
   slipTan: number
   wheelHeading: Vec3
   bodyForward: Vec3
-  /** Wheel camber (rad), top leaning left positive. */
   camber?: number
-  /** Surface and weather grip scale on peak friction; 1 when absent. */
   gripScale?: number
-  /** Surface rolling resistance scale; 1 when absent. */
   rollingScale?: number
 }
 
@@ -63,9 +57,7 @@ export interface TireResult {
   fmax: number
   usage: number
   rollingForce: number
-  /** Self-aligning torque about the vertical axis (N m); opposes the slip angle. */
   mz: number
-  /** Local slope of longitudinal force against slip ratio (N per unit slip), for implicit wheel integration. */
   slopeX: number
 }
 
@@ -81,7 +73,6 @@ export function magicFormula(
   return D * Math.sin(C * Math.atan(Bs - E * (Bs - Math.atan(Bs))))
 }
 
-/** Share of the pneumatic trail left at a slip angle: full at zero, gone near the grip limit. */
 function trailFactor(sa: number, s: PacejkaShape): number {
   const Bs = s.B * sa
   return s.D * Math.cos(s.C * Math.atan(Bs - s.E * (Bs - Math.atan(Bs))))
@@ -105,7 +96,6 @@ function norm(a: Vec3): Vec3 {
   return scale(a, 1 / m)
 }
 
-/** Builds tire model parameters from a car's wheel spec. */
 export function tireParamsFrom(w: Wheels): TireParams {
   const shape = (c: { B: number; C: number; D: number; E: number }) => ({
     B: c.B,
@@ -129,7 +119,6 @@ export function tireParamsFrom(w: Wheels): TireParams {
   }
 }
 
-/** Slip at which a Pacejka curve peaks (its stiffness-shaped maximum), by the arctan argument. */
 function peakSlip(s: PacejkaShape): number {
   return Math.tan(Math.PI / (2 * s.C)) / s.B
 }
@@ -144,7 +133,6 @@ export class TireModel {
     this.peakSlipX = peakSlip(params.long)
   }
 
-  /** The wheel's own axes on the ground plane: t along the wheel, l to its left. */
   basis(c: Pick<TireContact, "normal" | "wheelHeading" | "bodyForward">): { t: Vec3; l: Vec3 } {
     const n = norm(c.normal)
     let t = sub(c.wheelHeading, scale(n, dot(c.wheelHeading, n)))
@@ -192,7 +180,6 @@ export class TireModel {
     const vx = dot(c.patchVel, t)
     const vy = dot(c.patchVel, l)
     const sx = c.slipRatio
-    // camber thrust: leaning one way pushes the wheel that way, as extra slip angle
     const tanA = c.slipTan - this.params.camberThrust * (c.camber ?? 0)
     const sa = Math.atan(tanA)
 
@@ -204,7 +191,6 @@ export class TireModel {
     const Dx = P.long.D * muX * Fz
     const Dy = P.lat.D * muY * Fz
 
-    // Combined slip: each pure-slip force is weakened by the other axis' slip.
     let fx = magicFormula(sx, P.long.B, P.long.C, Dx, P.long.E)
     let fy = -magicFormula(sa, P.lat.B, P.lat.C, Dy, P.lat.E)
     const rollingForce = -P.rollingResist * (c.rollingScale ?? 1) * Fz * Math.tanh(vx / P.rollingV0)

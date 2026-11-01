@@ -2,16 +2,12 @@ import type { Aero as AeroSpec } from "../../../data/schema"
 import { clamp } from "../../math"
 
 export interface AeroForce {
-  /** Drag impulse direction * magnitude per second, horizontal plane. */
   dragX: number
   dragZ: number
-  /** Downforce, N, positive pushes the car down. */
   down: number
 }
 
-/** Quadratic drag and downforce from horizontal speed, worse at a yaw angle, with optional movable aero. */
 export class Aero {
-  /** 0 closed .. 1 fully open. */
   private open = 0
 
   constructor(private readonly p: AeroSpec) {}
@@ -20,7 +16,6 @@ export class Aero {
     return this.open
   }
 
-  /** Moves the flap: open on a straight above its speed, closed otherwise. */
   update(dt: number, speed: number, steerAbs: number) {
     const a = this.p.active
     if (!a) return
@@ -28,10 +23,6 @@ export class Aero {
     this.open += clamp(want - this.open, -a.blendRate * dt, a.blendRate * dt)
   }
 
-  /**
-   * Returns null below `minSpeed`. `vx`/`vz` are world horizontal velocity, `yaw` the angle (rad)
-   * between the car's heading and its travel.
-   */
   force(vx: number, vz: number, yaw = 0): AeroForce | null {
     const v = Math.hypot(vx, vz)
     if (!(v > this.p.minSpeed)) return null

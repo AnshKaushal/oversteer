@@ -8,13 +8,9 @@ export interface StabilityInput {
   fwdSpeed: number
   groundedWheels: number
   handbrake: boolean
-  /** Road-wheel steer angle, positive to the left (rad). */
   steerAngle: number
-  /** Extra vertical load per kg from aerodynamic downforce (m/s^2): the tyres can corner harder with it. */
   downforceAccel: number
-  /** Body side slip, positive when the car moves to the right of its nose (rad). */
   beta: number
-  /** Yaw rate about world up, positive to the left (rad/s). */
   yawRate: number
   launchActive: boolean
 }
@@ -24,17 +20,8 @@ export interface StabilityWheel {
   left: boolean
 }
 
-/**
- * Electronic stability control. A bicycle model with the car's own understeer
- * gradient turns the steer angle and speed into the yaw rate the driver wants.
- * Past a deadzone the difference, with body side slip, picks one wheel to brake:
- * the outer front when the car oversteers, the inner rear when it understeers.
- * Brake pressure rises and falls at a hydraulic rate and the engine is cut a little.
- */
 export class StabilityControl {
-  /** Brake pressure per wheel as a share of that axle's brake torque. */
   readonly pressure: number[]
-  /** Engine torque factor, 1 = untouched. */
   engineFactor = 1
   private readonly wheelbase: number
   private readonly gradient: number
@@ -56,14 +43,12 @@ export class StabilityControl {
     this.lateralLimit = p.gripFraction * frictionMu * WORLD.gravity
   }
 
-  /** 1 while the wheel grips, falling to 0 as its brake slip passes the limit. */
   gripScale(wheelSpeed: number, groundSpeed: number): number {
     const limit = this.p.wheelSlipLimit
     const lock = 1 - wheelSpeed / Math.max(groundSpeed, Number.EPSILON)
     return clamp(1 - (lock - limit) / limit, 0, 1)
   }
 
-  /** Some wheel is being braked by the control. */
   get intervening(): boolean {
     return this.pressure.some((p) => p > this.p.indicateFraction)
   }
@@ -73,7 +58,6 @@ export class StabilityControl {
     this.engineFactor = 1
   }
 
-  /** Yaw rate the car should follow for this steer angle and speed (rad/s). */
   referenceYaw(steerAngle: number, fwdSpeed: number, downforceAccel = 0): number {
     const r = (fwdSpeed * steerAngle) / (this.wheelbase + this.gradient * fwdSpeed * fwdSpeed)
     const limit =
@@ -91,7 +75,6 @@ export class StabilityControl {
       const yawErr = i.yawRate - ref
       const yawExcess = Math.sign(yawErr) * Math.max(0, Math.abs(yawErr) - p.yawDeadzone)
       const betaExcess = Math.sign(i.beta) * Math.max(0, Math.abs(i.beta) - p.betaDeadzone)
-      // demand > 0 asks for more yaw to the left, < 0 for more to the right
       const demand = -p.yawGain * yawExcess - p.betaGain * betaExcess
       if (demand !== 0) {
         const turn = Math.sign(Math.abs(ref) > p.yawDeadzone ? ref : i.yawRate)

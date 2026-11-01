@@ -4,17 +4,11 @@ import type { GearAccess } from "../types"
 export interface DirectionInput {
   dt: number
   fwdSpeed: number
-  /** Pedals as the driver pressed them, before any swap or injection. */
   throttle: number
   brake: number
   handbrake: boolean
 }
 
-/**
- * Automatic direction changes at a standstill: hold brake in 1st to go
- * 1 -> N -> R, hold throttle in R to go R -> N -> 1, and a pedal in N picks
- * the matching gear.
- */
 export class DirectionShift {
   private reverseHold = 0
   private reversePending = false
@@ -31,7 +25,6 @@ export class DirectionShift {
     const brakeOn = i.brake > p.brakePress && !i.handbrake
     const throttleOn = i.throttle > p.throttlePress
 
-    // 1 -> N -> R
     if (standstill && g.gear === 1 && brakeOn && i.throttle < p.pedalRelease) {
       this.reverseHold += i.dt
       if (this.reverseHold > p.holdTime && g.shiftTimer <= 0 && !this.reversePending) {
@@ -67,7 +60,6 @@ export class DirectionShift {
       }
     }
 
-    // R -> N -> 1
     if (
       Math.abs(i.fwdSpeed) < p.reverseExitSpeed &&
       g.gear === -1 &&
@@ -108,7 +100,6 @@ export class DirectionShift {
       }
     }
 
-    // Neutral: a pedal picks the matching gear.
     if (g.gear === 0 && !this.reversePending && !this.forwardPending) {
       if (brakeOn && i.throttle < p.pedalRelease) g.gear = -1
       else if (throttleOn && i.brake < p.pedalRelease) g.gear = 1

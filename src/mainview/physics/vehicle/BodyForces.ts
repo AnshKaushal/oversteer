@@ -9,10 +9,6 @@ import { VelocityLimiter } from "./components/VelocityLimiter"
 import { clamp } from "../math"
 import type { Kinematics } from "./types"
 
-/**
- * Forces applied to the chassis after the wheels: aero, self-righting,
- * and speed clamps, in that order.
- */
 export class BodyForces {
   private readonly aero: Aero
   readonly impact: Impact
@@ -34,12 +30,10 @@ export class BodyForces {
     this.impact = new Impact(P.chassis.crash)
   }
 
-  /** Downforce at this velocity (N). */
   downforce(vx: number, vz: number, yaw = 0): number {
     return this.aero.force(vx, vz, yaw)?.down ?? 0
   }
 
-  /** The chassis colliders are pressed against something (the wheels are rays, so this is a hit or a scrape). */
   private touching(): boolean {
     let found = false
     for (let i = 0; i < this.body.numColliders(); i++) {
@@ -53,7 +47,6 @@ export class BodyForces {
     return found
   }
 
-  /** Angle (rad) between the car's heading and its direction of travel. */
   yawToAirflow(k: Kinematics): number {
     return Math.atan2(
       k.linvel.x * k.right.x + k.linvel.z * k.right.z,

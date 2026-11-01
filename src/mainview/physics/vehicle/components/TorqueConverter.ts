@@ -1,7 +1,6 @@
 import type { Transmission } from "../../../data/schema"
 import { clamp } from "../../math"
 
-/** Torque multiplication that fades out as the converter locks up. */
 export class TorqueConverter {
   constructor(private readonly p: Transmission["torqueConverter"]) {}
 

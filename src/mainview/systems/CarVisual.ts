@@ -343,7 +343,6 @@ export class CarVisual {
       lo.add(w)
     }
 
-    // Imposter headlights: two glowing dots so distant cars still look active at night
     const headGeo = new THREE.PlaneGeometry(0.28, 0.16)
     headGeo.rotateY(Math.PI)
     const headMat = new THREE.MeshBasicMaterial({
@@ -359,7 +358,6 @@ export class CarVisual {
     leftHead.visible = this.headlightsOn
     rightHead.visible = this.headlightsOn
 
-    // Imposter taillights: two red glowing dots so distant cars are visible from behind
     const tailGeo = new THREE.PlaneGeometry(0.28, 0.16)
     const tailMat = new THREE.MeshBasicMaterial({
       color: 0xff1505,
@@ -599,7 +597,6 @@ export class CarVisual {
     const group = new THREE.Group()
     this.headlightGroup = group
 
-    // Scan for actual headlight meshes / materials on the car model
     if (this.hiBody) {
       this.hiBody.traverse((o: any) => {
         if (!o.isMesh || !o.material) return
@@ -608,41 +605,29 @@ export class CarVisual {
           const std = m as THREE.MeshStandardMaterial
           if (!std || !std.isMeshStandardMaterial) continue
 
-          // NEVER illuminate car body paint or materials in tintedMats
           if (this.tintedMats.includes(std)) continue
 
           const matName = (std.name || "").toLowerCase()
           const meshName = (o.name || "").toLowerCase()
 
-          // 1. G-Wagon check:
-          // In G-Wagon (g_wagon.glb), the car body mesh has an emissiveMap with baked white headlights
-          // that must be controlled by setHeadlights so they turn OFF when lights are off!
           const isGWagonHeadlight =
             meshName.includes("carbody") && matName === "body" && !!std.emissiveMap
 
-          // 2. Lamborghini Aventador check:
-          // Front headlight glass/bulb meshes are glasses_glass017, glasses_glass018, glasses_glass020, glasses_glass024
           const isAventadorHeadlight =
             meshName.startsWith("glasses_glass017") ||
             meshName.startsWith("glasses_glass018") ||
             meshName.startsWith("glasses_glass020") ||
             meshName.startsWith("glasses_glass024")
 
-          // 3. Dodge Challenger check:
-          // Round front grille quad lamps and lower front fog lights
           const isDodgeHeadlight =
             meshName.includes("front_light") ||
             meshName.startsWith("pcylinder1_glass_gray") ||
             meshName.startsWith("psphere1_gray_4") ||
             meshName.startsWith("psphere1_orange_1")
 
-          // 4. Cheetah '84 check:
-          // Front secondary lamps, secondary glass, and headlight panels
           const isCheetahHeadlight =
             meshName.includes("cheetah84_headlights")
 
-          // 5. Dodge Charger '69 check:
-          // Front grille dual round headlights & headlight glass
           const isChargerHeadlight =
             meshName.includes("duke69_headlight")
 
@@ -655,7 +640,6 @@ export class CarVisual {
 
           if (isSpecificHeadlight) {
             let targetMat = std
-            // Clone if shared so other parts don't get illuminated
             if (!isGWagonHeadlight && !o.userData.__headlightCloned) {
               targetMat = std.clone()
               if (Array.isArray(o.material)) {
@@ -675,11 +659,8 @@ export class CarVisual {
                   targetMat.emissive.g === 0 &&
                   targetMat.emissive.b === 0)
               ) {
-                // Warm white headlight glass instead of flat plain white.
                 targetMat.emissive = new THREE.Color(0xfff0cc)
               }
-              // Make the headlight lens slightly transparent so it reads as
-              // glass rather than an opaque white disc.
               const wasTransparent = targetMat.transparent
               const wasOpacity = targetMat.opacity
               targetMat.transparent = true
@@ -698,10 +679,8 @@ export class CarVisual {
             continue
           }
 
-          // NEVER illuminate car body paint or materials in tintedMats for generic cars
           if (this.tintedMats.includes(std)) continue
 
-          // Exclude body panels, chassis, interior, wheels, calipers, glass
           const isExcludedMat =
             matName.includes("paint") ||
             matName.includes("body") ||
@@ -741,7 +720,6 @@ export class CarVisual {
             meshName.includes("suspension")
           if (isExcludedMesh) continue
 
-          // Exclude red taillights and brakelights
           const isRed =
             (std.emissive &&
               std.emissive.r > 0.12 &&
@@ -772,7 +750,6 @@ export class CarVisual {
             Math.abs(std.emissive.r - std.emissive.b) < 0.2
 
           if (isHeadlightName || hasNativeWhiteEmissive) {
-            // Clone material on the specific mesh to isolate it from non-light meshes sharing this material
             let targetMat = std
             if (!o.userData.__headlightCloned) {
               targetMat = std.clone()
@@ -793,11 +770,8 @@ export class CarVisual {
                   targetMat.emissive.g === 0 &&
                   targetMat.emissive.b === 0)
               ) {
-                // Warm white headlight glass instead of flat plain white.
                 targetMat.emissive = new THREE.Color(0xfff0cc)
               }
-              // Make the headlight lens slightly transparent so it reads as
-              // glass rather than an opaque white disc.
               const wasTransparent = targetMat.transparent
               const wasOpacity = targetMat.opacity
               targetMat.transparent = true
@@ -818,7 +792,6 @@ export class CarVisual {
       })
     }
 
-    // Player car gets dual long-range driving projectors with real-time shadow casting
     if (isPlayer) {
       const leftSpot = new THREE.SpotLight(
         0xfff0cc,
