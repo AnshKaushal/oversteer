@@ -148,7 +148,16 @@ function perfOverlay(): HTMLPreElement {
   return el
 }
 
+/** Squared distance within which cars cast shadows: 40 m at the lowest setting, 120 m at full. */
+function shadowRange2(s: AppSettings): number {
+  const q = Math.min(100, Math.max(25, s.shadowQuality ?? 100)) / 100
+  const r = 40 + 80 * q
+  return r * r
+}
+
 function applyFog(wm: WorldManager, s: AppSettings) {
+  wm.setShadowQuality(s.shadowQuality ?? 100)
+  wm.setStreetLights(s.streetLights !== false, s.streetLightsOn !== false)
   const k = FOG_INTENSITY[s.fog ?? "normal"]
   wm.setFog(k !== undefined, k ?? 1)
 }
@@ -1806,7 +1815,7 @@ export default function App() {
                 })
                 .sort((a, b) => a.d - b.d)
               for (const { i, d } of ranked) {
-                rivals[i].visual.setCastShadow(d < 7225)
+                rivals[i].visual.setCastShadow(d < shadowRange2(settingsRef.current))
               }
               let upgrades = 0
               for (const { i, d } of ranked) {
@@ -1973,7 +1982,7 @@ export default function App() {
                 .sort((a, b) => a.d - b.d)
               for (const { i, d } of tranked) {
                 const tc = trafficCars[i]
-                tc.visual.setCastShadow(d < 7225)
+                tc.visual.setCastShadow(d < shadowRange2(settingsRef.current))
 
                 if (d > 193600) {
                   // >440m completely culled (beyond fog range)
@@ -2053,8 +2062,9 @@ export default function App() {
             lightningWasOn = flash > 0
           }
           const kmhNow = Math.abs(car.forwardSpeed) * 3.6
-          if (raceActive && kmhNow > 210) wm.setPropShadows(false)
-          else if (!raceActive || kmhNow < 190) wm.setPropShadows(true)
+          const fullShadows = (settingsRef.current.shadowQuality ?? 100) >= 100
+          if (!fullShadows && raceActive && kmhNow > 210) wm.setPropShadows(false)
+          else if (fullShadows || !raceActive || kmhNow < 190) wm.setPropShadows(true)
 
           if (startedRef.current) {
             const intensity = Math.max(

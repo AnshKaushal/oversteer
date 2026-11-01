@@ -517,6 +517,7 @@ export class CarVisual {
           leftSpot.position.set(-headlightSpacing, headlightY, frontZ - 0.15)
           leftSpot.castShadow = true
           leftSpot.shadow.mapSize.set(1024, 1024)
+          leftSpot.shadow.radius = 3
           leftSpot.shadow.camera.near = 0.4
           leftSpot.shadow.camera.far = 90
           leftSpot.shadow.bias = -0.0003
@@ -535,6 +536,7 @@ export class CarVisual {
           rightSpot.position.set(headlightSpacing, headlightY, frontZ - 0.15)
           rightSpot.castShadow = true
           rightSpot.shadow.mapSize.set(1024, 1024)
+          rightSpot.shadow.radius = 3
           rightSpot.shadow.camera.near = 0.4
           rightSpot.shadow.camera.far = 90
           rightSpot.shadow.bias = -0.0003
@@ -829,6 +831,7 @@ export class CarVisual {
       leftSpot.position.set(-headlightSpacing, headlightY, frontZ - 0.15)
       leftSpot.castShadow = true
       leftSpot.shadow.mapSize.set(1024, 1024)
+      leftSpot.shadow.radius = 3
       leftSpot.shadow.camera.near = 0.4
       leftSpot.shadow.camera.far = 90
       leftSpot.shadow.bias = -0.0003
@@ -847,6 +850,7 @@ export class CarVisual {
       rightSpot.position.set(headlightSpacing, headlightY, frontZ - 0.15)
       rightSpot.castShadow = true
       rightSpot.shadow.mapSize.set(1024, 1024)
+      rightSpot.shadow.radius = 3
       rightSpot.shadow.camera.near = 0.4
       rightSpot.shadow.camera.far = 90
       rightSpot.shadow.bias = -0.0003

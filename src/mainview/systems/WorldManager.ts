@@ -1,4 +1,5 @@
 import { Puddles } from "./Puddles"
+import { StreetLights } from "./StreetLights"
 import type { SurfaceId } from "../data/surfaces"
 import { registerSurface } from "../physics/core/Surfaces"
 import * as THREE from "three"
@@ -264,9 +265,12 @@ export class WorldManager {
   private touchedVariants = new Set<number>()
   private grassDensity = 1
   private propShadows = true
-  private readonly SHADOW_FADE_RADIUS = 110
+  private readonly SHADOW_FADE_RADIUS = 70
   private shadowFadeMat: THREE.MeshDepthMaterial | null = null
   private timeOfDay: TimeOfDayMode = "day"
+  private streetLights: StreetLights | null = null
+  private streetLightsShown = true
+  private streetLightsPower = true
   private fogEnabled = true
   /** 1 is the preset's own fog; 2 is twice as thick (half the view distance). */
   private fogIntensity = 1
@@ -276,6 +280,48 @@ export class WorldManager {
   private sunOffset = new THREE.Vector3(120, 180, 60)
   private sceneRef: THREE.Scene | null = null
   private starsPoints: THREE.Points | null = null
+
+  /** Shadow detail, 25 to 100: sharper maps and a wider shadowed area as it rises. */
+  setShadowQuality(pct: number) {
+    const sun = this.sunLight
+    if (!sun) return
+    const q = Math.min(100, Math.max(25, pct)) / 100
+    // at full, 4096 px over 140 m is about 29 px/m, roughly four times the original density
+    const size = Math.max(1024, Math.round((4096 * q) / 256) * 256)
+    const half = 50 + 20 * q
+    this.shadowTexel = (2 * half) / size
+    const cam = sun.shadow.camera
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.map?.dispose()
+      sun.shadow.map = null
+      sun.shadow.mapSize.set(size, size)
+      sun.shadow.needsUpdate = true
+    }
+    // the filter blur, in shadow pixels: wider as the map gets coarser, so edges never look blocky
+    sun.shadow.radius = 2.5 + (1 - q) * 2
+    cam.left = cam.bottom = -half
+    cam.right = cam.top = half
+    cam.updateProjectionMatrix()
+  }
+
+  private shadowTexel = 0.1
+  private readonly lightRight = new THREE.Vector3()
+  private readonly lightUp = new THREE.Vector3()
+  private readonly snapped = new THREE.Vector3()
+
+  /** The car's position moved onto the shadow map's pixel grid, so edges don't crawl as it drives. */
+  private snapToShadowGrid(carPos: THREE.Vector3): THREE.Vector3 {
+    const dir = this.sunOffset
+    const right = this.lightRight.set(0, 1, 0).cross(dir).normalize()
+    const up = this.lightUp.copy(dir).cross(right).normalize()
+    const texel = this.shadowTexel
+    const ground = this.snapped.set(carPos.x, 0, carPos.z)
+    const pr = ground.dot(right)
+    const pu = ground.dot(up)
+    return ground
+      .addScaledVector(right, Math.round(pr / texel) * texel - pr)
+      .addScaledVector(up, Math.round(pu / texel) * texel - pu)
+  }
 
   setPropShadows(on: boolean) {
     if (on === this.propShadows) return
@@ -329,6 +375,14 @@ export class WorldManager {
     return this.timeOfDay
   }
 
+  /** User settings: show the street lamps, and let them light up in every sky but day. */
+  setStreetLights(show: boolean, power: boolean) {
+    this.streetLightsShown = show
+    this.streetLightsPower = power
+    this.streetLights?.setEnabled(show)
+    this.streetLights?.setLit(power && this.timeOfDay !== "day")
+  }
+
   /** User fog setting: off, or a thickness multiplier on the time-of-day fog. */
   setFog(enabled: boolean, intensity: number) {
     this.fogEnabled = enabled
@@ -350,12 +404,26 @@ export class WorldManager {
     return !this.fogEnabled || !(fog instanceof THREE.Fog) || d < fog.far + 20
   }
 
+  /** Full stars at night, faint ones at sunrise and in the evening; unfogged when fog is off. */
+  private applyStars() {
+    const sp = this.starsPoints
+    if (!sp) return
+    const m = this.timeOfDay
+    // thick fog hides the stars along with the rest of the sky; the stars are too far for scene fog
+    const haze = this.fogEnabled ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7)) : 0
+    const a = (m === "night" ? 0.6 : m === "sunrise" || m === "evening" ? 0.6 : 0) * (1 - haze)
+    sp.visible = a > 0
+    const smat = sp.material as THREE.PointsMaterial
+    smat.opacity = a
+  }
+
   private applyFogRange() {
     const fog = this.sceneRef?.fog
     if (!(fog instanceof THREE.Fog)) return
     const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
     if (this.sceneRef?.background instanceof THREE.Color) this.hazedSky(this.sceneRef.background, preset)
     this.cloudLastCarS = -999999
+    this.applyStars()
     if (!this.fogEnabled) {
       // Never truly off: a faint fade in the sky's own colour over the last
       // stretch before the camera's far plane, so the ground never ends in a line.
@@ -371,6 +439,7 @@ export class WorldManager {
 
   setTimeOfDay(mode: TimeOfDayMode) {
     this.timeOfDay = mode
+    this.streetLights?.setLit(this.streetLightsPower && mode !== "day")
     const preset = TIME_OF_DAY_PRESETS[mode]
     if (!preset) return
 
@@ -426,14 +495,7 @@ export class WorldManager {
       }
     }
 
-    if (this.starsPoints) {
-      const isNight = mode === "night"
-      this.starsPoints.visible = isNight
-      const smat = this.starsPoints.material as THREE.PointsMaterial
-      if (smat) {
-        smat.opacity = isNight ? 0.85 : 0
-      }
-    }
+    this.applyStars()
   }
 
   private shadowFadeMaterial(): THREE.MeshDepthMaterial {
@@ -532,13 +594,13 @@ export class WorldManager {
     const sun = new THREE.DirectionalLight(W.environment.sunColor, 2.2)
     sun.position.set(120, 180, 60)
     sun.castShadow = true
-    sun.shadow.mapSize.set(1024, 1024)
-    sun.shadow.bias = -0.0004
-    sun.shadow.normalBias = 0.02
-    sun.shadow.camera.left = -80
-    sun.shadow.camera.right = 80
-    sun.shadow.camera.top = 80
-    sun.shadow.camera.bottom = -80
+    sun.shadow.mapSize.set(4096, 4096)
+    sun.shadow.bias = -0.0002
+    sun.shadow.normalBias = 0.015
+    sun.shadow.camera.left = -70
+    sun.shadow.camera.right = 70
+    sun.shadow.camera.top = 70
+    sun.shadow.camera.bottom = -70
     sun.shadow.camera.far = 500
     this.group.add(sun)
     this.sunLight = sun
@@ -553,34 +615,38 @@ export class WorldManager {
     const sunMat = new THREE.MeshBasicMaterial({
       color: W.environment.sunColor,
       fog: false,
+      // drawn after the stars (transparent pass, higher order) so they never show over the disk
+      transparent: true,
       depthWrite: false,
     })
     const sunVisual = new THREE.Mesh(sunGeo, sunMat)
     sunVisual.frustumCulled = false
-    sunVisual.renderOrder = -1
+    sunVisual.renderOrder = 1
     this.group.add(sunVisual)
     this.sunVisual = sunVisual
 
     // Night starry sky dome (single-draw-call, zero FPS impact)
     const starGeo = new THREE.BufferGeometry()
-    const starCount = 600
+    const starCount = 1400
     const starPos = new Float32Array(starCount * 3)
     for (let i = 0; i < starCount; i++) {
       const theta = Math.random() * Math.PI * 2
-      const phi = Math.random() * (Math.PI / 2.3)
+      // polar angle from straight up to just past the horizon, spread evenly over the sky
+      const phi = Math.acos(1 - Math.random() * 1.02)
       const r = 900 + Math.random() * 200
       starPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta)
-      starPos[i * 3 + 1] = r * Math.cos(phi) + 50
+      starPos[i * 3 + 1] = r * Math.cos(phi)
       starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
     }
     starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3))
     const starMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 2.2,
+      size: 2.6,
       transparent: true,
       opacity: 0,
       sizeAttenuation: false,
       depthWrite: false,
+      fog: false,
     })
     this.starsPoints = new THREE.Points(starGeo, starMat)
     this.starsPoints.frustumCulled = false
@@ -780,6 +846,11 @@ export class WorldManager {
       this.dressHill(h, i * 311 + 3, h.radius > 90 ? 10 : 20),
     )
 
+    this.streetLights = new StreetLights(this.group, roadCenterX)
+    await this.streetLights.load(baseUrl)
+    this.streetLights.setEnabled(this.streetLightsShown)
+    this.streetLights.setLit(this.streetLightsPower && this.timeOfDay !== "day")
+
     this.initClouds()
     this.update(0, new THREE.Vector3(0, 0, 0))
   }
@@ -861,6 +932,7 @@ export class WorldManager {
     registerSurface(world, world.createCollider(col, body), groundSurfaceAt)
     this.R = R
     this.physWorld = world
+    this.streetLights?.attachPhysics(R, world)
     for (const hill of this.hills) {
       const hb = world.createRigidBody(R.RigidBodyDesc.fixed())
       const hg = hill.mesh.geometry as THREE.BufferGeometry
@@ -1463,12 +1535,9 @@ export class WorldManager {
       this.sunLight ??
       ((this.group as any)._sun as THREE.DirectionalLight | undefined)
     if (sun) {
-      sun.position.set(
-        carPos.x + this.sunOffset.x,
-        this.sunOffset.y,
-        carPos.z + this.sunOffset.z,
-      )
-      sun.target.position.set(carPos.x, 0, carPos.z)
+      const f = this.snapToShadowGrid(carPos)
+      sun.position.set(f.x + this.sunOffset.x, f.y + this.sunOffset.y, f.z + this.sunOffset.z)
+      sun.target.position.set(f.x, 0, f.z)
       sun.target.updateMatrixWorld()
     }
     if (this.sunVisual) {
@@ -1501,6 +1570,7 @@ export class WorldManager {
       const sc = Math.max(f, 0.01)
       if (h.mesh.scale.x !== sc) h.mesh.scale.setScalar(sc)
     }
+    this.streetLights?.update(carS, carPos)
     this.updateClouds(carS, carPos)
     this.grassDensity += (grassTarget - this.grassDensity) * 0.08
     if (Math.abs(grassTarget - this.grassDensity) < 0.005) {

@@ -67,17 +67,11 @@ export class Brakes {
     const max = c.front
       ? this.wheels.brakeForce.front
       : this.wheels.brakeForce.rear
-    let base: number
-    if (c.reverse) {
-      base = c.brake * max * this.fadeFactor(this.temps[c.wheelIndex])
-      this.heat(c, base)
-    } else {
-      const hbLock = c.handbrake && !c.front
-      const hb = hbLock ? this.wheels.handbrakeForce : 0
-      const service = c.brake * max * this.fadeFactor(this.temps[c.wheelIndex])
-      this.heat(c, service)
-      base = service + hb
-    }
+    const hb = c.handbrake && !c.front ? this.wheels.handbrakeForce : 0
+    const service = c.brake * max * this.fadeFactor(this.temps[c.wheelIndex])
+    this.heat(c, service)
+    // the handbrake locks the rear wheels in either direction
+    let base = service + hb
     if (this.parking) base = Math.max(base, p.parkingTorque)
     return base
   }

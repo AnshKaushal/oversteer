@@ -93,22 +93,31 @@ export interface AppSettings {
   resolution: ResolutionId
   renderScale: number // 50 to 100
   shadows: boolean
+  /** 25 to 100: shadow sharpness and how far from the car shadows reach. */
+  shadowQuality: number
   timeOfDay?: TimeOfDayMode
   weather?: WeatherId
   dashStyle?: "modern" | "classic"
   fog?: FogLevel
   perfOverlay?: boolean
+  /** Show the lamp posts at all. */
+  streetLights?: boolean
+  /** Whether the lamps light up outside daytime. */
+  streetLightsOn?: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   resolution: "1080p",
   renderScale: 100,
   shadows: true,
+  shadowQuality: 100,
   timeOfDay: "day",
   weather: "dry",
   dashStyle: "modern",
   fog: "normal",
   perfOverlay: false,
+  streetLights: true,
+  streetLightsOn: true,
 }
 
 const SETTINGS_KEY = "oversteer_settings"

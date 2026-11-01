@@ -17,6 +17,7 @@ import {
   RefreshCw,
   CloudFog,
   Activity,
+  Lamp,
 } from "lucide-react"
 import { DEFAULT_WEATHER, WEATHER_GRIP, type WeatherId } from "../data/surfaces"
 
@@ -199,6 +200,13 @@ export function SettingsModal({
     onUpdateSettings({
       ...settings,
       shadows: !settings.shadows,
+    })
+  }
+
+  const handleShadowQuality = (q: number) => {
+    onUpdateSettings({
+      ...settings,
+      shadowQuality: q,
     })
   }
 
@@ -513,6 +521,56 @@ export function SettingsModal({
             </button>
           </div>
 
+          {/* Shadow quality */}
+          <div
+            data-anim-item
+            className={`rounded border border-white/10 bg-white/[0.02] p-4 space-y-3 ${
+              settings.shadows ? "" : "opacity-50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                  <Cpu size={14} className="text-[#51a7d5]" />
+                  Shadow Quality
+                </label>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Sharpness and reach of shadows. Lower it for more FPS
+                </p>
+              </div>
+              <span className="text-base font-bold text-[#6ec2f0] tabular-nums">
+                {settings.shadowQuality ?? 100}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={25}
+              max={100}
+              step={5}
+              disabled={!settings.shadows}
+              value={settings.shadowQuality ?? 100}
+              onChange={(e) => handleShadowQuality(Number(e.target.value))}
+              aria-label="Shadow Quality Percentage"
+              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#51a7d5]"
+            />
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[100, 75, 50, 25].map((val) => (
+                <button
+                  key={val}
+                  disabled={!settings.shadows}
+                  onClick={() => handleShadowQuality(val)}
+                  className={`flex-1 min-w-[50px] py-1.5 text-xs font-semibold rounded border transition ${
+                    (settings.shadowQuality ?? 100) === val
+                      ? "border-[#51a7d5] bg-[#51a7d5]/30 text-white"
+                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  {val}%
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Upscaling Tech Info Accordion (MetalFX / DLSS / FSR) */}
           <div
             data-anim-item
@@ -606,6 +664,53 @@ export function SettingsModal({
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Street lights */}
+          <div
+            data-anim-item
+            className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3.5"
+          >
+            <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+              <Lamp size={14} className="text-[#51a7d5]" />
+              Street Lights
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold text-gray-200">Show</div>
+                <p className="text-[11px] text-gray-400 mt-0.5">Lamp posts beside the road</p>
+              </div>
+              <button
+                onClick={() => onUpdateSettings({ ...settings, streetLights: settings.streetLights === false })}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                  settings.streetLights !== false ? "bg-[#51a7d5]" : "bg-gray-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.streetLights !== false ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold text-gray-200">Lit</div>
+                <p className="text-[11px] text-gray-400 mt-0.5">Lamps light up in every sky except day</p>
+              </div>
+              <button
+                onClick={() => onUpdateSettings({ ...settings, streetLightsOn: settings.streetLightsOn === false })}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                  settings.streetLightsOn !== false ? "bg-[#51a7d5]" : "bg-gray-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.streetLightsOn !== false ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
             </div>
           </div>
 
