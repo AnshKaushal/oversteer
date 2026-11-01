@@ -145,7 +145,7 @@ const pitch = (mode: FlybyMode, t: number) => {
   return (passState(mode, t, path, 0).pitch * 180) / Math.PI
 }
 check(pitch("takeoff", 0) > 8, "take-off starts nose up", `${pitch("takeoff", 0).toFixed(1)} deg`)
-check(pitch("takeoff", PASS_LENGTH) < 3, "take-off levels off", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
+check(pitch("takeoff", PASS_LENGTH) < 10 && pitch("takeoff", PASS_LENGTH) >= pitch("takeoff", 100), "take-off settles into a steady climb", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
 check(Math.abs(pitch("landing", PASS_LENGTH)) < 1e-9 && Math.abs(pitch("landing", 0)) < 1e-9, "landing stays level in pitch", `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`)
 
 // 8. The aircraft is never faded. It flies its line, on past the end of

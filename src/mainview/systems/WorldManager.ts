@@ -1,3 +1,4 @@
+import type { ClearZone } from "./Airport"
 import { Puddles } from "./Puddles"
 import { StreetLights } from "./StreetLights"
 import type { SurfaceId } from "../data/surfaces"
@@ -83,6 +84,8 @@ function fadeOut(d: number, from: number, to: number): number {
 // 22 hills share a ring of 44 segments; hill i owns every segment = hillResidue(i) (mod 44).
 const HILL_PERIOD = 44
 const hillResidue = (i: number) => -2 + i * 2
+/** The widest a hill can be, before its rim noise. */
+const HILL_MAX_RADIUS = 220
 
 
 function makeRibbonGeometry(
@@ -219,6 +222,8 @@ interface Hill {
   seg: number
   rotY: number
   radius: number
+  /** Peak height, used to bound hills that have not been placed yet. */
+  height: number
   body?: RAPIER.RigidBody
 }
 
@@ -378,6 +383,46 @@ export class WorldManager {
   }
 
   /** User settings: show the street lamps, and let them light up in every sky but day. */
+  /** Ground kept free of trees and grass, such as under a runway. */
+  private clearZones: ClearZone[] = []
+
+  /**
+   * Sets the ground that must stay free of roadside props. Segments the old
+   * or new zones touch are rebuilt, so only they refill.
+   */
+  setClearZones(zones: ClearZone[]) {
+    const segs = new Set<number>()
+    const mark = (list: ClearZone[]) => {
+      for (const z of list) {
+        const ext = Math.abs(z.uz) * z.hl + Math.abs(z.ux) * z.hw
+        const sLo = -(z.z + ext) - 10
+        const sHi = -(z.z - ext) + 10
+        for (let g = Math.floor(sLo / this.segLen); g <= Math.floor(sHi / this.segLen); g++) {
+          segs.add(g)
+        }
+      }
+    }
+    mark(this.clearZones)
+    mark(zones)
+    this.clearZones = zones
+    for (const k of segs) {
+      if (!this.segProps.has(k)) continue
+      this.freeSeg(k)
+      this.segProps.delete(k)
+    }
+  }
+
+  private inClearZone(x: number, z: number): boolean {
+    for (const c of this.clearZones) {
+      const dx = x - c.x
+      const dz = z - c.z
+      if (Math.abs(dx * c.ux + dz * c.uz) < c.hl && Math.abs(-dx * c.uz + dz * c.ux) < c.hw) {
+        return true
+      }
+    }
+    return false
+  }
+
   /** Share of trees and grass kept, 0..1. */
   private vegetation = 1
 
@@ -727,7 +772,7 @@ export class WorldManager {
       hill.receiveShadow = true
       this.group.add(hill)
       const seg = hillResidue(i) + HILL_PERIOD * Math.round(-hillResidue(i) / HILL_PERIOD)
-      this.hills.push({ mesh: hill, seg: -999999, rotY, radius })
+      this.hills.push({ mesh: hill, seg: -999999, rotY, radius, height })
       this.placeHill(this.hills[i], seg)
     }
 
@@ -1077,15 +1122,22 @@ export class WorldManager {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 
-  private placeHill(hill: Hill, seg: number) {
+  /** Where a hill stands when it holds `seg`. */
+  private hillSpot(hill: Hill, seg: number): { x: number; z: number } {
     const sMid = seg * this.segLen + this.segLen / 2
     const cx = roadCenterX(sMid)
     const side = this.rand(seg * 71 + 5) > 0.5 ? 1 : -1
     const far = hill.radius > 90
     const clearance = hill.radius * 1.4 + 12
     const lateral = clearance + this.rand(seg * 131 + 29) * (far ? 450 : 130)
-    const nx = cx + side * lateral
-    const nz = -(sMid + (this.rand(seg * 17 + 3) - 0.5) * this.segLen)
+    return {
+      x: cx + side * lateral,
+      z: -(sMid + (this.rand(seg * 17 + 3) - 0.5) * this.segLen),
+    }
+  }
+
+  private placeHill(hill: Hill, seg: number) {
+    const { x: nx, z: nz } = this.hillSpot(hill, seg)
     const dx = nx - this.carPos.x
     const dz = nz - this.carPos.z
     const keepOut = hill.radius + 15
@@ -1325,7 +1377,10 @@ export class WorldManager {
   }
 
   private genSegProps(seg: number): PropEntry[] {
-    const all = this.genSegPropsAll(seg)
+    let all = this.genSegPropsAll(seg)
+    if (this.clearZones.length > 0) {
+      all = all.filter((t) => !this.inClearZone(t.pos.x, t.pos.z))
+    }
     if (this.vegetation >= 1) return all
     return all.filter((t) => {
       const cat = this.propVariants[t.variantIdx]?.category
@@ -1675,6 +1730,22 @@ export class WorldManager {
       )
       const hit = this.hillRay.intersectObject(hill.mesh, false)
       if (hit.length > 0 && hit[0].point.y > h) h = hit[0].point.y
+    }
+    // Hills only stand near the car; the rest wait out of sight and move in as
+    // it comes. A hill that is not here yet still has a fixed place, so count
+    // it too, or an airfield could be laid where one is about to rise.
+    const g0 = Math.floor(-z / this.segLen)
+    const reach = Math.ceil((HILL_MAX_RADIUS * 1.3) / this.segLen)
+    for (let g = g0 - reach; g <= g0 + reach; g++) {
+      const m = (((g + 2) % HILL_PERIOD) + HILL_PERIOD) % HILL_PERIOD
+      if (m % 2) continue
+      const hill = this.hills[m / 2]
+      if (!hill || hill.seg === g) continue
+      const spot = this.hillSpot(hill, g)
+      const dx = x - spot.x
+      const dz = z - spot.z
+      const r = hill.radius * 1.3
+      if (dx * dx + dz * dz < r * r && hill.height > h) h = hill.height
     }
     return h
   }

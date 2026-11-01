@@ -1,6 +1,15 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { roadCenterX, roadYaw } from "./WorldManager"
+import {
+  AirportView,
+  airportBlocked,
+  layoutAirport,
+  type ClearZone,
+  RUNWAY_END_D,
+  warmAirportTextures,
+} from "./Airport"
+import { warmStructureTextures } from "./AirportStructures"
 import { type TimeOfDayMode } from "../constants/timeOfDay"
 
 /**
@@ -39,8 +48,38 @@ const LANDING_EXIT_LEN = 600
 function exitLen(mode: FlybyMode): number {
   return mode === "landing" ? LANDING_EXIT_LEN : EXIT_LEN
 }
-/** Climb gradient of a take-off once it is past the end of the path. */
-const TAKEOFF_CLIMB_SLOPE = 0.14
+/**
+ * Take-offs start on the runway, on the far side of the road from where
+ * the climb-out crosses it. `traveled` runs from here, so it is negative
+ * until the aircraft reaches the start of the take-off path.
+ */
+const TAKEOFF_START_D = -(RUNWAY_END_D - PASS_LENGTH) + 40
+/**
+ * A landing is first seen this far before the start of its path, level at
+ * the top of the glide, so it can be picked out from a long way off.
+ */
+const LANDING_START_D = -500
+/** Roll distance before the wheels leave the ground, metres. */
+const TAKEOFF_ROLL = 300
+const TAKEOFF_LIFTOFF_D = TAKEOFF_START_D + TAKEOFF_ROLL
+/** Acceleration on the ground, m/s². */
+const TAKEOFF_ACCEL = 2.4
+/** Climb gradient (rise over run) once airborne. */
+const TAKEOFF_GRADIENT = 0.07
+/** Distance over which the climb angle eases in, metres. */
+const TAKEOFF_EASE = 300
+/** Seconds the aircraft idles at the end of the runway before it rolls. */
+const TAKEOFF_HOLD = 3
+/** Seconds it takes to fade the aircraft in at the start of a take-off. */
+const FADE_TIME = 1.5
+/** Seconds a landed aircraft sits stopped before it fades away. */
+const LANDING_DWELL = 4
+/** How close the car must be to an airfield for it to keep serving it, m. */
+const AIRPORT_STAY_DIST = 1100
+/** Distance beyond which an unused airfield is taken down, m. */
+const AIRPORT_VIEW_DIST = 1800
+/** Smallest angle to the road for a pass that uses an airfield, degrees. */
+const AIRPORT_MIN_ANGLE = 40
 /** How far ahead of the car the crossing may be pushed for a fast car. */
 const MAX_LEAD = 700
 /** Seconds between passes once one has finished. */
@@ -99,6 +138,8 @@ export interface AircraftSpec {
   modes: FlybyMode[]
   /** Where the propeller is, if it has one. */
   prop: "separate" | "merged" | "none"
+  /** Whether it is drawn with landing gear. */
+  gear?: boolean
 }
 
 /**
@@ -121,24 +162,26 @@ export const AIRCRAFT: AircraftSpec[] = [
     modes: ["takeoff", "landing", "cruise"],
     prop: "separate",
   },
-  {
-    file: "c17_globemaster.glb",
-    span: 70,
-    spanAxis: "x",
-    yaw: 0,
-    speed: 1.4,
-    modes: ["takeoff", "cruise", "landing"],
-    prop: "none",
-  },
-  {
-    file: "cessna_172.glb",
-    span: 25,
-    spanAxis: "x",
-    yaw: 0,
-    speed: 1,
-    modes: ["takeoff", "landing", "cruise"],
-    prop: "merged",
-  },
+  // {
+  //   file: "c17_globemaster.glb",
+  //   span: 70,
+  //   spanAxis: "x",
+  //   yaw: 0,
+  //   speed: 1.4,
+  //   modes: ["takeoff", "cruise", "landing"],
+  //   prop: "none",
+  // },
+  // {
+  //   file: "cessna_172.glb",
+  //   span: 25,
+  //   spanAxis: "x",
+  //   yaw: 0,
+  //   speed: 1,
+  //   modes: ["takeoff", "landing", "cruise"],
+  //   prop: "merged",
+  //   // The model already has its wheels.
+  //   gear: false,
+  // },
 ]
 
 /** A spinning part and the axis it spins about in its own space. */
@@ -167,6 +210,14 @@ export interface LoadedAircraft {
    * the aircraft's centre line, so its belly hangs this far below.
    */
   clearance: number
+  /** How far the wheels hang below the belly, metres. */
+  gearDrop: number
+  /** Distance of the main wheels aft of the centre, metres. */
+  gearAft: number
+  /** Undercarriage, scaled down to retract. */
+  gear: THREE.Group
+  gearGeoms: THREE.BufferGeometry[]
+  wheels: THREE.Mesh[]
   /** Container for aircraft navigation and strobe lights. */
   lightsRoot: THREE.Group
   /** Flashing wingtip strobes. */
@@ -210,6 +261,8 @@ interface Flight {
   speed: number
   /** Seconds since the pass started. */
   age: number
+  /** Seconds a landed aircraft has sat stopped. */
+  stopped: number
 }
 
 interface Profile {
@@ -230,24 +283,40 @@ const LANDING_TOUCH_U = 0.85
 /** Height of the aircraft above its touchdown point at the start of the pass. */
 /** Clearance a landing keeps over hills on its way down, in metres. */
 const LANDING_HILL_MARGIN = 4
-const LANDING_START_HEIGHT = 100
+/** Glide slope, rise over run, and the length of the round-out. */
+const LANDING_SLOPE = 0.11
+const LANDING_FLARE = 130
 /** Speed at touchdown, m/s. */
 const LANDING_TOUCH_SPEED = 40
-/** Braking on the runway, m/s², and the walking pace it settles to. */
+/** Braking on the runway, m/s². */
 const LANDING_DECEL = 1.4
-const LANDING_MIN_SPEED = 8
+/** Roll-out distance from touchdown to a full stop, metres. */
+const LANDING_STOP_DIST = (LANDING_TOUCH_SPEED * LANDING_TOUCH_SPEED) / (2 * LANDING_DECEL)
 
-function profileFor(mode: FlybyMode, u: number, rolled = 0, beyond = 0): Profile {
+function profileFor(mode: FlybyMode, u: number, rolled = 0, d = 0): Profile {
   if (mode === "takeoff") {
-    // Rotating off the deck: low over the trees, climbing away as it crosses.
+    // Holds at the end of the runway, rolls, rotates, lifts off and climbs
+    // away at a steady gradient. `d` is the distance along the take-off path.
+    const roll = Math.max(0, d - TAKEOFF_START_D)
+    const x = d - TAKEOFF_LIFTOFF_D
+    const liftSpeed = Math.sqrt(9 + 2 * TAKEOFF_ACCEL * TAKEOFF_ROLL)
+    // The climb angle grows smoothly from nothing to its full gradient over
+    // TAKEOFF_EASE metres, so the path never kinks and the nose only ever
+    // comes up: rotate on the runway, then follow the climb.
+    const t = Math.min(1, Math.max(0, x / TAKEOFF_EASE))
+    const gain =
+      x <= 0
+        ? 0
+        : x < TAKEOFF_EASE
+          ? TAKEOFF_GRADIENT * TAKEOFF_EASE * (t * t * t - (t * t * t * t) / 2)
+          : TAKEOFF_GRADIENT * (TAKEOFF_EASE / 2 + (x - TAKEOFF_EASE))
+    const climb = Math.atan(TAKEOFF_GRADIENT * (t * t * (3 - 2 * t)))
+    const r = Math.min(1, Math.max(0, (x + 90) / 90))
+    const rotate = r * r * (3 - 2 * r)
     return {
-      // Past the end of the path it keeps climbing away, rather than
-      // hanging at one height until it is switched off.
-      y: 18 + 42 * Math.pow(u, 0.75) + beyond * TAKEOFF_CLIMB_SLOPE,
-      speed: 44 + 20 * u,
-      pitch:
-        13 * Math.pow(1 - u, 1.6) * DEG +
-        Math.atan(TAKEOFF_CLIMB_SLOPE) * Math.min(1, beyond / 200),
+      y: gain,
+      speed: x <= 0 ? Math.sqrt(9 + 2 * TAKEOFF_ACCEL * roll) : liftSpeed + 8 * Math.min(1, x / 700),
+      pitch: 6 * DEG * rotate + climb * 0.8,
     }
   }
   if (mode === "landing") {
@@ -260,13 +329,16 @@ function profileFor(mode: FlybyMode, u: number, rolled = 0, beyond = 0): Profile
     const v0 = LANDING_TOUCH_SPEED
     const speed =
       rolled > 0
-        ? Math.sqrt(Math.max(LANDING_MIN_SPEED ** 2, v0 * v0 - 2 * LANDING_DECEL * rolled))
+        ? Math.sqrt(Math.max(0, v0 * v0 - 2 * LANDING_DECEL * rolled))
         : 58 - (58 - v0) * k
-    return {
-      y: LANDING_START_HEIGHT * Math.pow(1 - k, 1.15),
-      speed,
-      pitch: 0,
-    }
+    // A constant glide slope all the way down, rounded out over the last
+    // LANDING_FLARE metres so the wheels meet the runway without a sink.
+    const r = Math.max(0, -rolled)
+    const y =
+      r >= LANDING_FLARE
+        ? LANDING_SLOPE * (r - LANDING_FLARE / 2)
+        : (LANDING_SLOPE * r * r) / (2 * LANDING_FLARE)
+    return { y, speed, pitch: 0 }
   }
   return {
     y: CRUISE_ALT,
@@ -309,6 +381,90 @@ export function makePath(
   }
 }
 
+/**
+ * Undercarriage: two main legs with wheels and a nose leg, hung from the
+ * belly. The group's origin is the belly line, so scaling it in Y folds the
+ * gear up into the fuselage. Returned materials join the fade list.
+ */
+function buildGear(
+  model: THREE.Object3D,
+  span: number,
+  height: number,
+  length: number,
+  fitted = true,
+) {
+  const geoms: THREE.BufferGeometry[] = []
+  const wheels: THREE.Mesh[] = []
+  const tyre = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 })
+  const metal = new THREE.MeshStandardMaterial({ color: 0x9a9fa6, roughness: 0.4, metalness: 0.6 })
+  for (const m of [tyre, metal]) m.fog = false
+  if (!fitted) {
+    const none = new THREE.Group()
+    none.visible = false
+    return { group: none, geoms, wheels, mats: [tyre, metal], drop: 0, aft: 0 }
+  }
+  const big = span > 40
+  // A tyre of the right size: about 0.6 m across on an airliner, 0.3 on a
+  // Cessna.
+  const radius = Math.max(0.3, span * 0.012)
+  const drop = radius * 2.4 + height * 0.01
+  const group = new THREE.Group()
+  group.position.y = -height / 2
+  const aft = length * 0.06
+  const track = span * (big ? 0.085 : 0.1)
+  // Where the underside of the aircraft really is at a leg's position: the
+  // fuselage belly and the wing sit well above the bottom of the bounding box.
+  model.updateMatrixWorld(true)
+  const ray = new THREE.Raycaster()
+  const underside = (x: number, z: number) => {
+    ray.set(new THREE.Vector3(x, -height * 2, z), new THREE.Vector3(0, 1, 0))
+    const hit = ray.intersectObject(model, true)[0]
+    // Relative to the group origin, which is the bottom of the bounding box.
+    return hit ? Math.max(0, hit.point.y + height / 2) + 0.15 : 0.3
+  }
+  // The main legs keep a fixed length and are carried up to the wing's
+  // underside; every wheel then rests on one common ground level.
+  const mainTop = underside(track, -aft)
+  const bottom = mainTop - drop
+  const leg = (x: number, z: number, pair: number, r: number) => {
+    const top = Math.max(underside(x, z), bottom + r * 2)
+    const thick = r * 0.7
+    const gap = thick * 1.25
+    const hubY = bottom * 1.25 + r
+    // The leg itself, from the belly down to the axle.
+    const reach = top - hubY
+    const strut = new THREE.CylinderGeometry(r * 0.2, r * 0.26, reach, 10)
+    geoms.push(strut)
+    const sm = new THREE.Mesh(strut, metal)
+    sm.position.set(x, hubY + reach / 2, z)
+    group.add(sm)
+    // The axle joining the wheels of a pair.
+    if (pair > 1) {
+      const ax = new THREE.CylinderGeometry(r * 0.14, r * 0.14, gap * pair, 8)
+      ax.rotateZ(Math.PI / 2)
+      geoms.push(ax)
+      const am = new THREE.Mesh(ax, metal)
+      am.position.set(x, hubY, z)
+      group.add(am)
+    }
+    const tg = new THREE.CylinderGeometry(r, r, thick, 18)
+    tg.rotateZ(Math.PI / 2)
+    const hg = new THREE.CylinderGeometry(r * 0.55, r * 0.55, thick * 1.08, 12)
+    hg.rotateZ(Math.PI / 2)
+    geoms.push(tg, hg)
+    for (let i = 0; i < pair; i++) {
+      const w = new THREE.Mesh(tg, tyre)
+      w.add(new THREE.Mesh(hg, metal))
+      w.position.set(x + (i - (pair - 1) / 2) * gap, hubY, z)
+      group.add(w)
+      wheels.push(w)
+    }
+  }
+  for (const side of [-1, 1]) leg(side * track, -aft, big ? 2 : 1, radius)
+  leg(0, length * 0.32, big ? 2 : 1, radius * 0.8)
+  return { group, geoms, wheels, mats: [tyre, metal], drop: drop - mainTop, aft }
+}
+
 export interface PassState {
   x: number
   y: number
@@ -336,12 +492,7 @@ export function passState(
   belly = 0,
 ): PassState {
   const u = Math.max(0, Math.min(1, traveled / path.length))
-  const pr = profileFor(
-    mode,
-    u,
-    traveled - LANDING_TOUCH_U * path.length,
-    Math.max(0, traveled - path.length),
-  )
+  const pr = profileFor(mode, u, traveled - LANDING_TOUCH_U * path.length, traveled)
   const along = traveled - path.length / 2
   const x = path.x + along * path.dx
   const z = path.z + along * path.dz
@@ -349,7 +500,9 @@ export function passState(
   // A landing is on flat ground (paths over hills are rejected), so the
   // wheels meet it at the touchdown point and stay there, with no bobbing.
   const y =
-    mode === "landing" ? belly + pr.y : pr.y + Math.sin(age * 0.9) * 0.5
+    mode === "landing" || mode === "takeoff"
+      ? belly + pr.y
+      : pr.y + Math.sin(age * 0.9) * 0.5
 
   return {
     x,
@@ -418,21 +571,25 @@ export function pathBlocked(
   // between two samples. `extra` is the distance the aircraft keeps
   // flying past the end of the path, which has to be clear as well.
   const total = path.length + extra
-  const samples = Math.max(16, Math.round(total / 15))
+  // A landing is on show before the start of its path, so look from there.
+  const start = mode === "landing" ? LANDING_START_D : 0
+  const reach = total - start
+  const samples = Math.max(16, Math.round(reach / 15))
   const half = span / 2
   // The direction across the path.
   const px = -path.dz
   const pz = path.dx
   for (let i = 0; i <= samples; i++) {
     const u = i / samples
-    const along = u * total - total / 2
+    const d = start + u * reach
+    const along = d - path.length / 2
     const x = path.x + along * path.dx
     const z = path.z + along * path.dz
     const y = profileFor(
       mode,
-      Math.min(1, (u * total) / path.length),
-      0,
-      Math.max(0, u * total - path.length),
+      Math.min(1, Math.max(0, d / path.length)),
+      d - LANDING_TOUCH_U * path.length,
+      d,
     ).y
     // A landing ends on flat ground and rolls out on it, so the ground under
     // the whole path must be flat there; higher up it only has to clear the
@@ -469,6 +626,8 @@ export function pickCrossing(
   span = TARGET_SPAN,
   clearance = 6,
   extra = 0,
+  /** An extra reason to reject a crossing, such as an airfield that cannot fit. */
+  alsoBlocked?: (s: number) => boolean,
 ): number {
   const offsets = [
     0, 70, -70, 140, -140, 210, -210, 300, -300, 400, -400, 520, -520,
@@ -477,7 +636,11 @@ export function pickCrossing(
     const s = base + off
     const ahead = s - carS
     if (minLead >= 0 ? ahead < minLead : ahead > minLead) continue
-    if (!pathBlocked(pathFor(s), mode, terrainAt, span, clearance, extra)) return s
+    if (
+      !pathBlocked(pathFor(s), mode, terrainAt, span, clearance, extra) &&
+      !alsoBlocked?.(s)
+    )
+      return s
   }
   return -1
 }
@@ -494,7 +657,7 @@ export function pickCrossing(
 export function prepareAircraft(
   model: THREE.Object3D,
   spec: AircraftSpec,
-): { props: PropDisc[]; span: number; height: number } {
+): { props: PropDisc[]; span: number; height: number; length: number } {
   model.updateMatrixWorld(true)
 
   let props: PropDisc[] = []
@@ -517,8 +680,8 @@ export function prepareAircraft(
   const c = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3())
   model.position.set(-c.x, -c.y, -c.z)
   model.updateMatrixWorld(true)
-  const height = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y
-  return { props, span: spec.span, height }
+  const fit = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3())
+  return { props, span: spec.span, height: fit.y, length: fit.z }
 }
 
 /**
@@ -1111,10 +1274,43 @@ export class AirplaneFlyby {
   private shadowMat: THREE.MeshBasicMaterial
   private geoms: THREE.BufferGeometry[] = []
   private flight: Flight | null = null
+  private scene: THREE.Scene | null = null
+  /** The airfield the current traffic uses, if any. */
+  private airport: {
+    view: AirportView
+    landing: FlightPath
+    takeoff: FlightPath
+  } | null = null
+  /** Airfields fading out, kept drawn until they are gone. */
+  private retiring: AirportView[] = []
+  private lastAirportMode: FlybyMode = "takeoff"
+  /** Whether it is dark enough for the airfield lamps. */
+  private lampsLit = false
+  private onClearZones: ((zones: ClearZone[]) => void) | null = null
   private timer = 0
   private nextIn = 0
   private ready = false
   private disposed = false
+
+  /** Called with the ground the airfields cover, so no trees grow on it. */
+  setClearZonesHandler(fn: (zones: ClearZone[]) => void) {
+    this.onClearZones = fn
+  }
+
+  private pushClearZones() {
+    const views = [
+      ...(this.airport ? [this.airport.view] : []),
+      ...this.retiring,
+    ]
+    this.onClearZones?.(views.flatMap((v) => v.layout.zones))
+  }
+
+  private retireAirport() {
+    if (!this.airport) return
+    this.airport.view.target = 0
+    this.retiring.push(this.airport.view)
+    this.airport = null
+  }
 
   constructor(terrainAt: TerrainAt) {
     this.terrainAt = terrainAt
@@ -1147,7 +1343,7 @@ export class AirplaneFlyby {
         const model = glb.scene
         model.updateMatrixWorld(true)
 
-        const { props, span, height } = prepareAircraft(model, spec)
+        const { props, span, height, length } = prepareAircraft(model, spec)
         const mats = this.prepareFade(model)
 
         if (this.disposed) return false
@@ -1171,6 +1367,10 @@ export class AirplaneFlyby {
         lightsRoot.visible = true
         body.add(lightsRoot)
 
+        const gear = buildGear(model, span, height, length, spec.gear !== false)
+        body.add(gear.group)
+        mats.push(...gear.mats)
+
         this.aircraft.push({
           spec,
           root,
@@ -1181,6 +1381,11 @@ export class AirplaneFlyby {
           // The belly of the aircraft hangs half its height below the
           // centre line, plus a little for the wingtips.
           clearance: height / 2 + 1,
+          gearDrop: gear.drop,
+          gearAft: gear.aft,
+          gear: gear.group,
+          gearGeoms: gear.geoms,
+          wheels: gear.wheels,
           lightsRoot,
           strobes,
           beacons,
@@ -1192,9 +1397,15 @@ export class AirplaneFlyby {
       }
     }
 
+    // Draw the airfield textures now, while the game loads, not in the frame
+    // an airport appears.
+    warmAirportTextures()
+    warmStructureTextures()
+
     if (this.disposed) return false
     if (this.aircraft.length === 0) return false
     scene.add(this.shadowRoot)
+    this.scene = scene
 
     this.ready = true
     this.nextIn = FIRST_GAP_MIN + Math.random() * (FIRST_GAP_MAX - FIRST_GAP_MIN)
@@ -1215,6 +1426,9 @@ export class AirplaneFlyby {
         // The aircraft is never faded, so it must not be sorted as a
         // transparent object: that would draw it over the clouds.
         c.transparent = false
+        // Fog would swallow the aircraft within a few hundred metres, so it
+        // is left out and `hazeAircraft` fades it into the distance instead.
+        c.fog = false
         clones.set(m, c)
         mats.push(c)
       }
@@ -1247,17 +1461,31 @@ export class AirplaneFlyby {
     carS: number,
     carSpeed: number,
     active: boolean,
+    /** The car's world x; defaults to the road centre at `carS`. */
+    carXWorld?: number,
   ) {
+    const carX = carXWorld ?? roadCenterX(carS)
     if (!this.ready) return
     if (!active) {
       this.endFlight()
+      this.retireAirport()
+      this.tickAirports(dt)
       this.timer = 0
       return
     }
 
+    this.tickAirports(dt)
+    // Once the car is far enough away that the airfield is out of sight,
+    // take it down (never while an aircraft is still using it).
+    if (this.airport && !this.flight) {
+      const l = this.airport.view.layout
+      const d = Math.hypot(l.cx - carX, l.cz + carS)
+      if (d > AIRPORT_VIEW_DIST) this.retireAirport()
+    }
+
     this.timer += dt
     if (!this.flight && this.timer >= this.nextIn) {
-      this.startFlight(carS, carSpeed)
+      this.startFlight(carS, carSpeed, carX)
     }
 
     const f = this.flight
@@ -1267,23 +1495,60 @@ export class AirplaneFlyby {
     }
 
     const ac = f.ac
-    f.traveled += f.speed * dt
+    // A take-off idles at the end of the runway before it starts to roll.
+    const holding = f.mode === "takeoff" && f.age < TAKEOFF_HOLD
+    if (!holding) f.traveled += f.speed * dt
     f.age += dt
     f.u = Math.max(0, Math.min(1, f.traveled / f.path.length))
-    const pr = profileFor(f.mode, f.u, f.traveled - LANDING_TOUCH_U * f.path.length)
-    f.speed = pr.speed * ac.spec.speed
+    const rolled = f.traveled - LANDING_TOUCH_U * f.path.length
+    const pr = profileFor(f.mode, f.u, rolled, f.traveled)
+    f.speed = holding ? 0 : pr.speed * ac.spec.speed
+    if (f.mode === "landing" && rolled >= LANDING_STOP_DIST - 1) f.stopped += dt
 
-    const st = passState(f.mode, f.traveled, f.path, f.age, ac.spec.speed, ac.clearance - 1)
-    ac.root.position.set(st.x, st.y, st.z)
+    // Fades in at the end of the runway and out once it has come to a halt;
+    // otherwise the aircraft is simply there or it is not.
+    let alpha = 1
+    if (f.mode === "takeoff") alpha = Math.min(1, f.age / FADE_TIME)
+    if (f.mode === "landing" && f.stopped > LANDING_DWELL) {
+      alpha = Math.max(0, 1 - (f.stopped - LANDING_DWELL) / FADE_TIME)
+    }
+    this.setAircraftAlpha(ac, alpha)
+
+    const st = passState(f.mode, f.traveled, f.path, f.age, ac.spec.speed, ac.clearance - 1 + ac.gearDrop)
+    // The nose comes up about the main wheels, not the middle of the
+    // fuselage, so the tail never dips into the runway.
+    const lifting = f.mode !== "cruise" ? st.pitch : 0
+    const pivotLift = f.mode === "cruise" ? 0 : ac.gearAft * Math.sin(lifting) - (ac.clearance - 1 + ac.gearDrop) * (1 - Math.cos(lifting))
+    ac.root.position.set(st.x, st.y + pivotLift, st.z)
     ac.root.rotation.y = st.heading
+    this.hazeAircraft(ac, Math.hypot(st.x - carX, st.z + carS, st.y))
 
     // A little sway so it does not look like it is on rails.
     const sway = Math.sin(f.age * 0.55) * 0.6 + Math.sin(f.age * 1.3) * 0.25
     // A landing is dead level on every axis.
-    const level = f.mode === "landing"
-    ac.body.rotation.x = level ? 0 : -st.pitch
-    ac.body.rotation.z = level ? 0 : (sway * 2.2 - 2) * DEG
+    // So is a take-off until it is off the ground.
+    const level =
+      f.mode === "landing" ||
+      (f.mode === "takeoff" && f.traveled < TAKEOFF_LIFTOFF_D + 30)
+    ac.body.rotation.x = -st.pitch
+    ac.body.rotation.z = f.mode !== "cruise" ? 0 : (sway * 2.2 - 2) * DEG
     ac.body.rotation.y = 0
+    void level
+
+    // Wheels are down for landing and the take-off roll, and tuck away
+    // shortly after the aircraft is airborne.
+    let down = 1
+    if (f.mode === "cruise") down = 0
+    else if (f.mode === "takeoff") {
+      // Wheels stay down until the aircraft has crossed the road.
+      const x = f.traveled - f.path.length / 2
+      const q = Math.min(1, Math.max(0, x / 90))
+      down = 1 - q * q * (3 - 2 * q)
+    }
+    ac.gear.visible = down > 0.02 && ac.wheels.length > 0
+    ac.gear.scale.set(1, Math.max(0.01, down), 1)
+    const spin = (f.speed / 0.6) * dt
+    for (const w of ac.wheels) w.rotation.x += spin
 
     // No fade: the aircraft is simply there or it is not. It flies its
     // line, on past the end of the path, until it is lost in the haze.
@@ -1314,7 +1579,11 @@ export class AirplaneFlyby {
       ac.beacons[i].visible = beaconActive
     }
 
-    if (f.traveled >= f.path.length + exitLen(f.mode)) this.endFlight()
+    if (f.mode === "landing") {
+      if (f.stopped >= LANDING_DWELL + FADE_TIME) this.endFlight()
+    } else if (f.traveled >= f.path.length + exitLen(f.mode)) {
+      this.endFlight()
+    }
   }
 
   /**
@@ -1330,8 +1599,28 @@ export class AirplaneFlyby {
     this.shadowMat.opacity = sh.alpha
   }
 
-  private startFlight(carS: number, carSpeed: number) {
+  private startFlight(carS: number, carSpeed: number, carX: number) {
     if (this.aircraft.length === 0) return
+
+    // A car near an airfield gets traffic from that airfield only, landing
+    // and taking off in turn, so it stays put while the player is by it and
+    // goes once the player has driven off.
+    const ap = this.airport
+    if (ap) {
+      const l = ap.view.layout
+      const d = Math.hypot(l.cx - carX, l.cz + carS)
+      if (d < AIRPORT_STAY_DIST) {
+        const want: FlybyMode = this.lastAirportMode === "landing" ? "takeoff" : "landing"
+        const pool = this.aircraft.filter((a) => a.spec.modes.includes(want))
+        if (pool.length > 0) {
+          const ac = pool[Math.floor(Math.random() * pool.length)]
+          this.lastAirportMode = want
+          this.beginFlight(want, ac, want === "landing" ? ap.landing : ap.takeoff)
+          return
+        }
+      }
+    }
+
     // The traffic is picked at random, so the sky is never the same
     // twice: a twin-turboprop, a jet or a light aircraft.
     const ac = this.aircraft[
@@ -1339,12 +1628,18 @@ export class AirplaneFlyby {
     ]
     const modes = ac.spec.modes
     const mode = modes[Math.floor(Math.random() * modes.length)]
+    const atAirport = mode !== "cruise"
     // Every pass gets its own line: the angle to the road, which side it
-    // comes from and whether it slides along the road as it crosses.
-    const theta = (MIN_ANGLE + Math.random() * (MAX_ANGLE - MIN_ANGLE)) * DEG
+    // comes from and whether it slides along the road as it crosses. An
+    // airfield wants a steeper angle so its runway stays clear of the road.
+    const minAngle = atAirport ? AIRPORT_MIN_ANGLE : MIN_ANGLE
+    const theta = (minAngle + Math.random() * (MAX_ANGLE - minAngle)) * DEG
     const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1
     const drift: 1 | -1 = Math.random() < 0.5 ? 1 : -1
-    const pr = profileFor(mode, 0)
+    // The landing line, and the take-off line which flies the same way back.
+    const landingFor = (s: number) => makePath(s, theta, side, drift)
+    const takeoffFor = (s: number) => makePath(s, theta, -side as 1 | -1, drift)
+    const pathFor = mode === "takeoff" ? takeoffFor : landingFor
 
     // The crossing is placed ahead of the car. A car in a hurry covers
     // ground while the aircraft is still on its way in, so the crossing
@@ -1352,14 +1647,26 @@ export class AirplaneFlyby {
     // sign follows the car: a car reversing gets the crossing behind it.
     // A cruise crosses much further down the road: it is high above the
     // cloud layer, and it would be over the top of the frame otherwise.
-    const flightTime = PASS_HALF / 52
+    const flightTime = mode === "takeoff" ? 22 : mode === "landing" ? 17 : PASS_HALF / 52
     const baseLead = mode === "cruise" ? CRUISE_LEAD : CROSS_LEAD
     const lead = Math.max(
       -MAX_LEAD,
       Math.min(baseLead + carSpeed * flightTime, MAX_LEAD),
     )
     const base = carS + lead
-    const pathFor = (s: number) => makePath(s, theta, side, drift)
+
+    // The airfield has to fit and serve any aircraft, so check it against
+    // the biggest of them, and check the line it is not flying as well.
+    const span = atAirport ? Math.max(...this.aircraft.map((a) => a.span)) : ac.span
+    const clearance = atAirport
+      ? Math.max(...this.aircraft.map((a) => a.clearance))
+      : ac.clearance
+    const other: FlybyMode = mode === "landing" ? "takeoff" : "landing"
+    const otherFor = mode === "landing" ? takeoffFor : landingFor
+    const airfieldBlocked = (s: number) =>
+      airportBlocked(layoutAirport(landingFor(s)), this.terrainAt) ||
+      pathBlocked(otherFor(s), other, this.terrainAt, span, clearance, exitLen(other))
+
     const sCross = pickCrossing(
       base,
       mode,
@@ -1367,9 +1674,10 @@ export class AirplaneFlyby {
       this.terrainAt,
       carS,
       lead * 0.35,
-      ac.span,
-      ac.clearance,
+      span,
+      clearance,
       exitLen(mode),
+      atAirport ? airfieldBlocked : undefined,
     )
     // Every crossing along the road is blocked by a hill, so there is
     // nothing to fly: try again in a moment rather than fly through it.
@@ -1379,23 +1687,78 @@ export class AirplaneFlyby {
       return
     }
 
+    // A new line means a new airfield, or none at all for a cruise.
+    this.retireAirport()
+    if (atAirport && this.scene) {
+      const landing = landingFor(sCross)
+      const view = new AirportView(layoutAirport(landing))
+      this.scene.add(view.group)
+      view.lit = this.lampsLit
+      this.airport = { view, landing, takeoff: takeoffFor(sCross) }
+      this.lastAirportMode = mode
+    }
+    this.pushClearZones()
+    this.beginFlight(mode, ac, pathFor(sCross))
+  }
+
+  private beginFlight(mode: FlybyMode, ac: LoadedAircraft, path: FlightPath) {
     // Only one aircraft is in the air at a time.
     for (const other of this.aircraft) other.root.visible = false
     ac.root.visible = true
-
+    const start =
+      mode === "takeoff" ? TAKEOFF_START_D : mode === "landing" ? LANDING_START_D : 0
     this.flight = {
       mode,
       ac,
-      path: pathFor(sCross),
-      traveled: 0,
+      path,
+      traveled: start,
       u: 0,
-      speed: pr.speed * ac.spec.speed,
+      speed: profileFor(mode, 0, 0, start).speed * ac.spec.speed,
       age: 0,
+      stopped: 0,
     }
+  }
+
+  /** Fades the aircraft, switching it to blended drawing only while fading. */
+  private setAircraftAlpha(ac: LoadedAircraft, a: number) {
+    const fading = a < 0.999
+    for (const m of ac.mats) {
+      const base = (m.userData.baseOpacity ??= m.opacity) as number
+      m.transparent = fading
+      m.opacity = base * a
+    }
+    ac.lightsRoot.visible = a > 0.6
+  }
+
+  /**
+   * Tints the aircraft toward the haze colour with distance. It is kept out
+   * of the scene fog so it stays visible from far away, but it should still
+   * grow paler and softer the further off it is.
+   */
+  private hazeAircraft(ac: LoadedAircraft, dist: number) {
+    const fog = this.scene?.fog
+    const haze = Math.min(1, Math.max(0, (dist - 300) / 1800)) * 0.4
+    for (const m of ac.mats) {
+      if (fog && haze > 0) m.emissive.copy(fog.color).multiplyScalar(haze)
+      else m.emissive.setScalar(0)
+    }
+  }
+
+  private tickAirports(dt: number) {
+    this.airport?.view.step(dt)
+    let changed = false
+    this.retiring = this.retiring.filter((v) => {
+      if (!v.step(dt)) return true
+      v.dispose()
+      changed = true
+      return false
+    })
+    if (changed) this.pushClearZones()
   }
 
   private endFlight() {
     if (!this.flight) return
+    this.setAircraftAlpha(this.flight.ac, 1)
     this.flight.ac.root.visible = false
     this.flight = null
     this.shadowRoot.visible = false
@@ -1404,7 +1767,10 @@ export class AirplaneFlyby {
     this.nextIn = MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP)
   }
 
-  setTimeOfDay(_mode: TimeOfDayMode) {
+  setTimeOfDay(mode: TimeOfDayMode) {
+    this.lampsLit = mode !== "day"
+    if (this.airport) this.airport.view.lit = this.lampsLit
+    for (const v of this.retiring) v.lit = this.lampsLit
     for (const ac of this.aircraft) {
       ac.lightsRoot.visible = true
     }
@@ -1412,12 +1778,19 @@ export class AirplaneFlyby {
 
   dispose() {
     this.disposed = true
+    this.retireAirport()
+    for (const v of this.retiring) v.dispose()
+    this.retiring.length = 0
+    this.pushClearZones()
     for (const ac of this.aircraft) {
       ac.root.removeFromParent()
       for (const m of ac.mats) m.dispose()
       ac.mats.length = 0
       ac.props.length = 0
       ac.lightsRoot.removeFromParent()
+      for (const g of ac.gearGeoms) g.dispose()
+      ac.gearGeoms.length = 0
+      ac.wheels.length = 0
       for (const g of ac.lightGeoms) g.dispose()
       for (const m of ac.lightMats) m.dispose()
       ac.lightGeoms.length = 0

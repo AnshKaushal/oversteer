@@ -194,6 +194,15 @@ export default function App() {
   }
   const startedRef = useRef(false)
   const pausedRef = useRef(false)
+  // While the error dialog is up the mouse belongs to the user.
+  const errorRef = useRef(false)
+  useEffect(() => {
+    errorRef.current = !!error
+    if (!error) return
+    document.documentElement.style.cursor = ""
+    document.body.style.cursor = ""
+    if (document.pointerLockElement) document.exitPointerLock?.()
+  }, [error])
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -699,6 +708,7 @@ export default function App() {
 
         const flyby = new AirplaneFlyby((x, z) => wm.terrainHeightAt(x, z))
         flybyRef.current = flyby
+        flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setTimeOfDay(timeOfDayRef.current)
         await flyby.init(scene, baseUrl)
 
@@ -1303,7 +1313,7 @@ export default function App() {
           tryLock()
         }
         const tryLock = () => {
-          if (nativeActive || !startedRef.current || pausedRef.current || lockWanted) return
+          if (errorRef.current || nativeActive || !startedRef.current || pausedRef.current || lockWanted) return
           lockWanted = true
           const el = dom as any
           if (!el.requestPointerLock) {
@@ -1343,7 +1353,7 @@ export default function App() {
         }
         const onGesture = (e: Event) => {
           if ((e as KeyboardEvent).key === "Escape") return
-          if (startedRef.current && !document.pointerLockElement) tryLock()
+          if (!errorRef.current && startedRef.current && !document.pointerLockElement) tryLock()
         }
         document.addEventListener("pointermove", onForceHide)
         document.addEventListener("pointerdown", onGesture)
@@ -1413,6 +1423,7 @@ export default function App() {
 
         const lockGuard = window.setInterval(() => {
           if (
+            !errorRef.current &&
             startedRef.current &&
             !pausedRef.current &&
             !mouseLocked &&
@@ -2249,6 +2260,7 @@ export default function App() {
             -bp.z,
             car.forwardSpeed,
             startedRef.current && !raceActive,
+            bp.x,
           )
 
           const renderT0 = performance.now()
@@ -2329,6 +2341,7 @@ export default function App() {
       } catch (e: any) {
         console.error(e)
         if (!disposed) {
+          errorRef.current = true
           setError(e?.message ?? String(e))
           setLoading(false)
           document.documentElement.style.cursor = ""

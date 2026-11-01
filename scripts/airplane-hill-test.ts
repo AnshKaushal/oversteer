@@ -79,6 +79,7 @@ wm.update(0, carPos, 1)
   let worstClearance = Infinity
   let landingOnHill = 0
   let checked = 0
+  let none = 0
 
   for (const mode of modes) {
    for (const deg of angles) {
@@ -88,6 +89,11 @@ wm.update(0, carPos, 1)
       if (pathBlocked(pathFor(base), mode, terrainAt)) blocked++
       const s = pickCrossing(base, mode, pathFor, terrainAt, base - 190, 66)
       if (s !== base) moved++
+      // Nothing clear along the road: the game waits and tries again.
+      if (s === -1) {
+        none++
+        continue
+      }
       if (pathBlocked(pathFor(s), mode, terrainAt)) {
         stillBlocked++
         continue
@@ -117,6 +123,7 @@ wm.update(0, carPos, 1)
    }
   }
 
+  check(none <= checked * 0.05, "almost every base crossing finds a clear path", `${none} of ${checked} found none`)
   check(checked > 0, "crossings were checked", `${checked}`)
   check(
     blocked > 0,
@@ -147,7 +154,9 @@ wm.update(0, carPos, 1)
 {
   const terrainAt = (x: number, z: number) => wm.terrainHeightAt(x, z)
   const SPAN = 52
-  const CLEARANCE = 9
+  // The take-off now starts a little higher, so a tall belly clearance is
+  // what it takes to meet the hills at all.
+  const CLEARANCE = 20
   const DEG = Math.PI / 180
   let checked = 0
   let blocked = 0
@@ -172,7 +181,7 @@ wm.update(0, carPos, 1)
       )
       if (s < 0) continue
       if (pathBlocked(pathFor(s), "takeoff", terrainAt, SPAN, CLEARANCE)) {
-        stillBlocked++
+        stillBlocked++; console.log("STILL", mode, deg, base, s)
         continue
       }
       // Check the wingtips along the chosen path as well.
