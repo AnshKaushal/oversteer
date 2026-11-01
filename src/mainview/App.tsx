@@ -76,6 +76,7 @@ import {
 import { SpeedLines } from "./ui/SpeedLines"
 import { MultiplayerManager } from "./systems/net/MultiplayerManager"
 import { MultiplayerLobby, MultiplayerHudBadge } from "./ui/MultiplayerLobby"
+import { onNativeMouseDelta, setNativeCursorLock } from "./systems/updater"
 import { NetDiagPanel } from "./ui/NetDiagPanel"
 import {
   netDiagEnabled,
@@ -186,6 +187,9 @@ export default function App() {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const showSettingsRef = useRef(false)
+  showSettingsRef.current = showSettings
+  const raceFinishedRef = useRef(false)
   const [padNotice, setPadNotice] = useState<string | null>(null)
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
   const settingsRef = useRef(settings)
@@ -468,6 +472,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    raceFinishedRef.current = race.finished
     if (race.finished) {
       document.documentElement.style.cursor = ""
       document.body.style.cursor = ""
@@ -1172,6 +1177,12 @@ export default function App() {
         }
         const onWinBlur = () => {
           input.clear()
+          // give the cursor back at once; the loop re-grabs it when focus returns
+          if (nativeWant) {
+            nativeWant = false
+            nativeActive = false
+            void setNativeCursorLock(false)
+          }
         }
         window.addEventListener("blur", onWinBlur)
         let hadLock = false
@@ -1254,6 +1265,15 @@ export default function App() {
         let lastPX = 0,
           lastPY = 0
         const e0 = { lastMovementX: 0, lastMovementY: 0 }
+        // macOS: the main process holds the cursor and sends raw movement, so the
+        // pointer can't wander onto the dock or a hot corner.
+        let nativeActive = false
+        let nativeWant = false
+        onNativeMouseDelta((dx, dy) => {
+          if (!nativeActive) return
+          e0.lastMovementX += dx
+          e0.lastMovementY += dy
+        })
         let mouseLocked = false
         let lockWanted = false
         let lockRetry = 0
@@ -1265,7 +1285,7 @@ export default function App() {
           tryLock()
         }
         const tryLock = () => {
-          if (!startedRef.current || pausedRef.current || lockWanted) return
+          if (nativeActive || !startedRef.current || pausedRef.current || lockWanted) return
           lockWanted = true
           const el = dom as any
           if (!el.requestPointerLock) {
@@ -1319,7 +1339,9 @@ export default function App() {
           lastOrbit = performance.now() / 1000
         }
         const onPointerMove = (e: PointerEvent) => {
-          if (document.pointerLockElement === dom) {
+          if (nativeActive) {
+            // raw movement arrives from the main process instead
+          } else if (document.pointerLockElement === dom) {
             e0.lastMovementX += e.movementX || 0
             e0.lastMovementY += e.movementY || 0
           } else if (
@@ -1396,6 +1418,20 @@ export default function App() {
           let dt = (now - last) / 1000
           last = now
           dt = Math.min(dt, WORLD.maxFrameDt)
+
+          const wantNative =
+            startedRef.current &&
+            !pausedRef.current &&
+            !showSettingsRef.current &&
+            !raceFinishedRef.current &&
+            document.hasFocus()
+          if (wantNative !== nativeWant) {
+            nativeWant = wantNative
+            if (!wantNative) nativeActive = false
+            void setNativeCursorLock(wantNative).then((ok) => {
+              nativeActive = ok && nativeWant
+            })
+          }
 
           const inp = input.update(dt)
           // a connected pad drives with ABS on; the keyboard (B) can still switch it off
@@ -2220,6 +2256,8 @@ export default function App() {
           garageApiRef.current = null
           window.removeEventListener("resize", onResize)
           window.removeEventListener("keydown", onStatsKey)
+          onNativeMouseDelta(null)
+          if (nativeWant) void setNativeCursorLock(false)
           statsEl.style.display = "none"
           window.removeEventListener("blur", onWinBlur)
           dom.removeEventListener("pointerdown", onPointerDown)
