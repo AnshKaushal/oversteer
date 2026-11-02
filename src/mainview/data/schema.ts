@@ -542,6 +542,7 @@ export interface CarSpec {
   defaultTint: number | null
   paintMatch?: string[]
   tailLampMeshes?: string[]
+  flatTailLamps?: boolean
   paintTexture?: PaintTextureRule
 }
 

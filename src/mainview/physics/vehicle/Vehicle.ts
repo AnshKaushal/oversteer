@@ -418,7 +418,7 @@ export class Vehicle {
         launching: this.launch.launching,
         launchArmed: this.launch.armed,
         clutchDumping: this.launch.dumping,
-        slipRatioAvg: this.slip.slipRatioAvg,
+        slipRatioAvg: Math.max(this.slip.slipRatioAvg, Math.abs(Math.tan(k.beta)) * 5),
       })
       engineTorque *= cut
       this.engineCut = cut < 1

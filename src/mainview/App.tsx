@@ -2422,6 +2422,7 @@ export default function App() {
           )
 
           const renderT0 = performance.now()
+          wm.renderReflections?.(renderer!, scene, camera, (on) => rain.setReflectionPass(on))
           renderer!.render(scene, camera)
           const renderT1 = performance.now()
           cpuMax = Math.max(cpuMax * 0.985, renderT0 - loopT0)

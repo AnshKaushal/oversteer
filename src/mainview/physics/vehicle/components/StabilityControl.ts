@@ -73,8 +73,9 @@ export class StabilityControl {
     if (active) {
       const ref = this.referenceYaw(i.steerAngle, i.fwdSpeed, i.downforceAccel)
       const yawErr = i.yawRate - ref
-      const yawExcess = Math.sign(yawErr) * Math.max(0, Math.abs(yawErr) - p.yawDeadzone)
-      const betaExcess = Math.sign(i.beta) * Math.max(0, Math.abs(i.beta) - p.betaDeadzone)
+      const intent = clamp(Math.abs(ref) / p.yawDeadzone, 0, 1)
+      const yawExcess = Math.sign(yawErr) * Math.max(0, Math.abs(yawErr) - p.yawDeadzone * intent)
+      const betaExcess = Math.sign(i.beta) * Math.max(0, Math.abs(i.beta) - p.betaDeadzone * intent)
       const demand = -p.yawGain * yawExcess - p.betaGain * betaExcess
       if (demand !== 0) {
         const turn = Math.sign(Math.abs(ref) > p.yawDeadzone ? ref : i.yawRate)

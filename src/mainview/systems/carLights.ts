@@ -13,6 +13,7 @@ export interface BrakeLight {
 export const BRAKE_HEAT = new THREE.Color(0xff3d38)
 
 const HEAT_MIX = 1.8
+const LAMP_PEAK = 2.0
 
 export function applyBrakeHeat(
   l: BrakeLight,
@@ -24,6 +25,9 @@ export function applyBrakeHeat(
   l.mat.emissiveIntensity = (base + brakeGain * heat) * (l.gain ?? 1)
   l.mat.emissive.copy(l.glow)
   if (!l.flat) l.mat.emissive.lerp(BRAKE_HEAT, heat * HEAT_MIX)
+  const e = l.mat.emissive
+  const peak = Math.max(e.r, e.g, e.b) * l.mat.emissiveIntensity
+  if (peak > LAMP_PEAK) l.mat.emissiveIntensity *= LAMP_PEAK / peak
 }
 
 export function brakeGlowIsBlown(l: BrakeLight): boolean {
@@ -154,7 +158,7 @@ export function authorTailLamps(root: THREE.Object3D, meshPatterns?: string[]) {
   }
 }
 
-export function collectBrakeLights(root: THREE.Object3D): BrakeLight[] {
+export function collectBrakeLights(root: THREE.Object3D, flatLamps = false): BrakeLight[] {
   const bySource = new Map<string, BrakeLight>()
   root.traverse((o) => {
     const mesh = o as THREE.Mesh
@@ -169,6 +173,10 @@ export function collectBrakeLights(root: THREE.Object3D): BrakeLight[] {
       if (!entry) {
         const clone = (mat as THREE.MeshStandardMaterial).clone()
         clone.emissiveIntensity = 0.0
+        if (flatLamps) {
+          clone.emissiveMap = null
+          clone.color.setHex(0x000000)
+        }
         const authored = !!clone.userData.authoredTailLamp
         entry = {
           mat: clone,
@@ -185,4 +193,23 @@ export function collectBrakeLights(root: THREE.Object3D): BrakeLight[] {
     mesh.material = Array.isArray(mesh.material) ? next : next[0]
   })
   return [...bySource.values()]
+}
+
+/**
+ * Some models wrap their tail lenses in a dark see-through glass shell that
+ * is drawn over them, hiding the glow. Draws the lamps after that glass.
+ */
+export function liftLampsOverGlass(root: THREE.Object3D, lampMeshes: THREE.Object3D[]) {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || lampMeshes.includes(mesh)) return
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const m of mats) if (m.transparent && m.opacity < 1) m.depthWrite = false
+  })
+  for (const l of lampMeshes) {
+    l.renderOrder = 1
+    const mesh = l as THREE.Mesh
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const m of mats) m.transparent = true
+  }
 }

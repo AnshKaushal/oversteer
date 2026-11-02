@@ -7,6 +7,7 @@ const FALL_SPEED = 26
 const STREAK = 0.9
 const STREAK_PER_SPEED = 0.03
 const STREAK_MAX = 4.5
+const REFLECTED_SHARE = 0.08
 
 export class RainEffect {
   private readonly pos = new Float32Array(MAX_DROPS * 6)
@@ -36,6 +37,11 @@ export class RainEffect {
     this.lines.renderOrder = 10
     this.lines.visible = false
     scene.add(this.lines)
+  }
+
+  setReflectionPass(on: boolean) {
+    const share = on ? REFLECTED_SHARE : 1
+    this.geo.setDrawRange(0, Math.round(MAX_DROPS * Math.min(1, this.intensity) * share) * 2)
   }
 
   setConditions(rain: number, lightning: boolean) {

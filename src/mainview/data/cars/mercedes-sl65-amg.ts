@@ -436,6 +436,7 @@ export const mercedesSl65: CarSpec = {
   defaultTint: null,
   paintMatch: ["^Cylinder$"],
   paintTexture: { keepMap: true, neutralize: { color: [53, 54, 55], tol: 6 } },
+  flatTailLamps: true,
   tested: {
     zeroToHundredS: 4.9,
     topSpeedKmh: 329,

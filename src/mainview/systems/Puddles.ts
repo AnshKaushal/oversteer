@@ -10,6 +10,10 @@ const MAX_CHANCE = 0.52
 
 const ROAD_Y = 0.018
 const GRASS_Y = -0.055
+const MIRROR_Y = 0
+const REFLECT_SCALE = 0.5
+const REFLECT_FAR = 700
+const REFLECT_MIN_WET = 0.05
 
 export type PuddleSurface = "road" | "grass" | null
 
@@ -81,6 +85,18 @@ export class Puddles {
   private readonly scl = new THREE.Vector3()
   private readonly up = new THREE.Vector3(0, 1, 0)
   private readonly col = new THREE.Color()
+  private reflTarget: THREE.WebGLRenderTarget | null = null
+  private readonly reflCam = new THREE.PerspectiveCamera()
+  private readonly reflPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -MIRROR_Y)
+  private readonly reflUniforms = {
+    uRefl: { value: null as THREE.Texture | null },
+    uReflMat: { value: new THREE.Matrix4() },
+    uReflOn: { value: 0 },
+  }
+  private readonly camPos = new THREE.Vector3()
+  private readonly camDir = new THREE.Vector3()
+  private readonly camUp = new THREE.Vector3()
+  private readonly size = new THREE.Vector2()
 
   constructor(
     private readonly parent: THREE.Object3D,
@@ -102,6 +118,31 @@ export class Puddles {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     })
+    this.mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, this.reflUniforms)
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;")
+        .replace(
+          "#include <project_vertex>",
+          "#include <project_vertex>\nvReflUv = uReflMat * (modelMatrix * instanceMatrix * vec4(transformed, 1.0));",
+        )
+      sh.fragmentShader = sh.fragmentShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform sampler2D uRefl;\nuniform float uReflOn;\nvarying vec4 vReflUv;",
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+          if (uReflOn > 0.5) {
+            vec4 ruv = vReflUv;
+            vec3 refl = texture2DProj(uRefl, ruv).rgb;
+            float ndv = clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0);
+            float fres = 0.55 + 0.45 * pow(1.0 - ndv, 3.0);
+            totalEmissiveRadiance = mix(totalEmissiveRadiance * 0.3, refl, fres);
+          }`,
+        )
+    }
     this.mesh = new THREE.InstancedMesh(geo, this.mat, MAX)
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 3), 3)
@@ -127,6 +168,59 @@ export class Puddles {
 
   setFlash(f: number) {
     this.mat.emissiveIntensity = this.baseGlow + f * 2.2
+  }
+
+  renderReflection(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, around?: (on: boolean) => void) {
+    this.reflUniforms.uReflOn.value = 0
+    if (!this.mesh.visible || this.mesh.count === 0 || this.wet < REFLECT_MIN_WET) return
+    renderer.getDrawingBufferSize(this.size)
+    const w = Math.max(2, Math.floor(this.size.x * REFLECT_SCALE))
+    const h = Math.max(2, Math.floor(this.size.y * REFLECT_SCALE))
+    if (!this.reflTarget || this.reflTarget.width !== w || this.reflTarget.height !== h) {
+      this.reflTarget?.dispose()
+      this.reflTarget = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 0 })
+      this.reflUniforms.uRefl.value = this.reflTarget.texture
+    }
+
+    camera.updateMatrixWorld()
+    camera.getWorldPosition(this.camPos)
+    camera.getWorldDirection(this.camDir)
+    this.camUp.set(0, 1, 0).applyQuaternion(camera.quaternion)
+    const rc = this.reflCam
+    rc.position.set(this.camPos.x, 2 * MIRROR_Y - this.camPos.y, this.camPos.z)
+    rc.up.set(this.camUp.x, -this.camUp.y, this.camUp.z)
+    rc.lookAt(
+      this.camPos.x + this.camDir.x,
+      2 * MIRROR_Y - (this.camPos.y + this.camDir.y),
+      this.camPos.z + this.camDir.z,
+    )
+    rc.fov = camera.fov
+    rc.aspect = camera.aspect
+    rc.near = camera.near
+    rc.far = Math.min(camera.far, REFLECT_FAR)
+    rc.updateProjectionMatrix()
+    rc.updateMatrixWorld()
+
+    const tm = this.reflUniforms.uReflMat.value
+    tm.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
+    tm.multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse)
+
+    const prevTarget = renderer.getRenderTarget()
+    const prevClip = renderer.clippingPlanes
+    const prevAuto = renderer.shadowMap.autoUpdate
+    this.mesh.visible = false
+    renderer.shadowMap.autoUpdate = false
+    renderer.clippingPlanes = [this.reflPlane]
+    renderer.setRenderTarget(this.reflTarget)
+    renderer.clear()
+    around?.(true)
+    renderer.render(scene, rc)
+    around?.(false)
+    renderer.setRenderTarget(prevTarget)
+    renderer.clippingPlanes = prevClip
+    renderer.shadowMap.autoUpdate = prevAuto
+    this.mesh.visible = true
+    this.reflUniforms.uReflOn.value = 1
   }
 
   update(carPos: THREE.Vector3, dt?: number) {
@@ -248,5 +342,6 @@ export class Puddles {
     this.mesh.geometry.dispose()
     this.mat.dispose()
     this.alpha.dispose()
+    this.reflTarget?.dispose()
   }
 }

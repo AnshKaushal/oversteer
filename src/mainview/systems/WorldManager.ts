@@ -321,6 +321,10 @@ export class WorldManager {
     return groundSurfaceAt(x, z)
   }
 
+  renderReflections(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, around?: (on: boolean) => void) {
+    this.puddles?.renderReflection(renderer, scene, camera, around)
+  }
+
   puddleAt(x: number, z: number): number {
     return this.puddles?.coverageAt(x, z) ?? 0
   }

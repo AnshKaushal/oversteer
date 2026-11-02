@@ -3,10 +3,12 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { WheelDef } from "../physics/vehicle/components/Suspension"
+import { CARS } from "../data/cars"
 import { tintCar, whitenRims, type PaintTextureRule } from "./carTint"
 import {
   applyBrakeHeat,
   collectBrakeLights,
+  liftLampsOverGlass,
   type BrakeLight,
   authorTailLamps,
   lampPartsWithin,
@@ -172,7 +174,8 @@ export class CarVisual {
       }
     })
     authorTailLamps(model, opts.tailLampMeshes)
-    this.brakeLights = collectBrakeLights(model)
+    const flatLamps = CARS.some((c) => c.modelFile === modelFile && c.flatTailLamps)
+    this.brakeLights = collectBrakeLights(model, flatLamps)
     this.brakeMeshes = []
     model.traverse((o: any) => {
       if (o.isMesh && o.material) {
@@ -182,6 +185,7 @@ export class CarVisual {
         }
       }
     })
+    if (flatLamps) liftLampsOverGlass(model, this.brakeMeshes)
     model.traverse((o: any) => {
       if (o.isMesh) {
         o.castShadow = this.castShadow
