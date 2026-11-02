@@ -441,7 +441,8 @@ export const lamboAventador: CarSpec = {
     maxKmh: 380,
   },
   defaultTint: null,
-  paintMatch: ["carpaint", "detach_door", "detach_bumper"],
+  paintMatch: ["carpaint", "detach_door", "detach_bumper_\\w*carpaint"],
+  tailLampMeshes: ["^glasses_glass0(13|15|16|21)"],
   tested: {
     zeroToHundredS: 3.3,
     topSpeedKmh: 352,

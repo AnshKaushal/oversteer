@@ -44,6 +44,8 @@ function TextIcon({ label }: { label: string }) {
 const ICON_SIZE = 15
 const ICON_ARC_STEP_DEG = 15
 const ICON_ARC_R = 70
+const NEEDLE_HALF_BASE = 4.6
+const NEEDLE_HALF_TAIL = 2.6
 
 function SafetyIcon() {
   return (
@@ -328,14 +330,12 @@ function Dial({
       })}
 
       <g ref={refs.needleRef}>
-        <line
-          x1={tail.x}
-          y1={tail.y}
-          x2={tip.x}
-          y2={tip.y}
+        <polygon
+          points={`${tip.x},${tip.y} ${CX + NEEDLE_HALF_BASE},${CY} ${CX + NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_BASE},${CY}`}
+          fill="#e30613"
           stroke="#e30613"
-          strokeWidth="4.5"
-          strokeLinecap="round"
+          strokeWidth="0.8"
+          strokeLinejoin="round"
         />
         <circle
           cx={CX}
@@ -344,17 +344,6 @@ function Dial({
           fill="#14181f"
           stroke="#c7ced8"
           strokeWidth="1.6"
-        />
-        <circle cx={CX} cy={CY} r="5.2" fill="#1c69b4" />
-        <path
-          d={`M ${CX} ${CY - 5.2} A 5.2 5.2 0 0 1 ${CX + 5.2} ${CY} L ${CX} ${CY} Z`}
-          fill="#ffffff"
-          opacity="0.92"
-        />
-        <path
-          d={`M ${CX} ${CY + 5.2} A 5.2 5.2 0 0 1 ${CX - 5.2} ${CY} L ${CX} ${CY} Z`}
-          fill="#ffffff"
-          opacity="0.92"
         />
         <circle cx={CX} cy={CY} r="1.6" fill="#0b0e13" />
       </g>

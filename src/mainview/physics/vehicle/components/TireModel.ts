@@ -19,7 +19,6 @@ export interface TireParams {
   loadExpLat: number
   rollingResist: number
   rollingV0: number
-  combinedWeight: number
   camberThrust: number
   trail: number
   long: PacejkaShape
@@ -110,7 +109,6 @@ export function tireParamsFrom(w: Wheels): TireParams {
     loadExpLat: w.pacejka.lateral.loadSensitivity,
     rollingResist: w.rollingResist,
     rollingV0: w.tire.rollingV0,
-    combinedWeight: w.tire.combinedWeight,
     camberThrust: w.alignment.camberThrust,
     trail: w.steering.pneumaticTrail,
     aligning: shape(w.pacejka.aligning),
@@ -125,12 +123,14 @@ function peakSlip(s: PacejkaShape): number {
 
 export class TireModel {
   private readonly peakSlipX: number
+  private readonly peakSlipY: number
 
   constructor(
     readonly params: TireParams,
     readonly radius: number,
   ) {
     this.peakSlipX = peakSlip(params.long)
+    this.peakSlipY = peakSlip(params.lat)
   }
 
   basis(c: Pick<TireContact, "normal" | "wheelHeading" | "bodyForward">): { t: Vec3; l: Vec3 } {
@@ -191,12 +191,17 @@ export class TireModel {
     const Dx = P.long.D * muX * Fz
     const Dy = P.lat.D * muY * Fz
 
-    let fx = magicFormula(sx, P.long.B, P.long.C, Dx, P.long.E)
-    let fy = -magicFormula(sa, P.lat.B, P.lat.C, Dy, P.lat.E)
+    const kx = sx / this.peakSlipX
+    const ky = sa / this.peakSlipY
+    const k = Math.hypot(kx, ky)
+    let fx = 0
+    let fy = 0
+    if (k > 0) {
+      fx = (magicFormula(k * this.peakSlipX, P.long.B, P.long.C, Dx, P.long.E) * kx) / k
+      fy = (-magicFormula(k * this.peakSlipY, P.lat.B, P.lat.C, Dy, P.lat.E) * ky) / k
+    }
     const rollingForce = -P.rollingResist * (c.rollingScale ?? 1) * Fz * Math.tanh(vx / P.rollingV0)
     fx += rollingForce
-    fx /= Math.hypot(1, P.combinedWeight * sa)
-    fy /= Math.hypot(1, P.combinedWeight * sx)
 
     const m = Math.hypot(fx / Dx, fy / Dy)
     if (m > 1) {

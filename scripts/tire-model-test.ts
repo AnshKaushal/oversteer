@@ -21,7 +21,6 @@ const P = {
   loadExpLat: 0.85,
   rollingResist: 0.012,
   rollingV0: 0.5,
-  combinedWeight: 2,
   camberThrust: 0.12,
   long: { B: 10.0, C: 1.65, D: 1.0, E: 0.97 },
   lat: { B: 9.0, C: 1.45, D: 1.0, E: 0.97 },

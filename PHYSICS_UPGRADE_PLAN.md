@@ -371,3 +371,5 @@ Techniques from Gaffer On Games (snapshot interpolation, state synchronisation):
 - **Docs:** `AddingCars.md` rewritten (steps, spec fields and helpers, tuning from real figures, verification commands, nose and lamp notes, troubleshooting); README and GAME_OVERVIEW rewritten for the data-driven cars, vehicle pipeline, world, netcode and tests.
 - **Pause menu:** key list matches `InputManager` (removed the stale parking-brake row), "Resolution & Graphics" button now "Settings".
 - **Release:** version set to 1.1.0 in `package.json` and `electrobun.config.ts`, notes in `Changes.md`. Nothing committed, tagged or pushed.
+
+Update: tire combined slip is again the slip-vector model (`fx = F(k) * kx/k`, `fy = F(k) * ky/k`, with `kx`/`ky` slips normalised by each curve's peak slip). It has no tuning weight, so `tire.combinedWeight` is removed. A locked or sliding tire now keeps lateral force in proportion to its slip direction, which fixes braking-while-turning and handbrake spin-outs.

@@ -1029,6 +1029,7 @@ export default function App() {
               wheelSpots: rivalDef.wheels,
               wheelRadius: rivalDef.physics.wheels.radius,
               paintMatch: rivalDef.paintMatch,
+              tailLampMeshes: rivalDef.tailLampMeshes,
               paintTexture: rivalDef.paintTexture,
             })
           } catch (e) {
@@ -1122,6 +1123,7 @@ export default function App() {
               wheelSpots: def.wheels,
               wheelRadius: def.physics.wheels.radius,
               paintMatch: def.paintMatch,
+              tailLampMeshes: def.tailLampMeshes,
               paintTexture: def.paintTexture,
             })
           } catch (e) {
@@ -1207,6 +1209,7 @@ export default function App() {
             wheelSpots: playerDef.wheels,
             wheelRadius: playerDef.physics.wheels.radius,
             paintMatch: playerDef.paintMatch,
+            tailLampMeshes: playerDef.tailLampMeshes,
             paintTexture: playerDef.paintTexture,
             isPlayer: true,
           })
@@ -1240,6 +1243,7 @@ export default function App() {
                   wheelSpots: def.wheels,
                   wheelRadius: def.physics.wheels.radius,
                   paintMatch: def.paintMatch,
+                  tailLampMeshes: def.tailLampMeshes,
                   paintTexture: def.paintTexture,
                   isPlayer: true,
                 })

@@ -19,8 +19,9 @@ const R_HUB = 135
 const START = 6
 const END = 84
 const N_BASE = R_HUB - 20
-const N_SPLIT = R_TICK - 70
 const N_END = R_TICK - 2
+const NEEDLE_HALF_BASE = 7
+const NEEDLE_HALF_TIP = 0.6
 
 const SANS = 'Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
 
@@ -301,8 +302,7 @@ function Dial({
       .map(([u, d]) => `${nx(u)},${S + d}`)
       .join(" ")
 
-  const body = bar(N_BASE, 3.5, N_SPLIT + 16, 1.5)
-  const tip = bar(N_SPLIT, 18.0, N_END + 1, 1.0)
+  const needle = bar(N_BASE, NEEDLE_HALF_BASE, N_END + 1, NEEDLE_HALF_TIP)
 
   const iconPos = { x: X(52) - 12, y: Y(86) - 12 }
 
@@ -373,21 +373,11 @@ function Dial({
         transform={`rotate(${sign * START} ${cx} ${S})`}
         style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.7))" }}
       >
-        <polygon points={body} fill="#eef1f5" />
-        {}
         <polygon
-          points={tip}
-          fill="none"
+          points={needle}
+          fill="#e30613"
           stroke="#0b0e14"
-          strokeWidth="3.5"
-          strokeLinejoin="round"
-          opacity="0.9"
-        />
-        <polygon
-          points={tip}
-          fill="none"
-          stroke="#ff3b30"
-          strokeWidth="2"
+          strokeWidth="1"
           strokeLinejoin="round"
         />
       </g>

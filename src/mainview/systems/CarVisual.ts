@@ -8,6 +8,8 @@ import {
   applyBrakeHeat,
   collectBrakeLights,
   type BrakeLight,
+  authorTailLamps,
+  lampPartsWithin,
 } from "./carLights"
 
 export const CAR_MODEL_YAW = Math.PI
@@ -22,11 +24,14 @@ export interface CarVisualOptions {
   wheelRadius: number
   paintMatch?: string[]
   paintTexture?: PaintTextureRule
+  tailLampMeshes?: string[]
   isPlayer?: boolean
 }
 
 export const MIN_PIVOT_FRAC = 0.025
 
+const AVENTADOR_HEADLIGHT = /^glasses_glass0(17|18|20|24)/i
+const BRAKE_LAMP_THRESHOLD = 0.04
 const DEFAULT_MODEL = "models/bmw_m3.glb"
 const DEFAULT_PIVOT_PATTERN = "^Plane00[3-6]$"
 
@@ -112,7 +117,6 @@ export class CarVisual {
   private lastTint: number | undefined = undefined
   private hiMerged: THREE.Object3D[] = []
   private brakeLights: BrakeLight[] = []
-  private brakeHoldUntil = 0
   private brakeMeshes: THREE.Object3D[] = []
   private brakeLevel = 0
   private headlightsOn = false
@@ -167,6 +171,7 @@ export class CarVisual {
         }
       }
     })
+    authorTailLamps(model, opts.tailLampMeshes)
     this.brakeLights = collectBrakeLights(model)
     this.brakeMeshes = []
     model.traverse((o: any) => {
@@ -486,13 +491,7 @@ export class CarVisual {
 
   setBrake(level: number) {
     if (this.brakeLights.length === 0) return
-    let want = Math.max(0, Math.min(1, level))
-    const now = performance.now()
-    if (want > 0.04) {
-      this.brakeHoldUntil = now + 150
-    } else if (now < this.brakeHoldUntil) {
-      want = this.brakeLevel
-    }
+    const want = level > BRAKE_LAMP_THRESHOLD ? 1 : 0
     if (want === this.brakeLevel) return
     this.brakeLevel = want
     for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn)
@@ -605,6 +604,11 @@ export class CarVisual {
     this.headlightGroup = group
 
     if (this.hiBody) {
+      const lensMeshes: THREE.Object3D[] = []
+      this.hiBody.traverse((o: any) => {
+        if (o.isMesh && AVENTADOR_HEADLIGHT.test(o.name)) lensMeshes.push(o)
+      })
+      const lampParts = new Set<THREE.Object3D>(lampPartsWithin(this.hiBody, lensMeshes))
       this.hiBody.traverse((o: any) => {
         if (!o.isMesh || !o.material) return
         const mats = Array.isArray(o.material) ? o.material : [o.material]
@@ -621,10 +625,7 @@ export class CarVisual {
             meshName.includes("carbody") && matName === "body" && !!std.emissiveMap
 
           const isAventadorHeadlight =
-            meshName.startsWith("glasses_glass017") ||
-            meshName.startsWith("glasses_glass018") ||
-            meshName.startsWith("glasses_glass020") ||
-            meshName.startsWith("glasses_glass024")
+            AVENTADOR_HEADLIGHT.test(o.name) || lampParts.has(o)
 
           const isDodgeHeadlight =
             meshName.includes("front_light") ||

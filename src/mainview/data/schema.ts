@@ -135,7 +135,6 @@ export interface SuspensionSpec {
 
 export interface TireSpec {
   rollingV0: number
-  combinedWeight: number
   maxSlip: number
 }
 
@@ -542,6 +541,7 @@ export interface CarSpec {
   tested: CarTested
   defaultTint: number | null
   paintMatch?: string[]
+  tailLampMeshes?: string[]
   paintTexture?: PaintTextureRule
 }
 
