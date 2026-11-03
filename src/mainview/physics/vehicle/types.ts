@@ -31,6 +31,10 @@ export interface CarTelemetry {
   absActive?: boolean
   steerFeedback?: number
   engineOn?: boolean
+  ignitionOn?: boolean
+  cranking?: boolean
+  crankTime?: number
+  sinceStart?: number
 }
 
 export interface GearAccess {

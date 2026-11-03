@@ -19,8 +19,9 @@ export function applyBrakeHeat(
   l: BrakeLight,
   heat: number,
   headlightsOn: boolean = false,
+  power: number = 1,
 ) {
-  const base = headlightsOn ? 1.0 : 0.0
+  const base = headlightsOn ? power : 0.0
   const brakeGain = 9.0
   l.mat.emissiveIntensity = (base + brakeGain * heat) * (l.gain ?? 1)
   l.mat.emissive.copy(l.glow)
@@ -212,4 +213,29 @@ export function liftLampsOverGlass(root: THREE.Object3D, lampMeshes: THREE.Objec
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
     for (const m of mats) m.transparent = true
   }
+}
+
+const smooth01 = (x: number) => {
+  const t = Math.min(1, Math.max(0, x))
+  return t * t * (3 - 2 * t)
+}
+
+export function electricalPower(
+  ignitionOn: boolean,
+  cranking: boolean,
+  crankTime: number,
+  sinceStart: number,
+): number {
+  if (!ignitionOn) return 0
+  if (cranking) {
+    if (crankTime < 0.12) return 0.55 - 0.4 * smooth01(crankTime / 0.06)
+    const sag = 0.42 + 0.13 * Math.sin(crankTime * 36) + 0.06 * Math.sin(crankTime * 93 + 1.1)
+    return Math.min(0.7, Math.max(0.15, sag * smooth01((crankTime - 0.08) / 0.15) + 0.2 * (1 - smooth01((crankTime - 0.08) / 0.15))))
+  }
+  if (sinceStart < 1.2) {
+    const recover = 0.5 + 0.5 * smooth01(sinceStart / 0.7)
+    const flick = sinceStart < 0.55 ? 1 - 0.4 * Math.max(0, Math.sin(sinceStart * 55)) * (1 - sinceStart / 0.55) : 1
+    return Math.min(1, recover * flick)
+  }
+  return 1
 }

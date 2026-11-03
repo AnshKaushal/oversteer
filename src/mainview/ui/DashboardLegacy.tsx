@@ -507,7 +507,7 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
               icon4Ref: rpmIcon4,
             }}
             id="dial-rpm"
-            modeLabel={!tele.engineOn ? "ENGINE OFF" : tele.autoMode ? "AUTO" : "MANUAL"}
+            modeLabel={!tele.engineOn ? (tele.cranking ? "STARTING" : tele.ignitionOn === false ? "IGNITION OFF" : "HOLD V TO START") : tele.autoMode ? "AUTO" : "MANUAL"}
           />
         </div>
       </div>

@@ -691,7 +691,7 @@ function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
             maxValue={dashMaxRpm}
             redFrom={dashRedFrom}
             yellowFrom={dashYellowFrom}
-            caption={!tele.engineOn ? "ENGINE OFF" : tele.autoMode ? "AUTO" : "MANUAL"}
+            caption={!tele.engineOn ? (tele.cranking ? "STARTING" : tele.ignitionOn === false ? "IGNITION OFF" : "HOLD V TO START") : tele.autoMode ? "AUTO" : "MANUAL"}
             captionColor={!tele.engineOn ? "#ff5a5a" : tele.autoMode ? "#7db8ec" : "#cbd5e1"}
             refs={rpm}
           />

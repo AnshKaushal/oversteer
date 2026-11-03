@@ -123,6 +123,7 @@ export class CarVisual {
   private brakeLevel = 0
   private headlightsOn = false
   private headlightsWanted = false
+  private power = 1
   private headlightGroup: THREE.Group | null = null
   private headlightMeshes: THREE.Object3D[] = []
   private headlightSpots: THREE.SpotLight[] = []
@@ -498,7 +499,7 @@ export class CarVisual {
     const want = level > BRAKE_LAMP_THRESHOLD ? 1 : 0
     if (want === this.brakeLevel) return
     this.brakeLevel = want
-    for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn)
+    for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn, this.power)
   }
 
   setupHeadlights(isPlayer: boolean = false) {
@@ -860,18 +861,30 @@ export class CarVisual {
     if (this.headlightGroup) {
       this.headlightGroup.visible = true
     }
+    this.applyLamps()
+  }
+
+  setPower(p: number) {
+    if (Math.abs(p - this.power) < 0.004) return
+    this.power = p
+    this.applyLamps()
+  }
+
+  private applyLamps() {
+    const lit = this.headlightsOn && this.power > 0.02
+    const p = this.power
     for (const spot of this.headlightSpots) {
       spot.visible = true
-      spot.intensity = on ? 75 : 0
+      spot.intensity = lit ? 75 * p : 0
     }
     for (const h of this.headlightMats) {
-      h.mat.emissiveIntensity = on ? Math.max(h.origIntensity * 4, 8.0) : 0.0
+      h.mat.emissiveIntensity = lit ? Math.max(h.origIntensity * 4, 8.0) * p : 0.0
     }
     for (const h of this.loHeadlights) {
-      h.visible = on
+      h.visible = lit
     }
     for (const l of this.brakeLights) {
-      applyBrakeHeat(l, this.brakeLevel, on)
+      applyBrakeHeat(l, this.brakeLevel, this.headlightsOn, p)
     }
   }
 

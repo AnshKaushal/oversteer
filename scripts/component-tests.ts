@@ -56,7 +56,7 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) <= tol * Math
   const idle = new Engine(P.engine)
   for (let i = 0; i < 600; i++) idle.stepRpm({ dt: 1 / 120, simTime: 0, gear: 0, throttle: 0, fwdSpeed: 0, coupledRpm: 0,
     launchArmed: false, launching: false, launchBog: 0, launchRpm: 0, launchWobble: 0, clutchDumping: false, kickdownTimer: 0, airborne: false, shifting: false, flareRpm: 0 })
-  check("engine: neutral rpm settles at idle", near(idle.rpm, P.engine.idleRPM, 1e-3), `rpm=${idle.rpm.toFixed(0)}`)
+  check("engine: neutral rpm settles at idle", near(idle.rpm, P.engine.idleRPM, 0.03), `rpm=${idle.rpm.toFixed(0)}`)
 }
 
 // ---- Gearbox ----------------------------------------------------------------

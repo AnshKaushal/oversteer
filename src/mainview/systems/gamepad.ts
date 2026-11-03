@@ -33,7 +33,6 @@ const EDGES: [number, string][] = [
   [BTN.start, "KeyP"],
   [BTN.l3, "KeyL"],
   [BTN.up, "KeyM"],
-  [BTN.down, "KeyV"],
   [BTN.left, "KeyX"],
   [BTN.right, "KeyG"],
   [BTN.r3, LOOK_RESET],
@@ -47,6 +46,7 @@ export interface PadState {
   lookX: number
   lookY: number
   edges: string[]
+  ignHeld: boolean
   handbrakeEdge: "down" | "up" | null
 }
 
@@ -147,6 +147,7 @@ export class GamepadInput {
       lookY: stick(pad.axes[3] ?? 0),
       handbrakeHeld: hb,
       edges,
+      ignHeld: down(BTN.down),
       handbrakeEdge,
     }
   }

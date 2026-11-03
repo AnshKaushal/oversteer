@@ -241,11 +241,11 @@ export const f1Car: CarSpec = {
         shakeAmp: 0.0016,
         shakeFromKmh: 140,
       },
-      absEnabled: false,
+      absEnabled: true,
       abs: {
         brakeMin: 0.05,
         minSpeed: 3,
-        slipTarget: 0.25,
+        slipTarget: 0.13,
         reapplyFraction: 0.85,
         releaseRate: 20,
         applyRate: 60,

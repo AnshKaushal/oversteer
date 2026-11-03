@@ -23,6 +23,7 @@ export interface DriveInput {
   toggleStabilityPressed: boolean
   toggleSafetyPressed: boolean
   toggleIgnitionPressed: boolean
+  crankHeld?: boolean
   toggleHandbrakePressed: boolean
   toggleAbsPressed: boolean
   resetPressed: boolean
@@ -36,6 +37,8 @@ export interface DriveInput {
   toggleHeadlightsPressed: boolean
 }
 
+const IGNITION_HOLD_MS = 450
+const IGNITION_TAP = "IgnitionTap"
 const HANDBRAKE_HOLD_MS = 300
 const HANDBRAKE_TAP = "HandbrakeTap"
 const LOOK_EASE = 9
@@ -49,6 +52,7 @@ export class InputManager {
   steer = 0
 
   private spaceDownAt = 0
+  private ignDownAt = -1
 
   private readonly pad = new GamepadInput()
   private padWasConnected = false
@@ -134,7 +138,7 @@ export class InputManager {
       e.preventDefault()
     }
     if (c === "Space" && !e.repeat) this.spaceDownAt = e.timeStamp
-    if (!e.repeat) this.edgeQueue.add(c)
+    if (!e.repeat && c !== "KeyV") this.edgeQueue.add(c)
     this.keys.add(c)
   }
 
@@ -157,7 +161,7 @@ export class InputManager {
       [out.toggleHandbrakePressed, HANDBRAKE_TAP],
       [out.toggleTractionPressed, "KeyX"],
       [out.toggleStabilityPressed, "KeyG"],
-      [out.toggleIgnitionPressed, "KeyV"],
+      [out.toggleIgnitionPressed, IGNITION_TAP],
       [out.toggleSafetyPressed, "KeyN"],
       [out.toggleAbsPressed, "KeyB"],
     ]
@@ -165,6 +169,7 @@ export class InputManager {
   }
 
   clear() {
+    this.ignDownAt = -1
     this.keys.clear()
     this.edgeQueue.clear()
     this.throttle = 0
@@ -199,6 +204,13 @@ export class InputManager {
 
     const k = this.keys
     const has = (c: string) => k.has(c)
+    const ignHeld = has("KeyV") || !!pad?.ignHeld
+    if (ignHeld) {
+      this.ignDownAt = this.ignDownAt < 0 ? 0 : this.ignDownAt + dt
+    } else if (this.ignDownAt >= 0) {
+      if (this.ignDownAt * 1000 < IGNITION_HOLD_MS) this.edgeQueue.add(IGNITION_TAP)
+      this.ignDownAt = -1
+    }
 
     const throttleTarget = has("KeyW") || has("ArrowUp") ? 1 : 0
     const brakeTarget = has("KeyS") || has("ArrowDown") ? 1 : 0
@@ -263,7 +275,8 @@ export class InputManager {
       toggleHandbrakePressed: edge(HANDBRAKE_TAP),
       toggleTractionPressed: edge("KeyX"),
       toggleStabilityPressed: edge("KeyG"),
-      toggleIgnitionPressed: edge("KeyV"),
+      toggleIgnitionPressed: edge(IGNITION_TAP),
+      crankHeld: ignHeld && this.ignDownAt * 1000 >= IGNITION_HOLD_MS,
       toggleSafetyPressed: edge("KeyN"),
       toggleAbsPressed: edge("KeyB"),
       resetPressed: edge("KeyR"),

@@ -309,7 +309,8 @@ export class Vehicle {
     if (input.toggleLaunchPressed) this.launch.enabled = !this.launch.enabled
     if (input.toggleTractionPressed) this.tractionControlOn = !this.tractionControlOn
     if (input.toggleSafetyPressed) this.toggleSafety()
-    if (input.toggleIgnitionPressed) this.engine.toggleIgnition()
+    if (input.toggleIgnitionPressed) this.engine.tapIgnition()
+    this.engine.holdCrank(!!input.crankHeld)
     if (input.toggleHandbrakePressed) this.handbrakeLatched = !this.handbrakeLatched
     else if (input.throttle > this.P.brakes.parkingReleaseThrottle) this.handbrakeLatched = false
     if (this.handbrakeLatched) input = { ...input, handbrake: true }
@@ -399,7 +400,7 @@ export class Vehicle {
       shifting: g.shifting,
       changeDelayActive: g.changeDelayActive,
       launchArmed: this.launch.armed,
-      limiterCut: this.engine.limiterCut,
+      limiterCut: this.engine.onLimiter,
       assistCutting: this.engineCut || this.stability.engineFactor < 1,
       slipRatioAvg: this.slip.slipRatioAvg,
       lateralVelocity: this.lateralVelocity(),
@@ -504,6 +505,10 @@ export class Vehicle {
       absActive: this.abs.active,
       steerFeedback: clamp(this.solver.steerTorque() / this.solver.steerTorqueScale(), -1, 1),
       engineOn: !this.engine.stalled,
+      ignitionOn: this.engine.ignition,
+      cranking: this.engine.cranking,
+      crankTime: this.engine.crankTime,
+      sinceStart: this.engine.sinceCatch,
       dash: this.dash,
     })
   }

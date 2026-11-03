@@ -3,6 +3,12 @@ import { clamp, curveLookup, smoothstep } from "../../math"
 import { SECONDS_PER_MINUTE, TWO_PI, WATT_PER_HP } from "../../../data/units"
 import { Turbo } from "./Turbo"
 
+const RPM_PER_RADS = SECONDS_PER_MINUTE / TWO_PI
+const CYCLIC_VARIATION = 0.06
+const CUT_CYCLES_MIN = 3
+const CUT_CYCLES_SPAN = 3
+const WIDE_OPEN = 0.98
+
 export interface RpmInput {
   dt: number
   simTime: number
@@ -29,6 +35,15 @@ export class Engine {
   stalled = false
   private starterT = 0
   private starting = false
+  ignition = true
+  sinceCatch = 99
+  private crankWobble = 0
+  private cutT = 0
+  private cutLen = 0
+  private cutCount = 0
+  onLimiter = false
+  private jitter = 0
+  private seed = 0x9e3779b9
   clutchCapacity = Infinity
   governorTorque = 0
   private readonly turbo: Turbo | null
@@ -66,12 +81,16 @@ export class Engine {
     const d = p.dynamics
     const idle = p.idleRPM
     this.governorTorque = 0
+    this.sinceCatch += c.dt
     if (this.stalled) {
       this.stepStalled(c)
       return
     }
     if (c.gear === 0) {
-      const target = idle + c.throttle * (p.redlineRPM - idle) * d.neutralRevFraction
+      const wideOpen = curveLookup(p.throttleMap, c.throttle) >= WIDE_OPEN
+      const target = wideOpen
+        ? p.revLimiterRPM * 1.02
+        : idle + c.throttle * (p.redlineRPM - idle) * d.neutralRevFraction
       if (target > this.rpm) {
         const want = (target - this.rpm) * Math.min(1, c.dt * d.neutralRiseRate)
         this.rpm += Math.min(want, this.freeRevRise(c.throttle, c.dt))
@@ -106,6 +125,7 @@ export class Engine {
       }
       if (clutched) {
         this.stepClutch(c)
+        this.stepJitter(c)
         this.finish(c)
         return
       }
@@ -127,19 +147,57 @@ export class Engine {
             : d.rateNormal
       this.rpm += (target - this.rpm) * Math.min(1, c.dt * rate)
     }
+    this.stepJitter(c)
     this.finish(c)
+  }
+
+  private random(): number {
+    this.seed = (Math.imul(this.seed, 1664525) + 1013904223) | 0
+    return (this.seed >>> 0) / 4294967296
+  }
+
+  private gauss(): number {
+    return (this.random() + this.random() + this.random() - 1.5) * 2
+  }
+
+  private stepJitter(c: RpmInput) {
+    const free = c.gear === 0 || Math.abs(c.fwdSpeed) < 0.8
+    const p = this.p
+    let next = 0
+    if (free && !this.limiterCut) {
+      const cyl = Math.max(1, p.config.cylinders)
+      const sigma = ((CYCLIC_VARIATION / Math.sqrt(cyl)) * this.frictionTorque() * RPM_PER_RADS) / p.engineInertia
+      const settle = p.dynamics.neutralRiseRate * 0.25
+      const lowRev = Math.min(1, p.idleRPM / Math.max(this.rpm, 1))
+      next = this.jitter * Math.exp(-settle * c.dt) + sigma * lowRev * Math.sqrt(c.dt) * this.gauss()
+    } else {
+      next = this.jitter * Math.exp(-c.dt * 12)
+    }
+    this.rpm += next - this.jitter
+    this.jitter = next
   }
 
   private stepStalled(c: RpmInput) {
     const p = this.p
     this.slipping = true
     this.clutchCapacity = 0
-    if (this.starting) this.starterT += c.dt
-    if (this.starting && this.starterT >= p.dynamics.restartTime) {
-      this.stalled = false
-      this.starting = false
-      this.starterT = 0
-      this.rpm = p.idleRPM
+    if (this.starting && this.ignition) {
+      this.starterT += c.dt
+      if (this.starterT >= this.crankDuration) {
+        this.stalled = false
+        this.starting = false
+        this.starterT = 0
+        this.sinceCatch = 0
+        this.rpm = p.idleRPM * 2
+        return
+      }
+      this.crankWobble += c.dt * 38
+      const ramp = Math.min(1, this.starterT / 0.25)
+      const cyl = 1 + 0.28 * Math.sin(this.crankWobble) + 0.12 * Math.sin(this.crankWobble * 2.3)
+      const target = 230 * ramp * cyl
+      this.rpm += (target - this.rpm) * Math.min(1, c.dt * 14)
+      this.limiterCut = false
+      this.turbo?.step(c.dt, 0, this.rpm)
       return
     }
     this.rpm *= Math.exp(-c.dt * p.dynamics.neutralDecayBase)
@@ -157,13 +215,40 @@ export class Engine {
     return p.maxTorqueNm * curveLookup(p.torqueCurve, rpm) * curveLookup(p.throttleMap, 1)
   }
 
-  toggleIgnition() {
-    if (this.stalled) {
-      this.starting = !this.starting
+  get cranking(): boolean {
+    return this.stalled && this.starting && this.ignition
+  }
+
+  get crankTime(): number {
+    return this.starterT
+  }
+
+  get crankDuration(): number {
+    return this.p.dynamics.restartTime + 0.6
+  }
+
+  tapIgnition() {
+    if (!this.stalled) {
+      this.stalled = true
+      this.ignition = false
+      this.starting = false
       this.starterT = 0
     } else {
-      this.stalled = true
+      this.ignition = !this.ignition
       this.starting = false
+      this.starterT = 0
+    }
+  }
+
+  holdCrank(held: boolean) {
+    if (held) {
+      if (!this.stalled || this.starting) return
+      this.ignition = true
+      this.starting = true
+      this.starterT = 0
+    } else if (this.starting) {
+      this.starting = false
+      this.starterT = 0
     }
   }
 
@@ -171,7 +256,7 @@ export class Engine {
     if (c.launchArmed && this.rpm > c.launchRpm) {
       this.rpm = c.launchRpm + c.launchWobble
     }
-    this.applyLimiter()
+    this.applyLimiter(c)
     this.turbo?.step(c.dt, c.throttle, this.rpm)
   }
 
@@ -212,10 +297,28 @@ export class Engine {
     this.clutchCapacity = Infinity
   }
 
-  private applyLimiter() {
-    const lim = this.p.revLimiterRPM
-    if (this.rpm >= lim) this.limiterCut = true
-    else if (this.rpm < lim - this.p.dynamics.limiterHysteresis) this.limiterCut = false
+  private applyLimiter(c: RpmInput) {
+    const p = this.p
+    const lim = p.revLimiterRPM
+    const hyst = p.dynamics.limiterHysteresis
+    if (this.rpm >= lim) this.onLimiter = true
+    else if (this.rpm < lim - hyst) this.onLimiter = false
+    if (this.limiterCut) {
+      this.cutT += c.dt
+      const free = c.gear === 0 || this.slipping
+      const rate = free
+        ? ((this.frictionTorque() + p.engineBrakeBase + this.rpm * p.engineBrakeRPMFactor) / p.engineInertia) *
+          RPM_PER_RADS
+        : (hyst * 0.5) / this.cutLen
+      this.rpm -= rate * c.dt
+      if (this.cutT >= this.cutLen || c.throttle < 0.2) this.limiterCut = false
+    } else if (this.rpm >= lim && c.throttle >= 0.2) {
+      this.limiterCut = true
+      this.cutT = 0
+      this.cutCount++
+      const skipped = CUT_CYCLES_MIN + Math.floor(this.random() * CUT_CYCLES_SPAN)
+      this.cutLen = (skipped * 2 * SECONDS_PER_MINUTE) / Math.max(lim, 1)
+    }
     if (this.rpm > lim) this.rpm = lim
   }
 
@@ -245,10 +348,14 @@ export class Engine {
   reset() {
     this.rpm = this.p.idleRPM
     this.limiterCut = false
+    this.onLimiter = false
+    this.jitter = 0
     this.slipping = false
     this.stalled = false
+    this.ignition = true
     this.starting = false
     this.starterT = 0
+    this.sinceCatch = 99
     this.clutchCapacity = Infinity
     this.turbo?.reset()
   }

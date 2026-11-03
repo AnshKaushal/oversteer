@@ -28,6 +28,10 @@ export interface TelemetrySources {
   absActive: boolean
   steerFeedback: number
   engineOn: boolean
+  ignitionOn: boolean
+  cranking: boolean
+  crankTime: number
+  sinceStart: number
   dash: CarDashConfig
 }
 
@@ -60,5 +64,9 @@ export function buildTelemetry(s: TelemetrySources): CarTelemetry {
     absActive: s.absActive,
     steerFeedback: s.steerFeedback,
     engineOn: s.engineOn,
+    ignitionOn: s.ignitionOn,
+    cranking: s.cranking,
+    crankTime: s.crankTime,
+    sinceStart: s.sinceStart,
   }
 }

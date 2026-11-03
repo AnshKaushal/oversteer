@@ -38,6 +38,7 @@ import {
   isLowLight,
 } from "./constants/timeOfDay"
 import { CarVisual } from "./systems/CarVisual"
+import { electricalPower } from "./systems/carLights"
 import { AirplaneFlyby } from "./systems/AirplaneFlyby"
 import { TireSmoke } from "./systems/TireSmoke"
 import { InputManager, type DriveInput } from "./systems/InputManager"
@@ -136,6 +137,10 @@ const initialTele: CarTelemetry = {
   absActive: false,
   steerFeedback: 0,
   engineOn: true,
+  ignitionOn: true,
+  cranking: false,
+  crankTime: 0,
+  sinceStart: 99,
   dash: getCar(DEFAULT_CAR_ID).dash,
 }
 
@@ -1018,6 +1023,9 @@ export default function App() {
             rivalDef.wheels,
             rivalDef.dash,
           )
+          rc.tractionControlOn = true
+          rc.stabilityControlOn = true
+          rc.abs.enabled = true
           const color = rivalColor(i)
           const vis = new CarVisual()
           vis.castShadow = true
@@ -1112,6 +1120,9 @@ export default function App() {
             def.wheels,
             def.dash,
           )
+          tc.tractionControlOn = true
+          tc.stabilityControlOn = true
+          tc.abs.enabled = true
           const tcolor = rivalColor((Math.random() * 64) | 0)
           const tvis = new CarVisual()
           tvis.castShadow = true
@@ -1350,6 +1361,7 @@ export default function App() {
         let last = performance.now()
         let buriedTimer = 0
         let buriedFrames = 0
+        let playerIgnOn = true
         const stepper = createFixedStepper()
         let substepTick = 0
         const stats = new FrameStats(WORLD.statsWindowMs)
@@ -1619,7 +1631,7 @@ export default function App() {
           }
           if (inp.toggleHeadlightsPressed) {
             const vis = playerVisualRef.current
-            if (vis) {
+            if (vis && playerIgnOn) {
               vis.setHeadlights(!vis.hasHeadlights())
             }
           }
@@ -1860,6 +1872,8 @@ export default function App() {
             }
           }
           syncVisual(visual, car, dt)
+          playerIgnOn = t?.ignitionOn ?? true
+          visual.setPower(electricalPower(t?.ignitionOn ?? true, t?.cranking ?? false, t?.crankTime ?? 0, t?.sinceStart ?? 99))
           visual.setBrake(Math.max(t?.brake ?? 0, t?.parkingBrake ? 1 : 0))
           if (net && net.roomId) {
             playerProgress = progressOf(body)
@@ -2825,7 +2839,7 @@ export default function App() {
                   ["G", "Stability control"],
                   ["B", "ABS"],
                   ["N", "Safety aids"],
-                  ["V", "Engine on / off"],
+                  ["V", "Tap: ignition · Hold: start engine"],
                   [";", "Cruise control"],
                   ["[ ]", "Cruise set / resume"],
                   ["H", "Headlights"],

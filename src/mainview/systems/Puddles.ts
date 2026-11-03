@@ -92,7 +92,12 @@ export class Puddles {
     uRefl: { value: null as THREE.Texture | null },
     uReflMat: { value: new THREE.Matrix4() },
     uReflOn: { value: 0 },
+    uTime: { value: 0 },
+    uRainAmt: { value: 0 },
+    uCar: { value: new THREE.Vector3() },
   }
+  private clock = 0
+  private carSpeed = 0
   private readonly camPos = new THREE.Vector3()
   private readonly camDir = new THREE.Vector3()
   private readonly camUp = new THREE.Vector3()
@@ -121,24 +126,30 @@ export class Puddles {
     this.mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.reflUniforms)
       sh.vertexShader = sh.vertexShader
-        .replace("#include <common>", "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;")
+        .replace("#include <common>", "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;\nvarying vec2 vWorldXZ;")
         .replace(
           "#include <project_vertex>",
-          "#include <project_vertex>\nvReflUv = uReflMat * (modelMatrix * instanceMatrix * vec4(transformed, 1.0));",
+          "#include <project_vertex>\nvec4 pwp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);\nvReflUv = uReflMat * pwp;\nvWorldXZ = pwp.xz;",
         )
       sh.fragmentShader = sh.fragmentShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform sampler2D uRefl;\nuniform float uReflOn;\nvarying vec4 vReflUv;",
+          "#include <common>\nuniform sampler2D uRefl;\nuniform float uReflOn;\nvarying vec4 vReflUv;\nvarying vec2 vWorldXZ;\nuniform float uTime;\nuniform float uRainAmt;\nuniform vec3 uCar;\nfloat h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nvec2 rainRipples(vec2 p, float t) {\n  vec2 acc = vec2(0.0);\n  for (int k = 0; k < 2; k++) {\n    float sc = k == 0 ? 1.7 : 2.9;\n    vec2 q = p * sc + float(k) * 17.0;\n    vec2 id = floor(q);\n    vec2 f = fract(q) - 0.5;\n    float r = h21(id);\n    vec2 off = vec2(h21(id + 3.1), h21(id + 7.7)) - 0.5;\n    float ph = fract(t * (0.7 + r * 0.6) + r * 9.0);\n    vec2 d = f - off * 0.5;\n    float len = length(d);\n    float ring = ph * 0.45;\n    float w = exp(-pow((len - ring) * 22.0, 2.0)) * (1.0 - ph) * step(r, uRainAmt);\n    acc += (len > 0.0001 ? d / len : vec2(0.0)) * w * sin((len - ring) * 60.0);\n  }\n  return acc;\n}\nvec2 carWake(vec2 p, float t) {\n  vec2 d = p - uCar.xy;\n  float len = length(d);\n  float reach = 3.0 + uCar.z * 0.25;\n  float env = smoothstep(reach, 0.3, len) * clamp(uCar.z * 0.15, 0.0, 1.0);\n  float wave = sin(len * 7.0 - t * 14.0) + 0.5 * sin(len * 13.0 - t * 22.0);\n  return (len > 0.0001 ? d / len : vec2(0.0)) * wave * env;\n}",
         )
         .replace(
           "#include <emissivemap_fragment>",
           `#include <emissivemap_fragment>
           if (uReflOn > 0.5) {
             vec4 ruv = vReflUv;
+            vec2 dist = rainRipples(vWorldXZ, uTime) * 0.9 + carWake(vWorldXZ, uTime) * 1.4;
+            dist += vec2(sin(vWorldXZ.x * 3.0 + uTime * 1.3), cos(vWorldXZ.y * 3.3 - uTime * 1.1)) * 0.04 * uRainAmt;
+            float disturb = clamp(length(dist) * 2.0, 0.0, 1.0);
+            ruv.xy += dist * 0.035 * ruv.w;
             vec3 refl = texture2DProj(uRefl, ruv).rgb;
             float ndv = clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0);
             float fres = 0.55 + 0.45 * pow(1.0 - ndv, 3.0);
+            fres *= 1.0 - 0.45 * disturb;
+            refl = mix(refl, refl * 0.6 + totalEmissiveRadiance * 0.4, 0.3 * disturb);
             totalEmissiveRadiance = mix(totalEmissiveRadiance * 0.3, refl, fres);
           }`,
         )
@@ -234,6 +245,12 @@ export class Puddles {
     this.lastPos.copy(carPos)
     this.haveLastPos = true
     if (dist > 60) dist = 0
+    this.clock += dt
+    const spd = dt > 0 ? dist / dt : 0
+    this.carSpeed += (spd - this.carSpeed) * Math.min(1, dt * 6)
+    this.reflUniforms.uTime.value = this.clock
+    this.reflUniforms.uRainAmt.value = Math.min(1, this.target * this.wet * 1.5)
+    this.reflUniforms.uCar.value.set(carPos.x, carPos.z, this.carSpeed)
 
     if (this.wet < this.target) this.wet = Math.min(this.target, this.wet + WET_RATE * dt)
     else if (this.wet > this.target) {
