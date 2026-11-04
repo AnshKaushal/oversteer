@@ -533,6 +533,7 @@ export class Vehicle {
       this.driveline.drivenOmega = dump.wheelOmega
       return
     }
+    if (g.gear === 0) return
     this.engine.settleAfterShift(g.coupledRpm(this.driveline.drivenOmega))
   }
 }

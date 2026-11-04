@@ -5,8 +5,6 @@ import { Turbo } from "./Turbo"
 
 const RPM_PER_RADS = SECONDS_PER_MINUTE / TWO_PI
 const CYCLIC_VARIATION = 0.06
-const CUT_CYCLES_MIN = 3
-const CUT_CYCLES_SPAN = 3
 const WIDE_OPEN = 0.98
 
 export interface RpmInput {
@@ -38,9 +36,6 @@ export class Engine {
   ignition = true
   sinceCatch = 99
   private crankWobble = 0
-  private cutT = 0
-  private cutLen = 0
-  private cutCount = 0
   onLimiter = false
   private jitter = 0
   private seed = 0x9e3779b9
@@ -256,7 +251,7 @@ export class Engine {
     if (c.launchArmed && this.rpm > c.launchRpm) {
       this.rpm = c.launchRpm + c.launchWobble
     }
-    this.applyLimiter(c)
+    this.applyLimiter()
     this.turbo?.step(c.dt, c.throttle, this.rpm)
   }
 
@@ -297,28 +292,14 @@ export class Engine {
     this.clutchCapacity = Infinity
   }
 
-  private applyLimiter(c: RpmInput) {
+  private applyLimiter() {
     const p = this.p
     const lim = p.revLimiterRPM
     const hyst = p.dynamics.limiterHysteresis
     if (this.rpm >= lim) this.onLimiter = true
     else if (this.rpm < lim - hyst) this.onLimiter = false
-    if (this.limiterCut) {
-      this.cutT += c.dt
-      const free = c.gear === 0 || this.slipping
-      const rate = free
-        ? ((this.frictionTorque() + p.engineBrakeBase + this.rpm * p.engineBrakeRPMFactor) / p.engineInertia) *
-          RPM_PER_RADS
-        : (hyst * 0.5) / this.cutLen
-      this.rpm -= rate * c.dt
-      if (this.cutT >= this.cutLen || c.throttle < 0.2) this.limiterCut = false
-    } else if (this.rpm >= lim && c.throttle >= 0.2) {
-      this.limiterCut = true
-      this.cutT = 0
-      this.cutCount++
-      const skipped = CUT_CYCLES_MIN + Math.floor(this.random() * CUT_CYCLES_SPAN)
-      this.cutLen = (skipped * 2 * SECONDS_PER_MINUTE) / Math.max(lim, 1)
-    }
+    if (this.rpm >= lim) this.limiterCut = true
+    else if (this.rpm < lim - hyst) this.limiterCut = false
     if (this.rpm > lim) this.rpm = lim
   }
 
