@@ -1,3 +1,4 @@
+import { fadeWithFog } from "./fogFade"
 import * as THREE from "three"
 import { sharedTexture, releaseTexture } from "./Airport"
 import { makeGlowTexture } from "./GlowTexture"
@@ -250,12 +251,12 @@ export class AirportStructures {
           opacity: 0,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
-          fog: false,
           toneMapped: false,
           polygonOffset: true,
           polygonOffsetFactor: -4,
           polygonOffsetUnits: -4,
         })
+        fadeWithFog(poolMat)
         this.pools.push(poolMat)
         const pool = new THREE.Mesh(poolGeo, poolMat)
         pool.rotation.x = -Math.PI / 2

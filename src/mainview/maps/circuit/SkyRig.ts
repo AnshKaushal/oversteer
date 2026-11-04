@@ -4,6 +4,7 @@ import {
   type TimeOfDayPreset,
   TIME_OF_DAY_PRESETS,
 } from "../../constants/timeOfDay"
+import { SkyDome } from "../../systems/SkyDome"
 
 const SKY_DISK_DISTANCE = 1200
 const LIGHTNING_TINT = new THREE.Color(0xe4ecff)
@@ -13,6 +14,7 @@ export class SkyRig {
   readonly hemi = new THREE.HemisphereLight(0xbdd7ff, 0x3d5a2a, 0.9)
   private sunVisual!: THREE.Mesh
   private stars!: THREE.Points
+  private dome!: SkyDome
   private scene: THREE.Scene | null = null
   private mode: TimeOfDayMode = "day"
   private fogEnabled = true
@@ -56,6 +58,8 @@ export class SkyRig {
     this.sunVisual.frustumCulled = false
     this.sunVisual.renderOrder = 1
     this.group.add(this.sunVisual)
+
+    this.dome = new SkyDome(this.group)
 
     const count = 1000
     const pos = new Float32Array(count * 3)
@@ -102,6 +106,15 @@ export class SkyRig {
     return out.lerp(new THREE.Color(p.fogColor), this.haze())
   }
 
+  private syncDome(top: THREE.Color, horizon: THREE.Color) {
+    this.dome.setColors(top, horizon)
+  }
+
+  private applySunHaze() {
+    const h = this.haze()
+    ;(this.sunVisual.material as THREE.MeshBasicMaterial).opacity = 1 - 0.9 * h * h
+  }
+
   private applyStars() {
     const m = this.mode
     const a =
@@ -119,15 +132,18 @@ export class SkyRig {
       this.hazedSky(this.scene.background, p)
     }
     this.applyStars()
+    this.applySunHaze()
     if (!this.fogEnabled) {
       fog.color.setHex(p.skyColor)
       fog.near = 1300
       fog.far = 2350
+      this.syncDome(fog.color, fog.color)
       return
     }
     fog.color.setHex(p.fogColor)
     fog.near = p.fogNear / this.fogIntensity
     fog.far = p.fogFar / this.fogIntensity
+    this.syncDome(this.hazedSky(new THREE.Color(), p), fog.color)
   }
 
   get fogFar(): number {
@@ -187,6 +203,7 @@ export class SkyRig {
       scene.fog.color
         .setHex(this.fogEnabled ? p.fogColor : p.skyColor)
         .lerp(LIGHTNING_TINT, f * 0.5)
+      this.syncDome(scene.background instanceof THREE.Color ? scene.background : scene.fog.color, scene.fog.color)
     }
   }
 
@@ -237,6 +254,7 @@ export class SkyRig {
       this.sunOffset.y * k,
       carPos.z + this.sunOffset.z * k,
     )
+    this.dome.follow(carPos.x, carPos.z)
     if (this.stars.visible) this.stars.position.set(carPos.x, 0, carPos.z)
   }
 }

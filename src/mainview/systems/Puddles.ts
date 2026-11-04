@@ -9,7 +9,7 @@ const WET_RATE = 0.14
 const MAX_CHANCE = 0.52
 
 const ROAD_Y = 0.018
-const GRASS_Y = -0.055
+const GRASS_Y = 0.012
 const MIRROR_Y = 0
 const REFLECT_SCALE = 0.5
 const REFLECT_FAR = 700

@@ -76,6 +76,8 @@ import {
 } from "./ui/MapPicker"
 import { RainEffect } from "./systems/RainEffect"
 import { SettingsModal } from "./ui/SettingsModal"
+import { currentDisplayId } from "./ui/DisplayPicker"
+import { getDisplays, moveToDisplay } from "./systems/updater"
 import { ControllerToast } from "./ui/ControllerToast"
 import {
   loadSettings,
@@ -267,6 +269,17 @@ export default function App() {
     }
     multiplayerRef.current?.setHeadlights(lowLight)
   }
+
+  useEffect(() => {
+    void getDisplays().then((list) => {
+      if (list.length < 2) return
+      const saved = settingsRef.current.displayId
+      if (saved !== undefined && list.some((d) => d.id === saved)) {
+        if (currentDisplayId(list) !== saved) void moveToDisplay(saved)
+        return
+      }
+    })
+  }, [])
 
   const handleUpdateSettings = (next: AppSettings) => {
     setSettings(next)

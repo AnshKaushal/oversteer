@@ -116,7 +116,7 @@ for (const mode of MODES) {
     )
   } else {
     check(
-      (mode === "landing" ? minY >= 0 : minY > 5) && maxY < 110,
+      (mode === "cruise" ? minY > 5 : minY >= 0) && maxY < 110,
       `${mode} stays below the cloud layer`,
       `${minY.toFixed(1)}-${maxY.toFixed(1)} m`,
     )
@@ -144,7 +144,7 @@ const pitch = (mode: FlybyMode, t: number) => {
   const path = makePath(300, 90 * DEG, 1, 1)
   return (passState(mode, t, path, 0).pitch * 180) / Math.PI
 }
-check(pitch("takeoff", 0) > 8, "take-off starts nose up", `${pitch("takeoff", 0).toFixed(1)} deg`)
+check(pitch("takeoff", 200) > 8, "take-off climbs nose up", `${pitch("takeoff", 200).toFixed(1)} deg`)
 check(pitch("takeoff", PASS_LENGTH) < 10 && pitch("takeoff", PASS_LENGTH) >= pitch("takeoff", 100), "take-off settles into a steady climb", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
 check(Math.abs(pitch("landing", PASS_LENGTH)) < 1e-9 && Math.abs(pitch("landing", 0)) < 1e-9, "landing stays level in pitch", `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`)
 

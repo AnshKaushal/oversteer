@@ -1,3 +1,4 @@
+import { fadeWithFog } from "./fogFade"
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { roadCenterX, roadYaw } from "./WorldManager"
@@ -25,9 +26,9 @@ function exitLen(mode: FlybyMode): number {
 }
 const TAKEOFF_START_D = -(RUNWAY_END_D - PASS_LENGTH) + 40
 const LANDING_START_D = -500
-const TAKEOFF_ROLL = 300
+const TAKEOFF_ROLL = 520
 const TAKEOFF_LIFTOFF_D = TAKEOFF_START_D + TAKEOFF_ROLL
-const TAKEOFF_ACCEL = 2.4
+const TAKEOFF_ACCEL = 2.2
 const TAKEOFF_GRADIENT = 0.07
 const TAKEOFF_EASE = 300
 const TAKEOFF_HOLD = 3
@@ -151,15 +152,15 @@ interface Profile {
   pitch: number
 }
 
-const LANDING_TOUCH_U = 0.85
+const LANDING_TOUCH_D = 900
 const LANDING_HILL_MARGIN = 4
-const LANDING_SLOPE = 0.11
-const LANDING_FLARE = 130
+const LANDING_SLOPE = 0.07
+const LANDING_FLARE = 160
 const LANDING_TOUCH_SPEED = 40
-const LANDING_DECEL = 1.4
+const LANDING_DECEL = 1.8
 const LANDING_STOP_DIST = (LANDING_TOUCH_SPEED * LANDING_TOUCH_SPEED) / (2 * LANDING_DECEL)
 
-function profileFor(mode: FlybyMode, u: number, rolled = 0, d = 0): Profile {
+function profileFor(mode: FlybyMode, _u: number, rolled = 0, d = 0): Profile {
   if (mode === "takeoff") {
     const roll = Math.max(0, d - TAKEOFF_START_D)
     const x = d - TAKEOFF_LIFTOFF_D
@@ -181,7 +182,7 @@ function profileFor(mode: FlybyMode, u: number, rolled = 0, d = 0): Profile {
     }
   }
   if (mode === "landing") {
-    const k = Math.min(1, u / LANDING_TOUCH_U)
+    const k = Math.min(1, Math.max(0, d / LANDING_TOUCH_D))
     const v0 = LANDING_TOUCH_SPEED
     const speed =
       rolled > 0
@@ -236,7 +237,6 @@ function buildGear(
   const wheels: THREE.Mesh[] = []
   const tyre = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 })
   const metal = new THREE.MeshStandardMaterial({ color: 0x9a9fa6, roughness: 0.4, metalness: 0.6 })
-  for (const m of [tyre, metal]) m.fog = false
   if (!fitted) {
     const none = new THREE.Group()
     none.visible = false
@@ -313,7 +313,7 @@ export function passState(
   belly = 0,
 ): PassState {
   const u = Math.max(0, Math.min(1, traveled / path.length))
-  const pr = profileFor(mode, u, traveled - LANDING_TOUCH_U * path.length, traveled)
+  const pr = profileFor(mode, u, traveled - LANDING_TOUCH_D, traveled)
   const along = traveled - path.length / 2
   const x = path.x + along * path.dx
   const z = path.z + along * path.dz
@@ -389,11 +389,15 @@ export function pathBlocked(
     const y = profileFor(
       mode,
       Math.min(1, Math.max(0, d / path.length)),
-      d - LANDING_TOUCH_U * path.length,
+      d - LANDING_TOUCH_D,
       d,
     ).y
     const limit =
-      mode === "landing" ? Math.max(0.3, y - LANDING_HILL_MARGIN) : y - clearance
+      mode === "landing"
+        ? Math.max(0.3, y - LANDING_HILL_MARGIN)
+        : mode === "takeoff"
+          ? Math.max(0.3, y - clearance)
+          : y - clearance
     if (terrainAt(x, z) > limit) return true
     if (half > 0) {
       if (terrainAt(x + px * half, z + pz * half) > limit) return true
@@ -846,50 +850,46 @@ function buildAircraftLights(
   const beaconGeo = lens(beaconRadius)
   geoms.push(navGeo, strobeGeo, beaconGeo)
 
-  const redMat = new THREE.MeshBasicMaterial({ color: 0xff1818, toneMapped: false, fog: false })
-  const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, toneMapped: false, fog: false })
-  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false })
-  const strobeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false })
-  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff2800, toneMapped: false, fog: false })
+  const redMat = new THREE.MeshBasicMaterial({ color: 0xff1818, toneMapped: false })
+  const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, toneMapped: false })
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
+  const strobeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff2800, toneMapped: false })
   mats.push(redMat, greenMat, whiteMat, strobeMat, beaconMat)
 
   const glowTex = getAirplaneLightGlowTexture()
-  const redGlowMat = new THREE.SpriteMaterial({
+  const redGlowMat = fadeWithFog(new THREE.SpriteMaterial({
     map: glowTex,
     color: 0xff2020,
     toneMapped: false,
-    fog: false,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-  })
-  const greenGlowMat = new THREE.SpriteMaterial({
+  }))
+  const greenGlowMat = fadeWithFog(new THREE.SpriteMaterial({
     map: glowTex,
     color: 0x00ff66,
     toneMapped: false,
-    fog: false,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-  })
-  const whiteGlowMat = new THREE.SpriteMaterial({
+  }))
+  const whiteGlowMat = fadeWithFog(new THREE.SpriteMaterial({
     map: glowTex,
     color: 0xffffff,
     toneMapped: false,
-    fog: false,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-  })
-  const beaconGlowMat = new THREE.SpriteMaterial({
+  }))
+  const beaconGlowMat = fadeWithFog(new THREE.SpriteMaterial({
     map: glowTex,
     color: 0xff2200,
     toneMapped: false,
-    fog: false,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-  })
+  }))
   for (const m of [redGlowMat, greenGlowMat, whiteGlowMat, beaconGlowMat]) m.color.multiplyScalar(2.2)
   for (const m of [redMat, greenMat, whiteMat, strobeMat, beaconMat]) m.color.multiplyScalar(1.6)
   mats.push(redGlowMat, greenGlowMat, whiteGlowMat, beaconGlowMat)
@@ -1099,7 +1099,7 @@ export class AirplaneFlyby {
       if (!c) {
         c = (m as THREE.MeshStandardMaterial).clone()
         c.transparent = false
-        c.fog = false
+        c.fog = true
         clones.set(m, c)
         mats.push(c)
       }
@@ -1157,7 +1157,7 @@ export class AirplaneFlyby {
     if (!holding) f.traveled += f.speed * dt
     f.age += dt
     f.u = Math.max(0, Math.min(1, f.traveled / f.path.length))
-    const rolled = f.traveled - LANDING_TOUCH_U * f.path.length
+    const rolled = f.traveled - LANDING_TOUCH_D
     const pr = profileFor(f.mode, f.u, rolled, f.traveled)
     f.speed = holding ? 0 : pr.speed * ac.spec.speed
     if (f.mode === "landing" && rolled >= LANDING_STOP_DIST - 1) f.stopped += dt
@@ -1174,7 +1174,7 @@ export class AirplaneFlyby {
     const pivotLift = f.mode === "cruise" ? 0 : ac.gearAft * Math.sin(lifting) - (ac.clearance - 1 + ac.gearDrop) * (1 - Math.cos(lifting))
     ac.root.position.set(st.x, st.y + pivotLift, st.z)
     ac.root.rotation.y = st.heading
-    this.hazeAircraft(ac, Math.hypot(st.x - carX, st.z + carS, st.y))
+    this.hazeAircraft(ac)
 
     const sway = Math.sin(f.age * 0.55) * 0.6 + Math.sin(f.age * 1.3) * 0.25
     const level =
@@ -1361,12 +1361,9 @@ export class AirplaneFlyby {
     ac.lightsRoot.visible = a > 0.6
   }
 
-  private hazeAircraft(ac: LoadedAircraft, dist: number) {
-    const fog = this.scene?.fog
-    const haze = Math.min(1, Math.max(0, (dist - 300) / 1800)) * 0.4
+  private hazeAircraft(ac: LoadedAircraft) {
     for (const m of ac.mats) {
-      if (fog && haze > 0) m.emissive.copy(fog.color).multiplyScalar(haze)
-      else m.emissive.setScalar(0)
+      m.emissive.setScalar(0)
     }
   }
 

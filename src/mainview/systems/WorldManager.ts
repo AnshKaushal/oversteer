@@ -9,6 +9,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD_CONFIG } from "../constants/world"
+import { SkyDome } from "./SkyDome"
 import {
   type TimeOfDayMode,
   TIME_OF_DAY_PRESETS,
@@ -246,6 +247,7 @@ export class WorldManager {
   private sunLight: THREE.DirectionalLight | null = null
   private hemiLight: THREE.HemisphereLight | null = null
   private sunVisual: THREE.Mesh | null = null
+  private skyDome: SkyDome | null = null
   private sunOffset = new THREE.Vector3(120, 180, 60)
   private sceneRef: THREE.Scene | null = null
   private starsPoints: THREE.Points | null = null
@@ -315,6 +317,7 @@ export class WorldManager {
       this.hazedSky(scene.background, preset).lerp(white, f * 0.55)
     }
     if (scene.fog instanceof THREE.Fog) scene.fog.color.setHex(this.fogEnabled ? preset.fogColor : preset.skyColor).lerp(white, f * 0.5)
+    this.syncDome(f)
   }
 
   surfaceAt(x: number, z: number): SurfaceId {
@@ -367,11 +370,37 @@ export class WorldManager {
     mark(zones)
     this.clearZones = zones
     pavedZones = zones.filter((z) => z.paved)
+    for (const h of this.hills) {
+      const p = h.mesh.position
+      if (!this.hillHitsZone(p.x, p.z, h.radius)) continue
+      h.seg = -999999
+      h.mesh.position.set(p.x + 20000, -0.3, p.z)
+      this.syncHillBody(h)
+    }
     for (const k of segs) {
       if (!this.segProps.has(k)) continue
       this.freeSeg(k)
       this.segProps.delete(k)
+      const cols = this.segColliders.get(k)
+      if (cols && this.physWorld) {
+        for (const c of cols) this.physWorld.removeCollider(c, false)
+      }
+      this.segColliders.delete(k)
     }
+  }
+
+  private hillHitsZone(x: number, z: number, radius: number): boolean {
+    const r = radius * 1.2 + 12
+    for (const c of this.clearZones) {
+      const dx = x - c.x
+      const dz = z - c.z
+      const along = Math.abs(dx * c.ux + dz * c.uz)
+      const across = Math.abs(-dx * c.uz + dz * c.ux)
+      const ex = Math.max(0, along - c.hl)
+      const ez = Math.max(0, across - c.hw)
+      if (ex * ex + ez * ez < r * r) return true
+    }
+    return false
   }
 
   private inClearZone(x: number, z: number): boolean {
@@ -427,6 +456,17 @@ export class WorldManager {
     return out.lerp(new THREE.Color(preset.fogColor), haze)
   }
 
+  private syncDome(flash = 0) {
+    const scene = this.sceneRef
+    const fog = scene?.fog
+    if (!this.skyDome || !scene || !(fog instanceof THREE.Fog)) return
+    const top = new THREE.Color()
+    this.hazedSky(top, TIME_OF_DAY_PRESETS[this.timeOfDay])
+    const hor = fog.color.clone()
+    if (flash > 0) top.lerp(LIGHTNING_TINT, flash * 0.55)
+    this.skyDome.setColors(top, hor)
+  }
+
   private withinFog(d: number): boolean {
     const fog = this.sceneRef?.fog
     return !this.fogEnabled || !(fog instanceof THREE.Fog) || d < fog.far + 20
@@ -450,15 +490,21 @@ export class WorldManager {
     if (this.sceneRef?.background instanceof THREE.Color) this.hazedSky(this.sceneRef.background, preset)
     this.cloudLastCarS = -999999
     this.applyStars()
+    if (this.sunVisual) {
+      const haze = this.fogEnabled ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7)) : 0
+      ;(this.sunVisual.material as THREE.MeshBasicMaterial).opacity = 1 - 0.9 * haze * haze
+    }
     if (!this.fogEnabled) {
       fog.color.setHex(preset.skyColor)
       fog.near = 1300
       fog.far = 2350
+      this.syncDome()
       return
     }
     fog.color.setHex(preset.fogColor)
     fog.near = preset.fogNear / this.fogIntensity
     fog.far = preset.fogFar / this.fogIntensity
+    this.syncDome()
   }
 
   setTimeOfDay(mode: TimeOfDayMode) {
@@ -579,6 +625,7 @@ export class WorldManager {
   private R?: typeof RAPIER
   private physWorld?: RAPIER.World
   private segColliders = new Map<number, RAPIER.Collider[]>()
+  private segColliderSrc = new Map<number, PropEntry[]>()
   private carPos = new THREE.Vector3()
   private hills: Hill[] = []
   private puddles: Puddles | null = null
@@ -641,6 +688,8 @@ export class WorldManager {
     sunVisual.renderOrder = 1
     this.group.add(sunVisual)
     this.sunVisual = sunVisual
+    this.skyDome = new SkyDome(this.group)
+    this.syncDome()
 
     const starGeo = new THREE.BufferGeometry()
     const starCount = 1000
@@ -675,7 +724,7 @@ export class WorldManager {
     })
     this.ground = new THREE.Mesh(gGeo, gMat)
     this.ground.rotation.x = -Math.PI / 2
-    this.ground.position.y = -0.08
+    this.ground.position.y = 0
     this.ground.receiveShadow = true
     this.group.add(this.ground)
 
@@ -716,6 +765,9 @@ export class WorldManager {
       map: tex.clone(),
       roughness: 1.0,
       metalness: 0.0,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     })
     this.roadSegs = []
     for (let i = 0; i < count; i++) {
@@ -937,7 +989,7 @@ export class WorldManager {
     const g = R.RigidBodyDesc.fixed()
     const body = world.createRigidBody(g)
     const col = R.ColliderDesc.cuboid(3000, 5, 3000)
-      .setTranslation(0, -4.98, 0)
+      .setTranslation(0, -4.99, 0)
       .setFriction(1.0)
       .setRestitution(0)
     registerSurface(world, world.createCollider(col, body), groundSurfaceAt)
@@ -1017,9 +1069,10 @@ export class WorldManager {
     const R = this.R
     const world = this.physWorld
     for (const [seg, cols] of [...this.segColliders]) {
-      if (this.segProps.has(seg)) continue
+      if (this.segProps.get(seg) === this.segColliderSrc.get(seg)) continue
       for (const c of cols) world.removeCollider(c, false)
       this.segColliders.delete(seg)
+      this.segColliderSrc.delete(seg)
     }
     for (const [seg, props] of this.segProps) {
       if (this.segColliders.has(seg)) continue
@@ -1041,6 +1094,7 @@ export class WorldManager {
         cols.push(world.createCollider(col))
       }
       this.segColliders.set(seg, cols)
+      this.segColliderSrc.set(seg, props)
     }
   }
 
@@ -1068,6 +1122,7 @@ export class WorldManager {
     const { x: nx, z: nz } = this.hillSpot(hill, seg)
     const dx = nx - this.carPos.x
     const dz = nz - this.carPos.z
+    if (this.hillHitsZone(nx, nz, hill.radius)) return
     const keepOut = hill.radius + 15
     if (hill.seg !== -999999 && dx * dx + dz * dz < keepOut * keepOut) return
     hill.seg = seg
@@ -1484,6 +1539,7 @@ export class WorldManager {
         carPos.z + this.sunOffset.z * k,
       )
     }
+    this.skyDome?.follow(carPos.x, carPos.z)
     if (this.starsPoints && this.starsPoints.visible) {
       this.starsPoints.position.set(carPos.x, 0, carPos.z)
     }

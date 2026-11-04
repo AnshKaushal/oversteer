@@ -117,7 +117,7 @@ wm.update(0, carPos, 1)
           if (h > Math.max(0.3, st.y - 4)) landingOnHill++
           continue
         }
-        worstClearance = Math.min(worstClearance, st.y - h)
+        if (h > 0.3) worstClearance = Math.min(worstClearance, st.y - h)
       }
     }
    }
@@ -198,7 +198,7 @@ wm.update(0, carPos, 1)
             x + px * (SPAN / 2) * side,
             z + pz * (SPAN / 2) * side,
           )
-          worst = Math.min(worst, y - h)
+          if (h > 0.3) worst = Math.min(worst, y - h)
         }
       }
     }

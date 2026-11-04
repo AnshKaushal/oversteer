@@ -1,14 +1,7 @@
 import * as THREE from "three"
 import type { TimeOfDayMode } from "../constants/timeOfDay"
 
-export type ResolutionId =
-  | "native"
-  | "1440p"
-  | "1080p"
-  | "900p"
-  | "720p"
-  | "540p"
-  | "480p"
+export type ResolutionId = string
 
 export interface ResolutionPreset {
   id: ResolutionId
@@ -19,64 +12,94 @@ export interface ResolutionPreset {
   description: string
 }
 
-export const RESOLUTION_PRESETS: ResolutionPreset[] = [
-  {
-    id: "native",
-    name: "Native Display",
-    height: null,
-    badge: "Native",
-    tier: "quality",
-    description: "Matches monitor native resolution (full detail)",
-  },
-  {
-    id: "1440p",
-    name: "1440p QHD",
-    height: 1440,
-    badge: "2K Ultra",
-    tier: "ultra",
-    description: "High resolution for powerful dedicated GPUs",
-  },
-  {
-    id: "1080p",
-    name: "1080p FHD",
-    height: 1080,
-    badge: "Full HD",
-    tier: "quality",
-    description: "Standard Full HD resolution (balanced crispness)",
-  },
-  {
-    id: "900p",
-    name: "900p HD+",
-    height: 900,
-    badge: "Balanced",
-    tier: "balanced",
-    description: "Great balance of smooth framerate and visual clarity",
-  },
-  {
-    id: "720p",
-    name: "720p HD",
-    height: 720,
-    badge: "Fast",
-    tier: "performance",
-    description: "Recommended for laptops and integrated graphics",
-  },
-  {
-    id: "540p",
-    name: "540p qHD",
-    height: 540,
-    badge: "High FPS",
-    tier: "performance",
-    description: "Huge framerate boost on older or battery-saver GPUs",
-  },
-  {
-    id: "480p",
-    name: "480p SD",
-    height: 480,
-    badge: "Max FPS",
-    tier: "max-fps",
-    description: "Maximum performance mode for lower-spec devices",
-  },
-]
+let nativePanel: { width: number; height: number } | null = null
+
+export function setNativePanel(p: { width: number; height: number } | null) {
+  nativePanel = p
+}
+
+export function nativeDisplaySize(): { width: number; height: number } {
+  if (nativePanel) return nativePanel
+  if (typeof window === "undefined") return { width: 1920, height: 1080 }
+  const dpr = window.devicePixelRatio || 1
+  return {
+    width: Math.round((window.screen?.width || window.innerWidth) * dpr),
+    height: Math.round((window.screen?.height || window.innerHeight) * dpr),
+  }
+}
+
+let osModes: { width: number; height: number }[] = []
+
+export function setDisplayModes(m: { width: number; height: number }[]) {
+  osModes = m
+}
+
+const STANDARD_HEIGHTS = [2160, 1440, 1200, 1080, 1050, 900, 800, 768, 720, 600, 540, 480]
+
+function tierFor(h: number, nativeH: number): ResolutionPreset["tier"] {
+  const r = h / nativeH
+  if (r > 0.9) return "ultra"
+  if (r > 0.6) return "quality"
+  if (r > 0.45) return "balanced"
+  if (r > 0.33) return "performance"
+  return "max-fps"
+}
+
+const BADGES: Record<ResolutionPreset["tier"], string> = {
+  ultra: "Sharpest",
+  quality: "Quality",
+  balanced: "Balanced",
+  performance: "Fast",
+  "max-fps": "Max FPS",
+}
+
+export function resolutionHeight(id: ResolutionId): number | null {
+  const x = /^(\d+)x(\d+)$/.exec(id)
+  if (x) return Number(x[2])
+  const p = /^(\d+)p$/.exec(id)
+  return p ? Number(p[1]) : null
+}
+
+// The resolutions the OS reports for this monitor, plus intermediate steps at the
+// screen's own aspect ratio, listed largest first like an OS display settings page.
+export function getResolutionPresets(): ResolutionPreset[] {
+  const native = nativeDisplaySize()
+  const aspect = native.width / native.height
+  const sizes = new Map<string, { width: number; height: number; os: boolean }>()
+  for (const m of osModes) {
+    if (m.height <= native.height && m.width <= native.width) sizes.set(`${m.width}x${m.height}`, { ...m, os: true })
+  }
+  for (const h of STANDARD_HEIGHTS) {
+    if (h >= native.height) continue
+    const w = Math.round((h * aspect) / 2) * 2
+    if (![...sizes.values()].some((s) => s.height === h)) sizes.set(`${w}x${h}`, { width: w, height: h, os: false })
+  }
+  const list = [...sizes.entries()]
+    .filter(([id]) => id !== `${native.width}x${native.height}`)
+    .sort((a, b) => b[1].height - a[1].height)
+  const out: ResolutionPreset[] = [
+    {
+      id: "native",
+      name: `${native.width} × ${native.height}`,
+      height: null,
+      badge: "Native",
+      tier: "ultra",
+      description: "This monitor's native resolution (recommended)",
+    },
+  ]
+  for (const [id, m] of list) {
+    const tier = tierFor(m.height, native.height)
+    out.push({
+      id,
+      name: `${m.width} × ${m.height}`,
+      height: m.height,
+      badge: BADGES[tier],
+      tier,
+      description: m.os ? "Display mode reported by your system" : "Renders at this size and scales up to fill the screen",
+    })
+  }
+  return out
+}
 
 export type FogLevel = "off" | "light" | "normal" | "heavy"
 export const FOG_LEVELS: FogLevel[] = ["off", "light", "normal", "heavy"]
@@ -99,6 +122,7 @@ export interface AppSettings {
   streetLights?: boolean
   streetLightsOn?: boolean
   vegetation?: number
+  displayId?: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -150,7 +174,9 @@ export function calculateResolution(
   if (presetId === "native") {
     const scale = Math.max(0.5, Math.min(1.0, scalePercent / 100))
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
-    const pr = Math.min(dpr, 1.25) * scale
+    const panel = nativeDisplaySize()
+    const logicalW = (typeof window !== "undefined" && window.screen?.width) || w
+    const pr = Math.min(dpr, panel.width / logicalW) * scale
     const calcW = Math.round(w * pr)
     const calcH = Math.round(h * pr)
     return {
@@ -161,8 +187,8 @@ export function calculateResolution(
     }
   }
 
-  const preset = RESOLUTION_PRESETS.find((p) => p.id === presetId)
-  let targetH = preset?.height ?? 1080
+  const nativeH = nativeDisplaySize().height
+  let targetH = Math.min(resolutionHeight(presetId) ?? 1080, nativeH)
   if (scalePercent !== 100) {
     targetH = Math.round((targetH * scalePercent) / 100)
   }

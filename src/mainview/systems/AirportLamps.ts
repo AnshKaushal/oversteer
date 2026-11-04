@@ -1,3 +1,4 @@
+import { fadeWithFog } from "./fogFade"
 import * as THREE from "three"
 
 
@@ -102,9 +103,9 @@ export class LampSet {
       opacity: 0,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      fog: false,
       toneMapped: false,
     })
+    fadeWithFog(this.haloMat)
     this.halo = new THREE.Points(hg, this.haloMat)
     this.halo.frustumCulled = false
     this.halo.visible = false

@@ -1,5 +1,6 @@
 import { Electroview } from "electrobun/view"
-import type { OverSteerRPC, UpdateResult } from "../../shared/updateRpc"
+import { setDisplayModes, setNativePanel } from "./settings"
+import type { DisplayInfo, OverSteerRPC, UpdateResult } from "../../shared/updateRpc"
 
 let deltaListener: ((dx: number, dy: number) => void) | null = null
 
@@ -43,5 +44,42 @@ export async function checkForUpdates(): Promise<UpdateResult> {
       outcome: "error",
       message: "Updates are only available in the installed app.",
     }
+  }
+}
+
+let knownDisplays: DisplayInfo[] = []
+
+function applyPanel(id?: number) {
+  const cx = window.screenX + window.innerWidth / 2
+  const cy = window.screenY + window.innerHeight / 2
+  const d =
+    knownDisplays.find((x) => x.id === id) ??
+    knownDisplays.find((x) => cx >= x.x && cx < x.x + x.width && cy >= x.y && cy < x.y + x.height) ??
+    knownDisplays.find((x) => x.isPrimary)
+  setNativePanel(d ? { width: d.nativeWidth, height: d.nativeHeight } : null)
+  setDisplayModes(d?.modes ?? [])
+  window.dispatchEvent(new Event("resize"))
+}
+
+export async function getDisplays(): Promise<DisplayInfo[]> {
+  try {
+    knownDisplays = await getBridge().request.getDisplays()
+    applyPanel()
+    return knownDisplays
+  } catch {
+    return []
+  }
+}
+
+export async function moveToDisplay(id: number): Promise<boolean> {
+  try {
+    const ok = await getBridge().request.moveToDisplay({ id })
+    if (ok) {
+      applyPanel(id)
+      setTimeout(() => applyPanel(id), 800)
+    }
+    return ok
+  } catch {
+    return false
   }
 }

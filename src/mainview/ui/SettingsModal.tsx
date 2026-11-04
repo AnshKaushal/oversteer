@@ -29,12 +29,13 @@ import {
   type FogLevel,
   FOG_LEVELS,
   type ResolutionId,
-  RESOLUTION_PRESETS,
+  getResolutionPresets,
   DEFAULT_SETTINGS,
   calculateResolution,
 } from "../systems/settings"
 import { EASE } from "./anim"
-import { checkForUpdates } from "../systems/updater"
+import { checkForUpdates, moveToDisplay } from "../systems/updater"
+import { DisplayList, currentDisplayId, useDisplays } from "./DisplayPicker"
 
 export interface SettingsModalProps {
   open: boolean
@@ -50,6 +51,7 @@ export function SettingsModal({
   onClose,
 }: SettingsModalProps) {
   const [mounted, setMounted] = useState(open)
+  const displays = useDisplays()
   const [tab, setTab] = useState<"graphics" | "world" | "interface" | "about">("graphics")
   const [showUpscalingInfo, setShowUpscalingInfo] = useState(false)
   const [updateChecking, setUpdateChecking] = useState(false)
@@ -158,6 +160,8 @@ export function SettingsModal({
   }, [open, onClose])
 
   if (!mounted) return null
+
+  const presets = getResolutionPresets()
 
   const nativeDims = calculateResolution("native", viewport.w, viewport.h, 100)
   const nativePixels = nativeDims.width * nativeDims.height
@@ -342,6 +346,23 @@ export function SettingsModal({
             </div>
           </div>
 
+          {displays.length > 1 && (
+            <div data-anim-item className="space-y-2.5">
+              <label className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+                <Monitor size={14} className="text-[#51a7d5]" />
+                Monitor
+              </label>
+              <DisplayList
+                displays={displays}
+                selectedId={settings.displayId ?? currentDisplayId(displays)}
+                onPick={(id) => {
+                  onUpdateSettings({ ...settings, displayId: id })
+                  void moveToDisplay(id)
+                }}
+              />
+            </div>
+          )}
+
           {}
           <div data-anim-item className="space-y-2.5">
             <div className="flex items-center justify-between">
@@ -355,8 +376,10 @@ export function SettingsModal({
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {RESOLUTION_PRESETS.map((preset) => {
-                const isSelected = settings.resolution === preset.id
+              {presets.map((preset) => {
+                const isSelected =
+                  settings.resolution === preset.id ||
+                  (preset.height !== null && settings.resolution === `${preset.height}p`)
                 const dims = calculateResolution(
                   preset.id,
                   viewport.w,

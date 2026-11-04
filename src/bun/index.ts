@@ -3,10 +3,12 @@ import {
   BrowserView,
   BrowserWindow,
   GlobalShortcut,
+  Screen,
   Updater,
 } from "electrobun/main"
 import os from "os"
 import { UPDATE_ICON_DATA_URI } from "./updateIcon"
+import { displayModes, nativePanelSize } from "./nativePanel"
 import { grabCursor, releaseCursor } from "./macCursor"
 import type { OverSteerRPC, UpdateResult } from "../shared/updateRpc"
 
@@ -322,6 +324,39 @@ function createWindow(winUrl: string, windowed = isWindowed) {
     handlers: {
       requests: {
         checkForUpdates: () => runUpdate(true),
+        getDisplays: () =>
+          Screen.getAllDisplays().map((d) => {
+            const panel = nativePanelSize(d.id)
+            return {
+            nativeWidth: panel?.width ?? Math.round(d.bounds.width * d.scaleFactor),
+            nativeHeight: panel?.height ?? Math.round(d.bounds.height * d.scaleFactor),
+            modes: displayModes(d.id),
+            id: d.id,
+            isPrimary: d.isPrimary,
+            x: d.bounds.x,
+            y: d.bounds.y,
+            width: d.bounds.width,
+            height: d.bounds.height,
+            scaleFactor: d.scaleFactor,
+            }
+          }),
+        moveToDisplay: (p?: any) => {
+          const d = Screen.getAllDisplays().find((x) => x.id === p?.id)
+          if (!d) return false
+          const w = win
+          const wasFull = w.isFullScreen()
+          try {
+            if (wasFull) w.setFullScreen(false)
+            const a = d.workArea
+            const width = Math.min(a.width, 1440)
+            const height = Math.min(a.height, 900)
+            w.setFrame(a.x + Math.round((a.width - width) / 2), a.y + Math.round((a.height - height) / 2), width, height)
+            if (wasFull) setTimeout(() => w.setFullScreen(true), 350)
+            return true
+          } catch {
+            return false
+          }
+        },
         setCursorLock: (p?: any) => {
           if (!p?.locked) {
             releaseCursor()
