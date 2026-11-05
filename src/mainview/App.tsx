@@ -17,10 +17,7 @@ import {
 } from "./physics/core/PhysicsSystem"
 import { PoseHistory } from "./physics/core/PoseHistory"
 import { FrameStats } from "./diagnostics/FrameStats"
-import {
-  Vehicle,
-  type CarTelemetry,
-} from "./physics/vehicle/Vehicle"
+import { Vehicle, type CarTelemetry } from "./physics/vehicle/Vehicle"
 import {
   DEFAULT_MAP_ID,
   listMaps,
@@ -47,6 +44,7 @@ import {
   carProgress,
   type RaceDriver,
   holdInput,
+  ZERO_EDGES,
   makeProfile,
   makeTrafficProfile,
   stripEdges,
@@ -184,6 +182,22 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [started, setStarted] = useState(false)
+  const [freeCam, setFreeCam] = useState(false)
+  const freeCamRef = useRef(false)
+  const [hideUi, setHideUi] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyU" || e.repeat || e.metaKey || e.ctrlKey || e.altKey)
+        return
+      if (!freeCamRef.current) return
+      setHideUi((h) => !h)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+  useEffect(() => {
+    if (!freeCam) setHideUi(false)
+  }, [freeCam])
   const [paused, setPaused] = useState(false)
   const [lockHint, setLockHint] = useState(false)
   const speedLinesRef = useRef<HTMLDivElement | null>(null)
@@ -203,9 +217,7 @@ export default function App() {
       speedLinesOn.current = true
       el.classList.remove("sl-off")
     }
-    el.style.opacity = String(
-      Math.min(1, v) * strength,
-    )
+    el.style.opacity = String(Math.min(1, v) * strength)
   }
   const startedRef = useRef(false)
   const pausedRef = useRef(false)
@@ -233,10 +245,7 @@ export default function App() {
   )
   const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
   timeOfDayRef.current = timeOfDay
-  conditions.weather = effectiveWeather(
-    DEFAULT_WEATHER,
-    timeOfDay,
-  )
+  conditions.weather = effectiveWeather(DEFAULT_WEATHER, timeOfDay)
   conditions.timeOfDay = timeOfDay
   const wmRef = useRef<MapWorld | null>(null)
   const flybyRef = useRef<AirplaneFlyby | null>(null)
@@ -431,12 +440,20 @@ export default function App() {
   const [circuitOpts, setCircuitOpts] = useState<CircuitMenuOptions>(() => {
     try {
       const raw = localStorage.getItem("oversteer_circuit")
-      if (raw) return { ...DEFAULT_CIRCUIT_MENU, ...JSON.parse(raw), seed: randomSeed() }
+      if (raw)
+        return {
+          ...DEFAULT_CIRCUIT_MENU,
+          ...JSON.parse(raw),
+          seed: randomSeed(),
+        }
     } catch {}
     return { ...DEFAULT_CIRCUIT_MENU, seed: randomSeed() }
   })
   const circuitOptsRef = useRef(circuitOpts)
-  const updateCircuitOpts = (patch: Partial<CircuitMenuOptions>, rebuild = true) => {
+  const updateCircuitOpts = (
+    patch: Partial<CircuitMenuOptions>,
+    rebuild = true,
+  ) => {
     const next = { ...circuitOptsRef.current, ...patch }
     circuitOptsRef.current = next
     setCircuitOpts(next)
@@ -715,6 +732,8 @@ export default function App() {
     pausedRef.current = false
     startedRef.current = false
     raceSetupRef.current = null
+    freeCamRef.current = false
+    setFreeCam(false)
     setPaused(false)
     setStarted(false)
     setLockHint(false)
@@ -780,7 +799,10 @@ export default function App() {
         const R = await initPhysics()
         const world = createWorld()
 
-        const map = createMap(mapIdRef.current, circuitOptionsFor(circuitOptsRef.current))
+        const map = createMap(
+          mapIdRef.current,
+          circuitOptionsFor(circuitOptsRef.current),
+        )
         const lin = map.linear as LinearRoad
         const wm = map.world
         wmRef.current = wm
@@ -925,7 +947,10 @@ export default function App() {
             : { s: 0, lateral: 0 }
         const spawned = raceActiveInit || !!netIds
         const spawnP = map.circuit
-          ? placeAt(spawned ? playerSlot.s : 0, spawned ? playerSlot.lateral : 0)
+          ? placeAt(
+              spawned ? playerSlot.s : 0,
+              spawned ? playerSlot.lateral : 0,
+            )
           : null
         const yaw0 = spawnP ? spawnP.yaw : lin.dirYaw(0)
         const nx0 = spawnP ? 0 : Math.cos(lin.yaw(0))
@@ -1023,7 +1048,13 @@ export default function App() {
                 }
               })()
           const yaw = rpl.yaw
-          const rb = createChassisBody(world, rpl.x, 0.72, rpl.z, rivalDef.physics)
+          const rb = createChassisBody(
+            world,
+            rpl.x,
+            0.72,
+            rpl.z,
+            rivalDef.physics,
+          )
           const q = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(0, yaw, 0),
           )
@@ -1206,6 +1237,7 @@ export default function App() {
             cruiseTogglePressed: false,
             toggleTimeOfDayPressed: false,
             toggleHeadlightsPressed: false,
+            toggleFreeCameraPressed: false,
           }
           const allCars = [car, ...rivals.map((r) => r.car)]
           for (let i = 0; i < 120; i++) {
@@ -1325,13 +1357,21 @@ export default function App() {
         scene.add(smoke.points)
         smoke.wetnessAt = (x, z) =>
           Math.max(WEATHER_WETNESS[conditions.weather], wm.puddleAt(x, z))
-        smoke.grassAt = (x, z) => wm.surfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
+        smoke.grassAt = (x, z) =>
+          wm.surfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
         const smokeSpots: THREE.Vector3[] = []
         let smokeAcc = 0
 
         const npcSpotPool: THREE.SpotLight[] = []
         for (let sIdx = 0; sIdx < 4; sIdx++) {
-          const s = new THREE.SpotLight(0xfffaee, 0, 85, Math.PI / 3.0, 0.9, 1.2)
+          const s = new THREE.SpotLight(
+            0xfffaee,
+            0,
+            85,
+            Math.PI / 3.0,
+            0.9,
+            1.2,
+          )
           s.castShadow = false
           s.visible = true
           scene.add(s.target)
@@ -1344,7 +1384,9 @@ export default function App() {
         inputRef.current = input
         let padNoticeTimer: ReturnType<typeof setTimeout> | undefined
         input.onPadChange = (connected, name) => {
-          setPadNotice(connected ? `${name} connected` : "Controller disconnected")
+          setPadNotice(
+            connected ? `${name} connected` : "Controller disconnected",
+          )
           clearTimeout(padNoticeTimer)
           padNoticeTimer = setTimeout(() => setPadNotice(null), 3000)
         }
@@ -1361,12 +1403,7 @@ export default function App() {
         let hadLock = false
 
         const onResize = () => {
-          applyRendererResolution(
-            renderer!,
-            camera,
-            mount,
-            settingsRef.current,
-          )
+          applyRendererResolution(renderer!, camera, mount, settingsRef.current)
         }
         window.addEventListener("resize", onResize)
 
@@ -1424,6 +1461,12 @@ export default function App() {
         let frameStepMs = 0
         let frameSteps = 0
         const camPos = new THREE.Vector3(startX, 3, 8)
+        const freeCamPos = new THREE.Vector3(startX, 3, 8)
+        const freeCamCamPos = new THREE.Vector3(startX, 3, 8)
+        const freeCamLook = new THREE.Vector3(startX, 3, 7)
+        let freeCamYaw = 0
+        let freeCamPitch = 0
+        let freeCamActive = false
         const showDesired = new THREE.Vector3()
         const camLook = new THREE.Vector3()
         const smoothFwd = new THREE.Vector3(0, 0, -1)
@@ -1462,7 +1505,14 @@ export default function App() {
           tryLock()
         }
         const tryLock = () => {
-          if (errorRef.current || nativeActive || !startedRef.current || pausedRef.current || lockWanted) return
+          if (
+            errorRef.current ||
+            nativeActive ||
+            !startedRef.current ||
+            pausedRef.current ||
+            lockWanted
+          )
+            return
           lockWanted = true
           const el = dom as any
           if (!el.requestPointerLock) {
@@ -1502,7 +1552,12 @@ export default function App() {
         }
         const onGesture = (e: Event) => {
           if ((e as KeyboardEvent).key === "Escape") return
-          if (!errorRef.current && startedRef.current && !document.pointerLockElement) tryLock()
+          if (
+            !errorRef.current &&
+            startedRef.current &&
+            !document.pointerLockElement
+          )
+            tryLock()
         }
         document.addEventListener("pointermove", onForceHide)
         document.addEventListener("pointerdown", onGesture)
@@ -1636,6 +1691,25 @@ export default function App() {
           }
           if (pausedRef.current && inp.startPressed) resumeFnRef.current()
           if (inp.toggleCameraPressed) chaseFar = !chaseFar
+          if (!startedRef.current && freeCamActive) {
+            freeCamActive = false
+            freeCamRef.current = false
+            setFreeCam(false)
+          }
+          if (inp.toggleFreeCameraPressed && startedRef.current) {
+            freeCamActive = !freeCamActive
+            freeCamRef.current = freeCamActive
+            setFreeCam(freeCamActive)
+            if (freeCamActive) {
+              freeCamPos.copy(camera.position)
+              freeCamCamPos.copy(camera.position)
+              const dir = new THREE.Vector3()
+              camera.getWorldDirection(dir)
+              freeCamPitch = Math.asin(Math.max(-1, Math.min(1, dir.y)))
+              freeCamYaw = Math.atan2(dir.x, -dir.z)
+              freeCamLook.copy(camera.position).add(dir)
+            }
+          }
           if (inp.toggleTimeOfDayPressed) {
             const cur = timeOfDayRef.current
             const nextIdx =
@@ -1768,12 +1842,12 @@ export default function App() {
                       toggleModePressed: false,
                       toggleLaunchPressed: false,
                       toggleParkPressed: false,
-            toggleTractionPressed: false,
-            toggleStabilityPressed: false,
-            toggleSafetyPressed: false,
-            toggleIgnitionPressed: false,
-            toggleHandbrakePressed: false,
-            toggleAbsPressed: false,
+                      toggleTractionPressed: false,
+                      toggleStabilityPressed: false,
+                      toggleSafetyPressed: false,
+                      toggleIgnitionPressed: false,
+                      toggleHandbrakePressed: false,
+                      toggleAbsPressed: false,
                       resetPressed: false,
                       toggleCameraPressed: false,
                       startPressed: false,
@@ -1786,8 +1860,17 @@ export default function App() {
                 playerFinished && !raceFinished && playerDoneT > 4
               const preGreen = raceActive && !racing && !playerFinished
               car.autoShiftEnabled = !preGreen
-              const playerInp =
-                !playerFinished || postFinishFree ? subInp : holdInput()
+              const playerInp = freeCamActive
+                ? {
+                    throttle: 0,
+                    brake: 0,
+                    steer: 0,
+                    handbrake: false,
+                    ...ZERO_EDGES,
+                  }
+                : !playerFinished || postFinishFree
+                  ? subInp
+                  : holdInput()
               let lockT: { x: number; y: number; z: number } | null = null
               let lockR: { x: number; y: number; z: number; w: number } | null =
                 null
@@ -1886,7 +1969,14 @@ export default function App() {
           }
           syncVisual(visual, car, dt)
           playerIgnOn = t?.ignitionOn ?? true
-          visual.setPower(electricalPower(t?.ignitionOn ?? true, t?.cranking ?? false, t?.crankTime ?? 0, t?.sinceStart ?? 99))
+          visual.setPower(
+            electricalPower(
+              t?.ignitionOn ?? true,
+              t?.cranking ?? false,
+              t?.crankTime ?? 0,
+              t?.sinceStart ?? 99,
+            ),
+          )
           visual.setBrake(Math.max(t?.brake ?? 0, t?.parkingBrake ? 1 : 0))
           if (net && net.roomId) {
             playerProgress = progressOf(body)
@@ -1989,7 +2079,9 @@ export default function App() {
                 })
                 .sort((a, b) => a.d - b.d)
               for (const { i, d } of ranked) {
-                rivals[i].visual.setCastShadow(d < shadowRange2(settingsRef.current))
+                rivals[i].visual.setCastShadow(
+                  d < shadowRange2(settingsRef.current),
+                )
               }
               let upgrades = 0
               for (const { i, d } of ranked) {
@@ -2205,8 +2297,14 @@ export default function App() {
                   _qNpc.set(bquat.x, bquat.y, bquat.z, bquat.w)
                   _vNpcPos.set(bpos.x, bpos.y, bpos.z)
 
-                  _vNpcFront.set(0, -0.07, -2.4).applyQuaternion(_qNpc).add(_vNpcPos)
-                  _vNpcTarget.set(0, -0.27, -30.0).applyQuaternion(_qNpc).add(_vNpcPos)
+                  _vNpcFront
+                    .set(0, -0.07, -2.4)
+                    .applyQuaternion(_qNpc)
+                    .add(_vNpcPos)
+                  _vNpcTarget
+                    .set(0, -0.27, -30.0)
+                    .applyQuaternion(_qNpc)
+                    .add(_vNpcPos)
 
                   spot.position.copy(_vNpcFront)
                   spot.target.position.copy(_vNpcTarget)
@@ -2247,7 +2345,8 @@ export default function App() {
                 setLap({
                   lap: lapsDone + 1,
                   running: lapStartClock !== null,
-                  currentS: lapStartClock === null ? 0 : lapClock - lapStartClock,
+                  currentS:
+                    lapStartClock === null ? 0 : lapClock - lapStartClock,
                   lastS: lastLapT,
                   bestS: bestLapT,
                   progress: prog / L,
@@ -2264,8 +2363,10 @@ export default function App() {
           }
           const kmhNow = Math.abs(car.forwardSpeed) * 3.6
           const fullShadows = (settingsRef.current.shadowQuality ?? 100) >= 100
-          if (!fullShadows && raceActive && kmhNow > 210) wm.setPropShadows(false)
-          else if (fullShadows || !raceActive || kmhNow < 190) wm.setPropShadows(true)
+          if (!fullShadows && raceActive && kmhNow > 210)
+            wm.setPropShadows(false)
+          else if (fullShadows || !raceActive || kmhNow < 190)
+            wm.setPropShadows(true)
 
           if (startedRef.current) {
             const intensity = Math.max(
@@ -2341,24 +2442,51 @@ export default function App() {
               const MAXD = 120
               const mx = Math.max(-MAXD, Math.min(MAXD, e0.lastMovementX))
               const my = Math.max(-MAXD, Math.min(MAXD, e0.lastMovementY))
-              if (mx !== 0 || my !== 0) {
-                camYaw -= mx * 0.0022
-                camPitch = Math.max(-0.5, Math.min(0.5, camPitch + my * 0.0022))
-                lastOrbit = nowS
+              if (freeCamActive) {
+                if (mx !== 0 || my !== 0) {
+                  freeCamYaw += mx * 0.0024
+                  freeCamPitch = Math.max(
+                    -1.45,
+                    Math.min(1.45, freeCamPitch - my * 0.0024),
+                  )
+                }
+                if (input.lookX !== 0 || input.lookY !== 0) {
+                  freeCamYaw += input.lookX * 1.3 * dt
+                  freeCamPitch = Math.max(
+                    -1.45,
+                    Math.min(1.45, freeCamPitch - input.lookY * 0.6 * dt),
+                  )
+                }
+              } else {
+                if (mx !== 0 || my !== 0) {
+                  camYaw -= mx * 0.0022
+                  camPitch = Math.max(
+                    -0.5,
+                    Math.min(0.5, camPitch + my * 0.0022),
+                  )
+                  lastOrbit = nowS
+                }
+                if (input.lookX !== 0 || input.lookY !== 0) {
+                  camYaw -= input.lookX * 2.6 * dt
+                  camPitch = Math.max(
+                    -0.5,
+                    Math.min(0.5, camPitch + input.lookY * 1.2 * dt),
+                  )
+                  lastOrbit = nowS
+                  recentering = false
+                }
+                if (mx !== 0 || my !== 0) recentering = false
+                if (input.lookReset) recentering = true
               }
-              if (input.lookX !== 0 || input.lookY !== 0) {
-                camYaw -= input.lookX * 2.6 * dt
-                camPitch = Math.max(-0.5, Math.min(0.5, camPitch + input.lookY * 1.2 * dt))
-                lastOrbit = nowS
-                recentering = false
-              }
-              if (mx !== 0 || my !== 0) recentering = false
-              if (input.lookReset) recentering = true
             }
             e0.lastMovementX = 0
             e0.lastMovementY = 0
             const rolling = Math.abs(car.forwardSpeed) > 1.0
-            if (!orbiting && ((rolling && nowS - lastOrbit > 2.5) || recentering)) {
+            if (
+              !freeCamActive &&
+              !orbiting &&
+              ((rolling && nowS - lastOrbit > 2.5) || recentering)
+            ) {
               const ck = 1 - Math.exp(-dt * (recentering ? 4.5 : 2.2))
               camYaw +=
                 (Math.round(camYaw / (Math.PI * 2)) * Math.PI * 2 - camYaw) * ck
@@ -2367,75 +2495,107 @@ export default function App() {
               if (Math.abs(camPitch) < 0.002) camPitch = 0
               if (camYaw === 0 && camPitch === 0) recentering = false
             }
-            const orbitQ = new THREE.Quaternion().setFromAxisAngle(
-              new THREE.Vector3(0, 1, 0),
-              camYaw,
-            )
-            const viewDir = smoothFwd.clone().applyQuaternion(orbitQ)
-            viewDir.y = 0
-            viewDir.normalize()
-            const dist = chaseFar ? 5.5 : 4.4
-            const height =
-              (chaseFar ? 1.08 : 0.92) + camPitch * 5 + camHeightBoost
-            const desired = carPos
-              .clone()
-              .addScaledVector(viewDir, -dist)
-              .add(new THREE.Vector3(0, height, 0))
-            desired.y = Math.max(desired.y, carPos.y - 0.9, 0.3)
-            if (raceActive && headsUp > 0) {
-              desired
-                .copy(carPos)
-                .addScaledVector(smoothFwd, 13)
-                .add(new THREE.Vector3(7.5, 4.2, 0))
-              camLook
-                .copy(carPos)
-                .addScaledVector(smoothFwd, -9)
-                .add(new THREE.Vector3(0, 1.2, 0))
-              camera.position.copy(desired)
-              camera.lookAt(camLook)
-            } else {
-              camPos.copy(desired)
-
-              const SF = playerDef.physics.assists.speedFeel
-              const vAbs = Math.abs(car.forwardSpeed) * 3.6
-              const sfFov = Math.min(1, vAbs / SF.fovAtMaxSpeedKmh)
-              const offAxis = clamp(Math.abs(camYaw) / (Math.PI / 2), 0, 1)
-              const fovCeil =
-                SF.fovBase + (SF.fovMax - SF.fovBase) * (1 - offAxis * 0.55)
-              const targetFov = SF.fovBase + (fovCeil - SF.fovBase) * sfFov
-              if (Math.abs(camera.fov - targetFov) > 0.02) {
-                camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 3.5)
+            if (freeCamActive) {
+              const cosP = Math.cos(freeCamPitch)
+              const sinP = Math.sin(freeCamPitch)
+              const cosY = Math.cos(freeCamYaw)
+              const sinY = Math.sin(freeCamYaw)
+              const fwd = new THREE.Vector3(sinY * cosP, sinP, -cosY * cosP)
+              const right = new THREE.Vector3(cosY, 0, sinY)
+              const sprint =
+                input.isDown("ShiftLeft") || input.isDown("ShiftRight")
+              const speed = (sprint ? 12 : 3) * dt
+              if (input.isDown("KeyW")) freeCamPos.addScaledVector(fwd, speed)
+              if (input.isDown("KeyS")) freeCamPos.addScaledVector(fwd, -speed)
+              if (input.isDown("KeyA"))
+                freeCamPos.addScaledVector(right, -speed)
+              if (input.isDown("KeyD")) freeCamPos.addScaledVector(right, speed)
+              if (input.isDown("KeyQ")) freeCamPos.y += speed
+              if (input.isDown("KeyE")) freeCamPos.y -= speed
+              if (freeCamPos.y < 0.5) freeCamPos.y = 0.5
+              const look = freeCamPos.clone().add(fwd)
+              const k = 1 - Math.exp(-dt * 8)
+              freeCamCamPos.lerp(freeCamPos, k)
+              freeCamLook.lerp(look, k)
+              camera.position.copy(freeCamCamPos)
+              camera.lookAt(freeCamLook)
+              if (Math.abs(camera.fov - 75) > 0.05) {
+                camera.fov += (75 - camera.fov) * Math.min(1, dt * 4)
                 camera.updateProjectionMatrix()
               }
-              setSpeedLines(
-                Math.min(
+              setSpeedLines(0, 0)
+            } else {
+              const orbitQ = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 1, 0),
+                camYaw,
+              )
+              const viewDir = smoothFwd.clone().applyQuaternion(orbitQ)
+              viewDir.y = 0
+              viewDir.normalize()
+              const dist = chaseFar ? 5.5 : 4.4
+              const height =
+                (chaseFar ? 1.08 : 0.92) + camPitch * 5 + camHeightBoost
+              const desired = carPos
+                .clone()
+                .addScaledVector(viewDir, -dist)
+                .add(new THREE.Vector3(0, height, 0))
+              desired.y = Math.max(desired.y, carPos.y - 0.9, 0.3)
+              if (raceActive && headsUp > 0) {
+                desired
+                  .copy(carPos)
+                  .addScaledVector(smoothFwd, 13)
+                  .add(new THREE.Vector3(7.5, 4.2, 0))
+                camLook
+                  .copy(carPos)
+                  .addScaledVector(smoothFwd, -9)
+                  .add(new THREE.Vector3(0, 1.2, 0))
+                camera.position.copy(desired)
+                camera.lookAt(camLook)
+              } else {
+                camPos.copy(desired)
+
+                const SF = playerDef.physics.assists.speedFeel
+                const vAbs = Math.abs(car.forwardSpeed) * 3.6
+                const sfFov = Math.min(1, vAbs / SF.fovAtMaxSpeedKmh)
+                const offAxis = clamp(Math.abs(camYaw) / (Math.PI / 2), 0, 1)
+                const fovCeil =
+                  SF.fovBase + (SF.fovMax - SF.fovBase) * (1 - offAxis * 0.55)
+                const targetFov = SF.fovBase + (fovCeil - SF.fovBase) * sfFov
+                if (Math.abs(camera.fov - targetFov) > 0.02) {
+                  camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 3.5)
+                  camera.updateProjectionMatrix()
+                }
+                setSpeedLines(
+                  Math.min(
+                    1,
+                    Math.max(
+                      0,
+                      (vAbs - SF.linesFromKmh) /
+                        (SF.fovAtMaxSpeedKmh - SF.linesFromKmh),
+                    ),
+                  ),
+                  SF.linesStrength,
+                )
+
+                camLook.copy(carPos)
+                camera.position.copy(camPos)
+                camera.lookAt(camLook)
+
+                const sfShake = Math.min(
                   1,
                   Math.max(
                     0,
-                    (vAbs - SF.linesFromKmh) /
-                      (SF.fovAtMaxSpeedKmh - SF.linesFromKmh),
+                    (vAbs - SF.shakeFromKmh) /
+                      (SF.fovAtMaxSpeedKmh - SF.shakeFromKmh),
                   ),
-                ),
-                SF.linesStrength,
-              )
-
-              camLook.copy(carPos)
-              camera.position.copy(camPos)
-              camera.lookAt(camLook)
-
-              const sfShake = Math.min(
-                1,
-                Math.max(
-                  0,
-                  (vAbs - SF.shakeFromKmh) /
-                    (SF.fovAtMaxSpeedKmh - SF.shakeFromKmh),
-                ),
-              )
-              if (sfShake > 0.001) {
-                const t2 = nowS * 34
-                camera.rotation.z += Math.sin(t2 * 1.7) * SF.shakeAmp * sfShake
-                camera.position.x += Math.sin(t2 * 2.3) * 0.014 * sfShake
-                camera.position.y += Math.sin(t2 * 3.1) * 0.012 * sfShake
+                )
+                if (sfShake > 0.001) {
+                  const t2 = nowS * 34
+                  camera.rotation.z +=
+                    Math.sin(t2 * 1.7) * SF.shakeAmp * sfShake
+                  camera.position.x += Math.sin(t2 * 2.3) * 0.014 * sfShake
+                  camera.position.y += Math.sin(t2 * 3.1) * 0.012 * sfShake
+                }
               }
             }
           }
@@ -2449,7 +2609,9 @@ export default function App() {
           )
 
           const renderT0 = performance.now()
-          wm.renderReflections?.(renderer!, scene, camera, (on) => rain.setReflectionPass(on))
+          wm.renderReflections?.(renderer!, scene, camera, (on) =>
+            rain.setReflectionPass(on),
+          )
           renderer!.render(scene, camera)
           const renderT1 = performance.now()
           cpuMax = Math.max(cpuMax * 0.985, renderT0 - loopT0)
@@ -2576,12 +2738,18 @@ export default function App() {
 
   return (
     <div
-      className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""}`}
+      className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""} ${hideUi && freeCam ? "[&>*:not([data-game-mount])]:!hidden" : ""}`}
     >
-      <div ref={mountRef} className="absolute inset-0" />
+      <div ref={mountRef} data-game-mount className="absolute inset-0" />
       {}
       <SpeedLines ref={speedLinesRef} />
       {showNetDiag && <NetDiagPanel />}
+      {freeCam && started && !paused && !race.finished && (
+        <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/70 px-4 py-1.5 text-[12px] tracking-wide text-white backdrop-blur">
+          FREE CAMERA · WASD move · mouse look · Q/E up/down · Shift sprint · U
+          hide UI · F exit
+        </div>
+      )}
       {dashVisible && (
         <Screen
           open={dashOn}

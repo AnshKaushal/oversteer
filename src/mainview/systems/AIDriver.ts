@@ -26,6 +26,7 @@ export const ZERO_EDGES = {
   cruiseTogglePressed: false,
   toggleTimeOfDayPressed: false,
   toggleHeadlightsPressed: false,
+  toggleFreeCameraPressed: false,
 } as const
 
 const _fwd = new THREE.Vector3()

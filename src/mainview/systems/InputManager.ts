@@ -35,6 +35,7 @@ export interface DriveInput {
   cruiseTogglePressed: boolean
   toggleTimeOfDayPressed: boolean
   toggleHeadlightsPressed: boolean
+  toggleFreeCameraPressed: boolean
 }
 
 const IGNITION_HOLD_MS = 450
@@ -130,6 +131,7 @@ export class InputManager {
       c === "KeyN" ||
       c === "KeyG" ||
       c === "KeyB" ||
+      c === "KeyF" ||
       c === "BracketLeft" ||
       c === "BracketRight" ||
       c === "Semicolon" ||
@@ -166,6 +168,10 @@ export class InputManager {
       [out.toggleAbsPressed, "KeyB"],
     ]
     for (const [on, code] of edges) if (on) this.edgeQueue.add(code)
+  }
+
+  isDown(code: string): boolean {
+    return this.keys.has(code)
   }
 
   clear() {
@@ -288,6 +294,7 @@ export class InputManager {
       cruiseTogglePressed: edge("Semicolon"),
       toggleTimeOfDayPressed: edge("KeyT"),
       toggleHeadlightsPressed: edge("KeyH"),
+      toggleFreeCameraPressed: edge("KeyF"),
     }
 
     this.lookReset = edge(LOOK_RESET)
