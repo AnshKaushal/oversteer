@@ -104,7 +104,7 @@ export function getResolutionPresets(): ResolutionPreset[] {
 export type FogLevel = "off" | "light" | "normal" | "heavy"
 export const FOG_LEVELS: FogLevel[] = ["off", "light", "normal", "heavy"]
 export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
-  off: 0.75,
+  off: undefined,
   light: 1,
   normal: 2,
   heavy: 3,
@@ -122,6 +122,7 @@ export interface AppSettings {
   streetLights?: boolean
   streetLightsOn?: boolean
   vegetation?: number
+  drawDistance?: number
   displayId?: number
 }
 
@@ -137,6 +138,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   streetLights: true,
   streetLightsOn: true,
   vegetation: 100,
+  drawDistance: 100,
 }
 
 const SETTINGS_KEY = "oversteer_settings"

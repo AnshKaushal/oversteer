@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { createSunDisc, setSunBlur, SUN_SPRITE_SCALE } from "../../systems/sunDisc"
 import {
   type TimeOfDayMode,
   type TimeOfDayPreset,
@@ -12,13 +13,14 @@ const LIGHTNING_TINT = new THREE.Color(0xe4ecff)
 export class SkyRig {
   readonly sun = new THREE.DirectionalLight(0xfffaee, 2.2)
   readonly hemi = new THREE.HemisphereLight(0xbdd7ff, 0x3d5a2a, 0.9)
-  private sunVisual!: THREE.Mesh
+  private sunVisual!: THREE.Sprite
   private stars!: THREE.Points
   private dome!: SkyDome
   private scene: THREE.Scene | null = null
   private mode: TimeOfDayMode = "day"
   private fogEnabled = true
   private fogIntensity = 1
+  private drawDistance = 5000
   private readonly sunOffset = new THREE.Vector3(120, 180, 60)
   private shadowTexel = 0.1
   private readonly right = new THREE.Vector3()
@@ -46,15 +48,7 @@ export class SkyRig {
     sun.shadow.camera.far = 500
     this.group.add(sun, sun.target, this.hemi)
 
-    this.sunVisual = new THREE.Mesh(
-      new THREE.SphereGeometry(14, 24, 24),
-      new THREE.MeshBasicMaterial({
-        color: 0xfffaee,
-        fog: false,
-        transparent: true,
-        depthWrite: false,
-      }),
-    )
+    this.sunVisual = createSunDisc(0xfffaee)
     this.sunVisual.frustumCulled = false
     this.sunVisual.renderOrder = 1
     this.group.add(this.sunVisual)
@@ -73,11 +67,20 @@ export class SkyRig {
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
+    const col = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      const b = Math.random() < 0.15 ? 1 : 0.45 + Math.random() * 0.4
+      col[i * 3] = b
+      col[i * 3 + 1] = b
+      col[i * 3 + 2] = Math.min(1, b * 1.05)
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
     this.stars = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
         color: 0xffffff,
-        size: 2.6,
+        vertexColors: true,
+        size: 1.7,
         transparent: true,
         opacity: 0,
         sizeAttenuation: false,
@@ -112,13 +115,14 @@ export class SkyRig {
 
   private applySunHaze() {
     const h = this.haze()
-    ;(this.sunVisual.material as THREE.MeshBasicMaterial).opacity = 1 - 0.9 * h * h
+    ;(this.sunVisual.material as THREE.SpriteMaterial).opacity = 1 - 0.6 * h * h
+    setSunBlur(this.sunVisual, h)
   }
 
   private applyStars() {
     const m = this.mode
     const a =
-      (m === "night" || m === "sunrise" || m === "evening" ? 0.6 : 0) *
+      (m === "night" || m === "sunrise" || m === "evening" ? 0.95 : 0) *
       (1 - this.haze())
     this.stars.visible = a > 0
     ;(this.stars.material as THREE.PointsMaterial).opacity = a
@@ -135,20 +139,31 @@ export class SkyRig {
     this.applySunHaze()
     if (!this.fogEnabled) {
       fog.color.setHex(p.skyColor)
-      fog.near = 1300
-      fog.far = 2350
+      fog.near = this.drawDistance * 0.97
+      fog.far = this.drawDistance
       this.syncDome(fog.color, fog.color)
       return
     }
     fog.color.setHex(p.fogColor)
     fog.near = p.fogNear / this.fogIntensity
     fog.far = p.fogFar / this.fogIntensity
+    this.clampDrawDistance(fog)
     this.syncDome(this.hazedSky(new THREE.Color(), p), fog.color)
   }
 
   get fogFar(): number {
     const fog = this.scene?.fog
     return fog instanceof THREE.Fog ? fog.far : 900
+  }
+
+  setDrawDistance(percent: number) {
+    this.drawDistance = 5000 * Math.min(100, Math.max(20, percent)) / 100
+    this.applyFogRange()
+  }
+
+  private clampDrawDistance(fog: THREE.Fog) {
+    fog.far = Math.min(fog.far, this.drawDistance)
+    fog.near = Math.min(fog.near, this.drawDistance * 0.35)
   }
 
   setFog(enabled: boolean, intensity: number) {
@@ -167,15 +182,15 @@ export class SkyRig {
     this.hemi.color.setHex(p.hemiSkyColor)
     this.hemi.groundColor.setHex(p.hemiGroundColor)
     this.hemi.intensity = p.hemiIntensity
-    const mat = this.sunVisual.material as THREE.MeshBasicMaterial
+    const mat = this.sunVisual.material as THREE.SpriteMaterial
     this.sunVisual.visible = p.rain === 0
     const k = SKY_DISK_DISTANCE / this.sunOffset.length()
     if (mode === "night") {
       mat.color.setHex(0xdde6ff)
-      this.sunVisual.scale.setScalar(0.55 * k)
+      this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * 0.55 * k)
     } else {
       mat.color.setHex(p.sunColor)
-      this.sunVisual.scale.setScalar(k)
+      this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * k)
     }
     if (this.scene) {
       if (this.scene.background instanceof THREE.Color) {
@@ -255,6 +270,6 @@ export class SkyRig {
       carPos.z + this.sunOffset.z * k,
     )
     this.dome.follow(carPos.x, carPos.z)
-    if (this.stars.visible) this.stars.position.set(carPos.x, 0, carPos.z)
+    if (this.stars.visible) this.stars.position.set(carPos.x, carPos.y, carPos.z)
   }
 }

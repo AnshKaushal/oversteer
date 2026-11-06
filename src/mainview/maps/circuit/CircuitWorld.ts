@@ -163,6 +163,9 @@ export class CircuitWorld implements MapWorld {
   setFog(enabled: boolean, intensity: number) {
     this.sky.setFog(enabled, intensity)
   }
+  setDrawDistance(percent: number) {
+    this.sky.setDrawDistance(percent)
+  }
   setLightning(f: number) {
     this.sky.setLightning(f)
   }
@@ -539,7 +542,7 @@ export class CircuitWorld implements MapWorld {
       color: 0x44602f,
       roughness: 1,
     })
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), gMat)
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), gMat)
     this.ground.rotation.x = -Math.PI / 2
     this.ground.position.y = -0.08
     this.ground.receiveShadow = true

@@ -12,6 +12,10 @@ import { f1Car } from "./f1-car"
 import { cheetah84 } from "./cheetah-84"
 import { dodgeCharger69 } from "./dodge-charger-69"
 import { mercedesSl65 } from "./mercedes-sl65-amg"
+import { bugattiChironPurSport } from "./bugatti-chiron-pur-sport"
+import { mitsubishiLancerEvo6 } from "./mitsubishi-lancer-evo-6"
+import { nissan350z } from "./nissan-350z"
+import { nissanSkylineR32GtR } from "./nissan-skyline-r32-gt-r"
 
 const ALL_CARS: CarSpec[] = [
   bmwM3,
@@ -26,6 +30,10 @@ const ALL_CARS: CarSpec[] = [
   cheetah84,
   dodgeCharger69,
   mercedesSl65,
+  bugattiChironPurSport,
+  mitsubishiLancerEvo6,
+  nissan350z,
+  nissanSkylineR32GtR,
 ]
 
 export const CARS: CarSpec[] = ALL_CARS.filter((car) => {

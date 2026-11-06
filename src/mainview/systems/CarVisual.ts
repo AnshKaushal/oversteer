@@ -28,6 +28,7 @@ export interface CarVisualOptions {
   paintTexture?: PaintTextureRule
   tailLampMeshes?: string[]
   isPlayer?: boolean
+  headBeams?: boolean
 }
 
 export const MIN_PIVOT_FRAC = 0.025
@@ -313,7 +314,7 @@ export class CarVisual {
         (a.left ? 0 : 1) -
         ((b.front ? 0 : 2) + (b.left ? 0 : 1)),
     )
-    this.setupHeadlights(opts?.isPlayer ?? false)
+    this.setupHeadlights(opts?.isPlayer ?? false, opts?.headBeams ?? false)
     this.mergeStatic()
     this.setHeadlights(this.headlightsWanted)
   }
@@ -502,7 +503,7 @@ export class CarVisual {
     for (const l of this.brakeLights) applyBrakeHeat(l, want, this.headlightsOn, this.power)
   }
 
-  setupHeadlights(isPlayer: boolean = false) {
+  setupHeadlights(isPlayer: boolean = false, headBeams: boolean = false) {
     if (this.headlightsConfigured) {
       if (isPlayer && !this.isPlayerCar) {
         this.isPlayerCar = true
@@ -805,7 +806,7 @@ export class CarVisual {
       })
     }
 
-    if (isPlayer) {
+    if (isPlayer || headBeams) {
       const leftSpot = new THREE.SpotLight(
         0xfff0cc,
         this.headlightsOn ? 260 : 0,
@@ -815,7 +816,7 @@ export class CarVisual {
         1.0,
       )
       leftSpot.position.set(-headlightSpacing, headlightY, frontZ - 0.15)
-      leftSpot.castShadow = true
+      leftSpot.castShadow = isPlayer
       leftSpot.shadow.mapSize.set(1024, 1024)
       leftSpot.shadow.radius = 3
       leftSpot.shadow.camera.near = 0.4
@@ -834,7 +835,7 @@ export class CarVisual {
         1.0,
       )
       rightSpot.position.set(headlightSpacing, headlightY, frontZ - 0.15)
-      rightSpot.castShadow = true
+      rightSpot.castShadow = isPlayer
       rightSpot.shadow.mapSize.set(1024, 1024)
       rightSpot.shadow.radius = 3
       rightSpot.shadow.camera.near = 0.4

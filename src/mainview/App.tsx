@@ -171,6 +171,7 @@ function shadowRange2(s: AppSettings): number {
 function applyFog(wm: MapWorld, s: AppSettings) {
   wm.setShadowQuality(s.shadowQuality ?? 100)
   wm.setVegetation(s.vegetation ?? 100)
+  wm.setDrawDistance(s.drawDistance ?? 100)
   wm.setStreetLights(s.streetLights !== false, s.streetLightsOn !== false)
   const k = FOG_INTENSITY[s.fog ?? "normal"]
   wm.setFog(k !== undefined, k ?? 1)
@@ -790,7 +791,7 @@ export default function App() {
           68,
           mount.clientWidth / mount.clientHeight,
           0.1,
-          2500,
+          5200,
         )
         cameraRef.current = camera
 
@@ -1083,6 +1084,7 @@ export default function App() {
               paintMatch: rivalDef.paintMatch,
               tailLampMeshes: rivalDef.tailLampMeshes,
               paintTexture: rivalDef.paintTexture,
+              headBeams: true,
             })
           } catch (e) {
             console.warn("rival model failed", e)
@@ -1355,12 +1357,14 @@ export default function App() {
 
         const smoke = new TireSmoke()
         scene.add(smoke.points)
+        flyby?.setSmoke(smoke)
         smoke.wetnessAt = (x, z) =>
           Math.max(WEATHER_WETNESS[conditions.weather], wm.puddleAt(x, z))
         smoke.grassAt = (x, z) =>
           wm.surfaceAt(x, z) === "grass" && wm.puddleAt(x, z) < 0.3
         const smokeSpots: THREE.Vector3[] = []
         let smokeAcc = 0
+        let smokeHeat = 0
 
         const npcSpotPool: THREE.SpotLight[] = []
         for (let sIdx = 0; sIdx < 4; sIdx++) {
@@ -2374,21 +2378,29 @@ export default function App() {
               car.drifting ? 0.55 : 0,
               car.launching ? 0.7 : 0,
             )
-            if (intensity > 0.28) {
+            const slipping = intensity > 0.28
+            smokeHeat = slipping
+              ? Math.min(1, smokeHeat + dt / 1.4)
+              : Math.max(0, smokeHeat - dt / 0.7)
+            const heat = smokeHeat * smokeHeat * (3 - 2 * smokeHeat)
+            if (slipping && heat > 0.02) {
+              const smokeStrength = intensity * heat
               visual.wheelContactPositions(car.drifting, smokeSpots)
               if (smokeSpots.length === 0) {
                 smokeAcc = 0
               } else {
-                smokeAcc += dt * intensity * 90
+                smokeAcc += dt * smokeStrength * 90
                 while (smokeAcc >= 1) {
                   smokeAcc -= 1
                   smoke.spawn(
                     smokeSpots[(Math.random() * smokeSpots.length) | 0],
-                    Math.min(1, intensity),
+                    Math.min(1, smokeStrength),
                   )
                 }
               }
             }
+          } else {
+            smokeHeat = 0
           }
           smoke.update(dt)
 
@@ -2540,6 +2552,10 @@ export default function App() {
                 .addScaledVector(viewDir, -dist)
                 .add(new THREE.Vector3(0, height, 0))
               desired.y = Math.max(desired.y, carPos.y - 0.9, 0.3)
+              const surfaceY = wm.terrainHeightAt(desired.x, desired.z) + 0.6
+              if (surfaceY > desired.y) {
+                desired.y = Math.min(surfaceY, carPos.y + 2.5)
+              }
               if (raceActive && headsUp > 0) {
                 desired
                   .copy(carPos)

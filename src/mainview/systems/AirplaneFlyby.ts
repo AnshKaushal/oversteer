@@ -11,6 +11,7 @@ import {
   warmAirportTextures,
 } from "./Airport"
 import { warmStructureTextures } from "./AirportStructures"
+import type { TireSmoke } from "./TireSmoke"
 import { makeGlowTexture } from "./GlowTexture"
 import { type TimeOfDayMode } from "../constants/timeOfDay"
 
@@ -97,6 +98,16 @@ export const AIRCRAFT: AircraftSpec[] = [
     prop: "merged",
     gear: false,
   },
+  {
+    file: "boeing_787_dreamliner.glb",
+    span: 60,
+    spanAxis: "x",
+    yaw: 0,
+    speed: 1.35,
+    modes: ["takeoff", "landing", "cruise"],
+    prop: "none",
+    gear: false,
+  },
 ]
 
 export interface PropDisc {
@@ -153,6 +164,9 @@ interface Profile {
 }
 
 const LANDING_TOUCH_D = 900
+const TOUCH_SMOKE_LEN = 260
+const TOUCH_SMOKE_RATE = 160
+const TOUCH_SMOKE_BURST = 40
 const LANDING_HILL_MARGIN = 4
 const LANDING_SLOPE = 0.07
 const LANDING_FLARE = 160
@@ -1196,6 +1210,7 @@ export class AirplaneFlyby {
     ac.gear.scale.set(1, Math.max(0.01, down), 1)
     const spin = (f.speed / 0.6) * dt
     for (const w of ac.wheels) w.rotation.x += spin
+    if (f.mode === "landing") this.touchdownSmoke(ac, rolled, dt)
 
     this.updateShadow(st, ac.span, carX, carS)
 
@@ -1223,6 +1238,43 @@ export class AirplaneFlyby {
       if (f.stopped >= LANDING_DWELL + FADE_TIME) this.endFlight()
     } else if (f.traveled >= f.path.length + exitLen(f.mode)) {
       this.endFlight()
+    }
+  }
+
+  private smoke: TireSmoke | null = null
+  private lastRolled = -1e9
+  private smokeAcc = 0
+  private readonly wheelPos = new THREE.Vector3()
+
+  /** Lets landing aircraft kick up tyre smoke at touchdown. */
+  setSmoke(smoke: TireSmoke) {
+    this.smoke = smoke
+  }
+
+  private touchdownSmoke(ac: LoadedAircraft, rolled: number, dt: number) {
+    const prev = this.lastRolled
+    this.lastRolled = rolled
+    const smoke = this.smoke
+    if (!smoke || rolled < 0 || rolled > TOUCH_SMOKE_LEN) return
+    const fade = 1 - rolled / TOUCH_SMOKE_LEN
+    this.smokeAcc += dt * TOUCH_SMOKE_RATE * fade
+    const burst = prev < 0 ? TOUCH_SMOKE_BURST : 0
+    const main = ac.wheels.filter((w) => w.position.z < 0)
+    if (main.length === 0) return
+    let n = burst
+    while (this.smokeAcc >= 1) {
+      this.smokeAcc -= 1
+      n++
+    }
+    for (let i = 0; i < n; i++) {
+      const w = i < burst ? main[i % main.length] : main[(Math.random() * main.length) | 0]
+      w.updateWorldMatrix(true, false)
+      w.getWorldPosition(this.wheelPos)
+      const r = (w.geometry as THREE.CylinderGeometry).parameters?.radiusTop ?? 0.5
+      this.wheelPos.y -= r * 0.9
+      this.wheelPos.x += (Math.random() - 0.5) * r
+      this.wheelPos.z += (Math.random() - 0.5) * r
+      smoke.spawn(this.wheelPos, Math.min(1, 0.7 + 0.3 * fade))
     }
   }
 

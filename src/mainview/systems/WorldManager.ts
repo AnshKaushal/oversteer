@@ -5,6 +5,7 @@ import { StreetLights } from "./StreetLights"
 import type { SurfaceId } from "../data/surfaces"
 import { registerSurface } from "../physics/core/Surfaces"
 import * as THREE from "three"
+import { createSunDisc, setSunBlur, SUN_SPRITE_SCALE } from "./sunDisc"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
@@ -246,7 +247,7 @@ export class WorldManager {
   private fogIntensity = 1
   private sunLight: THREE.DirectionalLight | null = null
   private hemiLight: THREE.HemisphereLight | null = null
-  private sunVisual: THREE.Mesh | null = null
+  private sunVisual: THREE.Sprite | null = null
   private skyDome: SkyDome | null = null
   private sunOffset = new THREE.Vector3(120, 180, 60)
   private sceneRef: THREE.Scene | null = null
@@ -443,6 +444,18 @@ export class WorldManager {
     this.streetLights?.setLit(power && this.timeOfDay !== "day")
   }
 
+  private drawDistance = 5000
+
+  setDrawDistance(percent: number) {
+    this.drawDistance = 5000 * Math.min(100, Math.max(20, percent)) / 100
+    this.applyFogRange()
+  }
+
+  private clampDrawDistance(fog: THREE.Fog) {
+    fog.far = Math.min(fog.far, this.drawDistance)
+    fog.near = Math.min(fog.near, this.drawDistance * 0.35)
+  }
+
   setFog(enabled: boolean, intensity: number) {
     this.fogEnabled = enabled
     this.fogIntensity = Math.max(0.1, intensity)
@@ -477,7 +490,7 @@ export class WorldManager {
     if (!sp) return
     const m = this.timeOfDay
     const haze = this.fogEnabled ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7)) : 0
-    const a = (m === "night" ? 0.6 : m === "sunrise" || m === "evening" ? 0.6 : 0) * (1 - haze)
+    const a = (m === "night" ? 0.95 : m === "sunrise" || m === "evening" ? 0.95 : 0) * (1 - haze)
     sp.visible = a > 0
     const smat = sp.material as THREE.PointsMaterial
     smat.opacity = a
@@ -492,18 +505,20 @@ export class WorldManager {
     this.applyStars()
     if (this.sunVisual) {
       const haze = this.fogEnabled ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7)) : 0
-      ;(this.sunVisual.material as THREE.MeshBasicMaterial).opacity = 1 - 0.9 * haze * haze
+      ;(this.sunVisual.material as THREE.SpriteMaterial).opacity = 1 - 0.6 * haze * haze
+      setSunBlur(this.sunVisual, haze)
     }
     if (!this.fogEnabled) {
       fog.color.setHex(preset.skyColor)
-      fog.near = 1300
-      fog.far = 2350
+      fog.near = this.drawDistance * 0.97
+      fog.far = this.drawDistance
       this.syncDome()
       return
     }
     fog.color.setHex(preset.fogColor)
     fog.near = preset.fogNear / this.fogIntensity
     fog.far = preset.fogFar / this.fogIntensity
+    this.clampDrawDistance(fog)
     this.syncDome()
   }
 
@@ -534,15 +549,15 @@ export class WorldManager {
     }
 
     if (this.sunVisual) {
-      const mat = this.sunVisual.material as THREE.MeshBasicMaterial
+      const mat = this.sunVisual.material as THREE.SpriteMaterial
       this.sunVisual.visible = preset.rain === 0
       const k = SKY_DISK_DISTANCE / this.sunOffset.length()
       if (mode === "night") {
         mat.color.setHex(0xdde6ff)
-        this.sunVisual.scale.setScalar(0.55 * k)
+        this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * 0.55 * k)
       } else {
         mat.color.setHex(preset.sunColor)
-        this.sunVisual.scale.setScalar(k)
+        this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * k)
       }
     }
 
@@ -632,8 +647,8 @@ export class WorldManager {
   private hillRay = new THREE.Raycaster()
   private get segRange() {
     const fog = this.sceneRef?.fog
-    if (!this.fogEnabled || !(fog instanceof THREE.Fog)) return 18
-    return Math.min(18, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
+    if (!(fog instanceof THREE.Fog)) return 18
+    return Math.min(100, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
   }
   private readonly ROAD_RIB = RIB_DIV
   private loader = new GLTFLoader()
@@ -676,14 +691,7 @@ export class WorldManager {
     this.hemiLight = hemi
     ;(this.group as any)._sun = sun
 
-    const sunGeo = new THREE.SphereGeometry(14, 24, 24)
-    const sunMat = new THREE.MeshBasicMaterial({
-      color: W.environment.sunColor,
-      fog: false,
-      transparent: true,
-      depthWrite: false,
-    })
-    const sunVisual = new THREE.Mesh(sunGeo, sunMat)
+    const sunVisual = createSunDisc(W.environment.sunColor)
     sunVisual.frustumCulled = false
     sunVisual.renderOrder = 1
     this.group.add(sunVisual)
@@ -703,9 +711,18 @@ export class WorldManager {
       starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
     }
     starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3))
+    const starCol = new Float32Array(starCount * 3)
+    for (let i = 0; i < starCount; i++) {
+      const b = Math.random() < 0.15 ? 1 : 0.45 + Math.random() * 0.4
+      starCol[i * 3] = b
+      starCol[i * 3 + 1] = b
+      starCol[i * 3 + 2] = Math.min(1, b * 1.05)
+    }
+    starGeo.setAttribute("color", new THREE.BufferAttribute(starCol, 3))
     const starMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 2.6,
+      vertexColors: true,
+      size: 1.7,
       transparent: true,
       opacity: 0,
       sizeAttenuation: false,
@@ -717,7 +734,7 @@ export class WorldManager {
     this.starsPoints.visible = false
     this.group.add(this.starsPoints)
 
-    const gGeo = new THREE.PlaneGeometry(6000, 6000, 1, 1)
+    const gGeo = new THREE.PlaneGeometry(12000, 12000, 1, 1)
     const gMat = new THREE.MeshStandardMaterial({
       color: 0x44602f,
       roughness: 1,
@@ -1541,7 +1558,7 @@ export class WorldManager {
     }
     this.skyDome?.follow(carPos.x, carPos.z)
     if (this.starsPoints && this.starsPoints.visible) {
-      this.starsPoints.position.set(carPos.x, 0, carPos.z)
+      this.starsPoints.position.set(carPos.x, carPos.y, carPos.z)
     }
     const carSeg = Math.floor(carS / this.segLen)
     this.ensureSegs(

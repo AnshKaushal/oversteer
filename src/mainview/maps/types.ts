@@ -48,6 +48,7 @@ export interface MapWorld {
   setVegetation(percent: number): void
   setStreetLights(show: boolean, power: boolean): void
   setFog(enabled: boolean, intensity: number): void
+  setDrawDistance(percent: number): void
   setLightning(f: number): void
   setClearZones(zones: ClearZone[]): void
   renderReflections?(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, around?: (on: boolean) => void): void
