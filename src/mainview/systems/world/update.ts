@@ -77,17 +77,16 @@ export function update(
     const r = hillResidue(i)
     const seg = r + HILL_PERIOD * Math.round((carSeg - r) / HILL_PERIOD)
     if (seg !== h.seg) this.placeHill(h, seg)
-    const f = fadeOut(
-      Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z),
-      800,
-      1050,
+    const dist = Math.hypot(
+      h.mesh.position.x - carPos.x,
+      h.mesh.position.z - carPos.z,
     )
-    h.mesh.visible =
-      f > 0.01 &&
-      this.withinFog(
-        Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z) -
-          h.radius,
-      )
+    // With fog on, the fog itself hides a hill until it is in range, so it
+    // appears at full size instead of visibly growing out of the ground.
+    // Only scale it in when there is no fog to hide behind.
+    const fogged = this.fogEnabled && this.sceneRef?.fog instanceof THREE.Fog
+    const f = fogged ? 1 : fadeOut(dist, 800, 1050)
+    h.mesh.visible = f > 0.01 && this.withinFog(dist - h.radius)
     const sc = Math.max(f, 0.01)
     if (h.mesh.scale.x !== sc) h.mesh.scale.setScalar(sc)
   }
