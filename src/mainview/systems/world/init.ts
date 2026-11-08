@@ -13,7 +13,12 @@ import { createSunDisc } from "../sunDisc"
 import { WORLD_CONFIG } from "../../constants/world"
 import { SkyDome } from "../SkyDome"
 import { roadCenterX } from "../../maps/highway/road"
-import { HILL_PERIOD, hillResidue } from "../world/constants"
+import {
+  HILL_PERIOD,
+  hillResidue,
+  HILL_FADE_FROM,
+  HILL_FADE_TO,
+} from "../world/constants"
 import { makeRibbonGeometry } from "../world/ribbon"
 import { makeAsphaltTexture } from "../world/asphalt"
 import { PropCategory, PropVariant } from "../world/types"
@@ -116,6 +121,22 @@ export async function init(
     roughness: 1,
     flatShading: true,
   })
+  // Distance dissolve (screen-door dither) so hills fade in at the draw
+  // limit instead of growing; fog hides them first whenever it is on.
+  hillMat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      `void main() {
+  {
+    float d = length( vViewPosition );
+    float keep = 1.0 - smoothstep( ${HILL_FADE_FROM.toFixed(1)}, ${HILL_FADE_TO.toFixed(1)}, d );
+    vec2 p = floor( mod( gl_FragCoord.xy, 4.0 ) );
+    float bayer = mod( p.x * 4.0 + p.y * 7.0 + mod( p.y, 2.0 ) * p.x * 3.0, 16.0 ) / 16.0 + 0.03;
+    if ( keep < bayer ) discard;
+  }`,
+    )
+  }
+  hillMat.customProgramCacheKey = () => "hillDissolve"
   for (let i = 0; i < 22; i++) {
     const far = i % 3 === 2
     const radius = far

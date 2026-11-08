@@ -16,3 +16,6 @@ export const hillResidue = (i: number) => -2 + i * 2
 export const HILL_MAX_RADIUS = 220
 
 export const LIGHTNING_TINT = new THREE.Color(0xe4ecff)
+
+export const HILL_FADE_FROM = 800
+export const HILL_FADE_TO = 1050
