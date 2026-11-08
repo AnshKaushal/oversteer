@@ -241,6 +241,7 @@ export class AirplaneFlyby {
     carXWorld?: number,
   ) {
     const carX = carXWorld ?? roadCenterX(carS)
+    this.carPos.set(carX, 0, -carS)
     if (!this.ready) return
     if (!active) {
       this.endFlight()
@@ -558,8 +559,10 @@ export class AirplaneFlyby {
     }
   }
 
+  private readonly carPos = new THREE.Vector3()
+
   private tickAirports(dt: number) {
-    this.airport?.view.step(dt)
+    this.airport?.view.step(dt, this.carPos)
     let changed = false
     this.retiring = this.retiring.filter((v) => {
       if (!v.step(dt)) return true

@@ -68,6 +68,11 @@ export class AirportStructures {
   readonly group = new THREE.Group()
   readonly lamps: LocalLamp[] = []
   readonly towerLamps: LocalLamp[] = []
+  /** Floodlight tower heads and where each one aims (local coords). */
+  readonly floods: {
+    head: [number, number, number]
+    aim: [number, number, number]
+  }[] = []
   beacon: { white: LocalLamp; green: LocalLamp } | null = null
 
   private solid: THREE.MeshStandardMaterial[] = []
@@ -265,6 +270,10 @@ export class AirportStructures {
           z - sgn * 0.4,
         )
         head.castShadow = false
+        this.floods.push({
+          head: [x, TOWER_HEIGHT + 0.3, z - sgn * 0.9],
+          aim: [x, 0, z - sgn * 16],
+        })
         for (const dx of [-1.4, 0, 1.4]) {
           this.towerLamps.push({
             x: x + dx,

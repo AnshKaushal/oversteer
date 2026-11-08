@@ -72,6 +72,7 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
     pool: number[],
     baseScale: number,
     y = 0,
+    rock = false,
   ) => {
     if (pool.length === 0) return
     const cx = roadCenterX(s)
@@ -85,6 +86,17 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
     const scaleVar =
       W.scaleRange.min +
       this.rand(seed * 3 + i * 7) * (W.scaleRange.max - W.scaleRange.min)
+    let scale = scaleVar * baseScale
+    if (rock) {
+      // small / medium / big rocks, each lodged 35-60% into the ground
+      const sz = this.rand(seed * 59 + i * 3)
+      const u = this.rand(seed * 61 + i * 11)
+      scale = sz < 0.5 ? 0.5 + u * 0.4 : sz < 0.85 ? 1.0 + u * 0.6 : 2.0 + u * 1.0
+      const g = this.propVariants[variantIdx].im.geometry
+      if (!g.boundingBox) g.computeBoundingBox()
+      const h = g.boundingBox!.max.y
+      y = -(0.35 + this.rand(seed * 67 + i * 13) * 0.25) * h * scale
+    }
     out.push({
       pos: new THREE.Vector3(
         cx + side * dist,
@@ -92,7 +104,7 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
         -(s + (this.rand(seed * 13 + i) - 0.5) * 8),
       ),
       rot: this.rand(seed + i) * Math.PI * 2,
-      scale: scaleVar * baseScale,
+      scale,
       variantIdx,
     })
   }
@@ -126,7 +138,7 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
         minD = W.minDistanceFromRoad
         maxD = W.maxDistanceFromRoad
       }
-      pushProp(s, seed, i, minD, maxD, pool, base, -0.15)
+      pushProp(s, seed, i, minD, maxD, pool, base, -0.15, pool === rockIdxs)
       if (out.length > 60) return out
     }
   }
@@ -341,7 +353,7 @@ export function syncPropColliders(this: WorldManager) {
       const col = R.ColliderDesc.cuboid(fit.hx * k, hh, fit.hz * k)
         .setTranslation(
           t.pos.x + ox * c + oz * sn,
-          hh,
+          pv.category === "rock" ? t.pos.y + hh : hh,
           t.pos.z - ox * sn + oz * c,
         )
         .setRotation({ x: 0, y: Math.sin(t.rot / 2), z: 0, w: Math.cos(t.rot / 2) })
