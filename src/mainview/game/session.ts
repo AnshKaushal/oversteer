@@ -179,6 +179,9 @@ export function startSession(ctx: SessionCtx): () => void {
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setSunSource(() => wm.sunDirection())
         flyby.setTimeOfDay(timeOfDayRef.current)
+        flyby.setPrecompile((o) =>
+          renderer!.compileAsync(o, camera, scene).then(() => undefined),
+        )
         await flyby.init(scene, baseUrl)
       }
 
