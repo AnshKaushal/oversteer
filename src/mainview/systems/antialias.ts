@@ -3,6 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js"
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js"
 import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js"
+import { MotionBlurPass } from "./motionBlur"
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js"
 
 export type AAMode = "off" | "fxaa" | "smaa" | "msaa"
@@ -15,6 +16,8 @@ export const AA_MODES: { id: AAMode; label: string; hint: string }[] = [
 
 export class AntiAlias {
   private mode: AAMode | null = null
+  private blurOn = false
+  private blurPass: MotionBlurPass | null = null
   private composer: EffectComposer | null = null
   private w = 0
   private h = 0
@@ -26,19 +29,30 @@ export class AntiAlias {
     private camera: THREE.Camera,
   ) {}
 
-  private build(mode: AAMode) {
+  private build(mode: AAMode, blur: boolean) {
     this.composer?.dispose()
+    this.blurPass?.dispose()
     this.composer = null
+    this.blurPass = null
     this.mode = mode
-    if (mode === "off") return
+    this.blurOn = blur
+    if (mode === "off" && !blur) return
     this.renderer.getDrawingBufferSize(this.v)
     const target = new THREE.WebGLRenderTarget(this.v.x, this.v.y, {
       type: THREE.HalfFloatType,
       samples: mode === "msaa" ? 4 : 0,
     })
+    if (blur) {
+      target.depthTexture = new THREE.DepthTexture(this.v.x, this.v.y)
+      target.depthTexture.type = THREE.UnsignedIntType
+    }
     const c = new EffectComposer(this.renderer, target)
     c.setPixelRatio(1)
     c.addPass(new RenderPass(this.scene, this.camera))
+    if (blur) {
+      this.blurPass = new MotionBlurPass(this.scene, this.camera, target.depthTexture!)
+      c.addPass(this.blurPass)
+    }
     c.addPass(new OutputPass())
     if (mode === "fxaa") c.addPass(new FXAAPass())
     else if (mode === "smaa") c.addPass(new SMAAPass())
@@ -46,8 +60,18 @@ export class AntiAlias {
     this.w = this.h = 0
   }
 
-  render(mode: AAMode) {
-    if (mode !== this.mode) this.build(mode)
+  /** blur: 0-100; keepSharp: object excluded from the blur (player car) */
+  render(
+    mode: AAMode,
+    blur = 0,
+    keepSharp: THREE.Object3D | null = null,
+  ) {
+    const on = blur > 0
+    if (mode !== this.mode || on !== this.blurOn) this.build(mode, on)
+    if (this.blurPass) {
+      this.blurPass.strength = (blur / 100) * 1.5
+      this.blurPass.maskRoot = keepSharp
+    }
     if (!this.composer) {
       this.renderer.render(this.scene, this.camera)
       return
@@ -63,5 +87,6 @@ export class AntiAlias {
 
   dispose() {
     this.composer?.dispose()
+    this.blurPass?.dispose()
   }
 }

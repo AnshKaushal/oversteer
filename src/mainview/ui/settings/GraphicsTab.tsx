@@ -5,6 +5,7 @@ import { RenderScaleCard } from "./graphics/RenderScaleCard"
 import { PresetCard } from "./graphics/PresetCard"
 import { ShadowsCard } from "./graphics/ShadowsCard"
 import { ShadowQualityCard } from "./graphics/ShadowQualityCard"
+import { MotionBlurCard } from "./graphics/MotionBlurCard"
 import { UpscalingFaqCard } from "./graphics/UpscalingFaqCard"
 import {
   type ResolutionId,
@@ -71,6 +72,7 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
         settings={settings}
         handleShadowQuality={handleShadowQuality}
       />
+      <MotionBlurCard settings={settings} onUpdateSettings={onUpdateSettings} />
       <UpscalingFaqCard />
     </>
   )

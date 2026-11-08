@@ -134,6 +134,7 @@ export interface AppSettings {
   qualityPreset?: "low" | "medium" | "high" | "ultra"
   autoQuality?: boolean
   rumble?: boolean
+  motionBlur?: number
   antiAliasing?: "off" | "fxaa" | "smaa" | "msaa"
 }
 
@@ -153,6 +154,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoQuality: false,
   antiAliasing: "fxaa",
   rumble: true,
+  motionBlur: 0,
 }
 
 const SETTINGS_KEY = "oversteer_settings"

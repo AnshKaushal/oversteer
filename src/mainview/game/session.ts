@@ -516,7 +516,11 @@ export function startSession(ctx: SessionCtx): () => void {
         })
         try {
           aa = new AntiAlias(renderer!, scene, camera)
-          aa.render(settingsRef.current.antiAliasing ?? "fxaa")
+          aa.render(
+            settingsRef.current.antiAliasing ?? "fxaa",
+            settingsRef.current.motionBlur ?? 0,
+            playerVisualRef.current?.group ?? null,
+          )
         } catch (e) {
           console.warn("warm-up render failed", e)
         }
@@ -643,6 +647,8 @@ export function startSession(ctx: SessionCtx): () => void {
           if (pausedTick !== 0) return
           ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
             settingsRef.current.antiAliasing ?? "fxaa",
+            settingsRef.current.motionBlur ?? 0,
+            playerVisualRef.current?.group ?? null,
           )
           return
         }
@@ -1218,6 +1224,8 @@ export function startSession(ctx: SessionCtx): () => void {
         )
         ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
           settingsRef.current.antiAliasing ?? "fxaa",
+          settingsRef.current.motionBlur ?? 0,
+          playerVisualRef.current?.group ?? null,
         )
         const renderT1 = performance.now()
         spike.ph("render")
