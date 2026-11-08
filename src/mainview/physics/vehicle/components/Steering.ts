@@ -1,8 +1,8 @@
-import type { Wheels } from "../../../data/schema";
-import { clamp } from "../../math";
+import type { Wheels } from "../../../data/schema"
+import { clamp } from "../../math"
 
 export class Steering {
-  angle = 0;
+  angle = 0
 
   constructor(
     private readonly p: Wheels["steering"],
@@ -11,20 +11,18 @@ export class Steering {
   ) {}
 
   wheelAngle(front: boolean, left: boolean, centre: number): number {
-    if (!front || centre === 0) return 0;
-    const t = Math.tan(Math.abs(centre));
-    const half = this.trackWidth / 2;
-    const inside = Math.atan(
-      (this.wheelbase * t) / (this.wheelbase - half * t),
-    );
+    if (!front || centre === 0) return 0
+    const t = Math.tan(Math.abs(centre))
+    const half = this.trackWidth / 2
+    const inside = Math.atan((this.wheelbase * t) / (this.wheelbase - half * t))
     const outside = Math.atan(
       (this.wheelbase * t) / (this.wheelbase + half * t),
-    );
-    const insideWheel = left === centre > 0;
-    const ideal = insideWheel ? inside : outside;
+    )
+    const insideWheel = left === centre > 0
+    const ideal = insideWheel ? inside : outside
     const angle =
-      Math.abs(centre) + this.p.ackermannFactor * (ideal - Math.abs(centre));
-    return Math.sign(centre) * angle;
+      Math.abs(centre) + this.p.ackermannFactor * (ideal - Math.abs(centre))
+    return Math.sign(centre) * angle
   }
 
   step(
@@ -34,35 +32,35 @@ export class Steering {
     fwdSpeed: number,
     beta = 0,
   ) {
-    const S = this.p;
+    const S = this.p
     const factor =
       1 /
       (1 +
         Math.pow(speedKmh / S.speedFalloffKmh, 2) *
           S.speedSensitivity *
-          S.falloffGain);
+          S.falloffGain)
     const gripCap = Math.atan(
       (this.wheelbase * S.gripCapAccel) /
         Math.max(S.gripCapMinSpeedSq, fwdSpeed * fwdSpeed),
-    );
-    const base = Math.max(gripCap, S.minAngleAtSpeed);
-    const want = steerInput * S.maxAngle * factor;
+    )
+    const base = Math.max(gripCap, S.minAngleAtSpeed)
+    const want = steerInput * S.maxAngle * factor
     // When the car is sliding, steering into the slide (countersteer) needs
     // roughly the body slip angle on top of the grip-limited angle, so the
     // cap would otherwise stop the driver from catching or holding a drift.
-    const countersteer = want * beta < 0;
+    const countersteer = want * beta < 0
     const cap = countersteer
       ? Math.min(S.maxAngle, base + Math.abs(beta))
-      : base;
-    const target = clamp(want, -cap, cap);
+      : base
+    const target = clamp(want, -cap, cap)
     this.angle += clamp(
       target - this.angle,
       -S.ratePerSec * dt,
       S.ratePerSec * dt,
-    );
+    )
   }
 
   reset() {
-    this.angle = 0;
+    this.angle = 0
   }
 }

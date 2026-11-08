@@ -317,6 +317,7 @@ export class Vehicle {
     this.steering.reset()
     this.slip.reset()
     this.forces.impact.reset()
+    this.forces.resetSlidePower()
     this.solver.reset()
     this.abs.reset()
     this.stability.reset()
@@ -503,6 +504,7 @@ export class Vehicle {
       engineTorque *= cut
       this.engineCut = cut < 1
     }
+    engineTorque *= this.forces.slidePower(dt, k, input, this.groundedWheels)
     this.stability.step({
       dt,
       fwdSpeed: k.fwdSpeed,
