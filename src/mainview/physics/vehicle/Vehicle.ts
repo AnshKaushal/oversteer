@@ -390,7 +390,7 @@ export class Vehicle {
         parkingBrake: this.brakes.parking,
       },
     )
-    this.steering.step(dt, input.steer, k.speedKmh, k.fwdSpeed)
+    this.steering.step(dt, input.steer, k.speedKmh, k.fwdSpeed, k.beta)
 
     if (this.autoMode && this.autoShiftEnabled) {
       this.directionShift.step(g, {

@@ -136,6 +136,8 @@ export interface SuspensionSpec {
 export interface TireSpec {
   rollingV0: number
   maxSlip: number
+  /** Fraction of peak grip lost once the contact patch is fully sliding. */
+  slideLoss: number
 }
 
 export interface AxleAlignment {
