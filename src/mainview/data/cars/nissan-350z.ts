@@ -63,10 +63,19 @@ export const nissan350z: CarSpec = {
         [7600, 0.82],
         [7900, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 6, displacementL: 3.5, flywheel: "sport" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 6,
+        displacementL: 3.5,
+        flywheel: "sport",
+      }),
       frictionTorqueBase: 48,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

@@ -65,10 +65,19 @@ export const mercedesSl65: CarSpec = {
         [6000, 0.5],
         [6200, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 12, displacementL: 6.0, flywheel: "road" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 12,
+        displacementL: 6.0,
+        flywheel: "road",
+      }),
       frictionTorqueBase: 50,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {
@@ -402,13 +411,13 @@ export const mercedesSl65: CarSpec = {
   wheels: [
     {
       x: -0.835,
-      z: -1.30,
+      z: -1.3,
       front: true,
       left: true,
     },
     {
       x: 0.835,
-      z: -1.30,
+      z: -1.3,
       front: true,
       left: false,
     },

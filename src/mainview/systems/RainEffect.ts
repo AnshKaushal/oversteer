@@ -31,7 +31,10 @@ export class RainEffect {
   private haveLastCam = false
 
   constructor(scene: THREE.Scene) {
-    this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage))
+    this.geo.setAttribute(
+      "position",
+      new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage),
+    )
     this.lines = new THREE.LineSegments(this.geo, this.mat)
     this.lines.frustumCulled = false
     this.lines.renderOrder = 10
@@ -41,7 +44,10 @@ export class RainEffect {
 
   setReflectionPass(on: boolean) {
     const share = on ? REFLECTED_SHARE : 1
-    this.geo.setDrawRange(0, Math.round(MAX_DROPS * Math.min(1, this.intensity) * share) * 2)
+    this.geo.setDrawRange(
+      0,
+      Math.round(MAX_DROPS * Math.min(1, this.intensity) * share) * 2,
+    )
   }
 
   setConditions(rain: number, lightning: boolean) {

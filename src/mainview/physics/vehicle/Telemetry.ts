@@ -37,7 +37,8 @@ export interface TelemetrySources {
 
 export function buildTelemetry(s: TelemetrySources): CarTelemetry {
   return {
-    speedKmh: Math.abs(s.k.fwdSpeed) * KMH_PER_MS * Math.sign(s.k.fwdSpeed || 1),
+    speedKmh:
+      Math.abs(s.k.fwdSpeed) * KMH_PER_MS * Math.sign(s.k.fwdSpeed || 1),
     rpm: Math.round(s.engine.rpm),
     gear: s.gearbox.gear,
     gearLabel: s.gearbox.label,

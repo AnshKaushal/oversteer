@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import {
   CLOUD_NODES,
@@ -7,13 +8,22 @@ import {
   bakeInstanced,
 } from "../../systems/WorldManager"
 import { makeHillGeometry, sampleSurface } from "../../systems/Hills"
+import {
+  USE_CUSTOM_PROPS,
+  cloudMaterial,
+  makeCloudGeometries,
+  makeTreeFarGeometry,
+  makeTreeGeometries,
+  propMaterial,
+} from "../../systems/lowPolyProps"
 import { mulberry32 } from "./config"
 import type { Track } from "./Track"
 
-/** A baked GLB prop: geometry + material(s), base at y = 0. */
 export interface Proto {
   geometry: THREE.BufferGeometry
   material: THREE.Material | THREE.Material[]
+  lod?: THREE.BufferGeometry
+  far?: THREE.BufferGeometry
 }
 
 export interface PropKit {
@@ -21,7 +31,6 @@ export interface PropKit {
   clouds: Proto[]
 }
 
-/** Loads the shared tree pack (same GLB the highway uses). Null on failure. */
 const kitCache = new Map<string, Promise<PropKit | null>>()
 
 export function loadPropKit(baseUrl: string): Promise<PropKit | null> {
@@ -34,6 +43,22 @@ export function loadPropKit(baseUrl: string): Promise<PropKit | null> {
 }
 
 async function bakePropKit(baseUrl: string): Promise<PropKit | null> {
+  if (USE_CUSTOM_PROPS) {
+    const mat = propMaterial()
+    const wrap = (gs: THREE.BufferGeometry[]): Proto[] =>
+      gs.map((geometry) => ({
+        geometry,
+        material: mat,
+        far: makeTreeFarGeometry(),
+      }))
+    return {
+      trees: wrap(makeTreeGeometries()),
+      clouds: makeCloudGeometries().map((geometry) => ({
+        geometry,
+        material: cloudMaterial(),
+      })),
+    }
+  }
   try {
     const glb = await new GLTFLoader().loadAsync(
       `${baseUrl}models/low_poly_tree_pack.glb`,
@@ -42,19 +67,40 @@ async function bakePropKit(baseUrl: string): Promise<PropKit | null> {
     root.updateMatrixWorld(true)
     const byName = new Map<string, THREE.Object3D>()
     root.traverse((o) => byName.set(o.name, o))
-    const bake = (names: string[], targetH: number): Proto[] => {
+    const simplifier = new SimplifyModifier()
+    const bake = async (
+      names: string[],
+      targetH: number,
+      lod = false,
+    ): Promise<Proto[]> => {
       const out: Proto[] = []
       for (const n of names) {
         const node = byName.get(n)
         if (!node) continue
         node.updateMatrixWorld(true)
         const im = bakeInstanced(node, 1, targetH)
-        if (im) out.push({ geometry: im.geometry, material: im.material })
+        if (im) {
+          const g = im.geometry
+          const tris =
+            (g.index ? g.index.count : g.attributes.position.count) / 3
+          let low: THREE.BufferGeometry | undefined
+          if (lod && tris > 1500) {
+            try {
+              low = await simplifier.modify(
+                g,
+                Math.floor(g.attributes.position.count * 0.88),
+              )
+            } catch (e) {
+              console.warn("tree LOD failed", e)
+            }
+          }
+          out.push({ geometry: g, material: im.material, lod: low })
+        }
       }
       return out
     }
-    const trees = bake(TREE_NODES, 6.5)
-    const clouds = bake(CLOUD_NODES, 14)
+    const trees = await bake(TREE_NODES, 6.5, true)
+    const clouds = await bake(CLOUD_NODES, 14)
     return trees.length ? { trees, clouds } : null
   } catch (e) {
     console.warn("low_poly_tree_pack.glb failed to load", e)
@@ -75,7 +121,6 @@ const hillMaterial = () =>
     flatShading: true,
   })
 
-/** Exact distance from a point to the nearest centreline sample. */
 function trackDist(track: Track, x: number, z: number): number {
   let best = Infinity
   for (let i = 0; i < track.xs.length; i++) {
@@ -85,7 +130,6 @@ function trackDist(track: Track, x: number, z: number): number {
   return Math.sqrt(best)
 }
 
-/** Hills ringed around the circuit, always outside the tree band. */
 export function buildHills(
   group: THREE.Group,
   track: Track,
@@ -196,7 +240,6 @@ export function hillColliders(
   }
 }
 
-/** Static cloud layer scattered over the circuit. */
 export function buildClouds(
   group: THREE.Group,
   track: Track,

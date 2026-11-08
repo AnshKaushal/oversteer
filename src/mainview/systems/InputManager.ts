@@ -35,6 +35,9 @@ export interface DriveInput {
   cruiseTogglePressed: boolean
   toggleTimeOfDayPressed: boolean
   toggleHeadlightsPressed: boolean
+  indicatorLeftPressed: boolean
+  indicatorRightPressed: boolean
+  hazardPressed: boolean
   toggleFreeCameraPressed: boolean
 }
 
@@ -83,6 +86,10 @@ export class InputManager {
 
   private onVisibility() {
     if (document.visibilityState !== "visible") this.release()
+  }
+
+  rumble(strong: number, weak: number) {
+    this.pad.rumble(strong, weak)
   }
 
   attach() {
@@ -135,6 +142,9 @@ export class InputManager {
       c === "BracketLeft" ||
       c === "BracketRight" ||
       c === "Semicolon" ||
+      c === "Comma" ||
+      c === "Period" ||
+      c === "Slash" ||
       c === "Escape"
     ) {
       e.preventDefault()
@@ -145,7 +155,10 @@ export class InputManager {
   }
 
   private onKeyUp(e: KeyboardEvent) {
-    if (this.normalize(e) === "Space" && e.timeStamp - this.spaceDownAt <= HANDBRAKE_HOLD_MS) {
+    if (
+      this.normalize(e) === "Space" &&
+      e.timeStamp - this.spaceDownAt <= HANDBRAKE_HOLD_MS
+    ) {
       this.edgeQueue.add(HANDBRAKE_TAP)
     }
     if (this.normalize(e).startsWith("Meta")) this.release()
@@ -203,7 +216,10 @@ export class InputManager {
       for (const code of pad.edges) this.edgeQueue.add(code)
       const now = performance.now()
       if (pad.handbrakeEdge === "down") this.padHandbrakeDownAt = now
-      else if (pad.handbrakeEdge === "up" && now - this.padHandbrakeDownAt <= HANDBRAKE_HOLD_MS) {
+      else if (
+        pad.handbrakeEdge === "up" &&
+        now - this.padHandbrakeDownAt <= HANDBRAKE_HOLD_MS
+      ) {
         this.edgeQueue.add(HANDBRAKE_TAP)
       }
     }
@@ -214,7 +230,8 @@ export class InputManager {
     if (ignHeld) {
       this.ignDownAt = this.ignDownAt < 0 ? 0 : this.ignDownAt + dt
     } else if (this.ignDownAt >= 0) {
-      if (this.ignDownAt * 1000 < IGNITION_HOLD_MS) this.edgeQueue.add(IGNITION_TAP)
+      if (this.ignDownAt * 1000 < IGNITION_HOLD_MS)
+        this.edgeQueue.add(IGNITION_TAP)
       this.ignDownAt = -1
     }
 
@@ -254,7 +271,7 @@ export class InputManager {
         const hold = this.ccHold.get(c) ?? -1
         if (hold >= 0) this.ccHold.set(c, hold + dt * 1000)
         const n = this.ccRepeat.get(c) ?? 0
-        if (hold > 350 && (hold - 350) >= n * 150) {
+        if (hold > 350 && hold - 350 >= n * 150) {
           this.ccRepeat.set(c, n + 1)
           return true
         }
@@ -294,6 +311,9 @@ export class InputManager {
       cruiseTogglePressed: edge("Semicolon"),
       toggleTimeOfDayPressed: edge("KeyT"),
       toggleHeadlightsPressed: edge("KeyH"),
+      indicatorLeftPressed: edge("Comma"),
+      indicatorRightPressed: edge("Period"),
+      hazardPressed: edge("Slash"),
       toggleFreeCameraPressed: edge("KeyF"),
     }
 

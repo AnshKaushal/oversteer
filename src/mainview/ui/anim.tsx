@@ -107,6 +107,7 @@ export function Screen({
           : [stagger]
         : []
       for (const s of specs) {
+        if (!el.querySelector(s.selector)) continue
         gsap.fromTo(
           s.selector,
           { autoAlpha: 0, ...still(s.from) },

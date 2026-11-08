@@ -36,7 +36,11 @@ export class CreepForces {
         1,
       )
       const coast =
-        (i.engineFriction * i.gearRatio * i.efficiency * lockup * p.coastShare) /
+        (i.engineFriction *
+          i.gearRatio *
+          i.efficiency *
+          lockup *
+          p.coastShare) /
         2 /
         i.wheelRadius
       f += clamp(-Math.sign(i.slipSpeed) * coast, -p.coastMax, p.coastMax)

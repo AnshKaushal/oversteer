@@ -19,7 +19,9 @@ const known: Record<string, Record<string, string[]>> = (await Bun.file(
 const args = process.argv.slice(2)
 const script = args.find((a) => !a.startsWith("--"))
 if (!script) {
-  console.error("usage: bun scripts/run-per-car.ts <script> [--only a,b] [--verbose]")
+  console.error(
+    "usage: bun scripts/run-per-car.ts <script> [--only a,b] [--verbose]",
+  )
   process.exit(2)
 }
 const verbose = args.includes("--verbose")

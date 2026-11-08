@@ -38,10 +38,7 @@ export class NetClock {
 
   observe(senderT: number, seq: number, arrivalMs: number): boolean {
     let restarted = false
-    if (
-      this.ready &&
-      Math.abs(senderT - this.lastT) > NET.clock.resyncGapMs
-    ) {
+    if (this.ready && Math.abs(senderT - this.lastT) > NET.clock.resyncGapMs) {
       this.reset()
       restarted = true
     }
@@ -49,7 +46,8 @@ export class NetClock {
     if (gap > 0 && gap < 200) this.interval += (gap - this.interval) * 0.05
     if (this.lastSeq >= 0 && seq > this.lastSeq) {
       const lost = seq - this.lastSeq - 1
-      this.loss += ((lost > 0 ? Math.min(1, lost / (lost + 1)) : 0) - this.loss) * 0.05
+      this.loss +=
+        ((lost > 0 ? Math.min(1, lost / (lost + 1)) : 0) - this.loss) * 0.05
     }
     this.lastSeq = seq
     this.lastT = Math.max(this.lastT, senderT)
@@ -58,7 +56,8 @@ export class NetClock {
     this.deltas.push(d)
     if (this.deltas.length > NET.clock.window) this.deltas.shift()
     let min = Infinity
-    for (let i = 0; i < this.deltas.length; i++) if (this.deltas[i] < min) min = this.deltas[i]
+    for (let i = 0; i < this.deltas.length; i++)
+      if (this.deltas[i] < min) min = this.deltas[i]
     if (!this.ready) {
       this.offset = min
       this.ready = true
@@ -78,10 +77,16 @@ export class NetClock {
       I.minDelayMs,
       I.maxDelayMs,
     )
-    const dtS = Math.max(0, Math.min(0.25, (arrivalMs - this.lastArrival) / 1000))
+    const dtS = Math.max(
+      0,
+      Math.min(0.25, (arrivalMs - this.lastArrival) / 1000),
+    )
     this.lastArrival = arrivalMs
     const up = I.riseMsPerS * dtS
-    this.delay += want > this.delay ? Math.min(up, want - this.delay) : -Math.min(up / 5, this.delay - want)
+    this.delay +=
+      want > this.delay
+        ? Math.min(up, want - this.delay)
+        : -Math.min(up / 5, this.delay - want)
     return restarted
   }
 
@@ -90,4 +95,5 @@ export class NetClock {
   }
 }
 
-const clampN = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v)
+const clampN = (v: number, lo: number, hi: number) =>
+  v < lo ? lo : v > hi ? hi : v

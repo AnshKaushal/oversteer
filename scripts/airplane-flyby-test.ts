@@ -29,7 +29,9 @@ import { roadCenterX, roadYaw } from "../src/mainview/systems/WorldManager"
 let fails = 0
 function check(ok: boolean, label: string, detail = "") {
   if (!ok) fails++
-  console.log(`${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`)
+  console.log(
+    `${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`,
+  )
 }
 
 const MODES: FlybyMode[] = ["takeoff", "landing", "cruise"]
@@ -66,7 +68,11 @@ for (const deg of ANGLES) {
   const path = makePath(sCross, deg * DEG, 1, 1)
   const mid = passState("takeoff", path.length / 2, path, 0)
   const lateral = Math.hypot(mid.x - roadCenterX(sCross), mid.z + sCross)
-  check(lateral < 1, `a ${deg} degree path crosses the road`, `${lateral.toFixed(2)} m off centre`)
+  check(
+    lateral < 1,
+    `a ${deg} degree path crosses the road`,
+    `${lateral.toFixed(2)} m off centre`,
+  )
 }
 
 // 3. The path is fixed: the same path always produces the same line.
@@ -88,7 +94,11 @@ for (const deg of ANGLES) {
   const nx = Math.sin(st.heading)
   const nz = Math.cos(st.heading)
   const dot = nx * path.dx + nz * path.dz
-  check(Math.abs(dot - 1) < 0.001, `the nose points along the ${deg} degree path`, `dot=${dot.toFixed(4)}`)
+  check(
+    Math.abs(dot - 1) < 0.001,
+    `the nose points along the ${deg} degree path`,
+    `dot=${dot.toFixed(4)}`,
+  )
 }
 
 // 5. Height and speed stay believable.
@@ -135,18 +145,44 @@ const climb = (mode: FlybyMode) => {
   const b = passState(mode, PASS_LENGTH, path, 0).y
   return b - a
 }
-check(climb("takeoff") > 35, "take-off climbs away", `${climb("takeoff").toFixed(1)} m`)
-check(climb("landing") < -35, "landing comes down", `${climb("landing").toFixed(1)} m`)
-check(Math.abs(climb("cruise")) < 2, "cruise holds height", `${climb("cruise").toFixed(1)} m`)
+check(
+  climb("takeoff") > 35,
+  "take-off climbs away",
+  `${climb("takeoff").toFixed(1)} m`,
+)
+check(
+  climb("landing") < -35,
+  "landing comes down",
+  `${climb("landing").toFixed(1)} m`,
+)
+check(
+  Math.abs(climb("cruise")) < 2,
+  "cruise holds height",
+  `${climb("cruise").toFixed(1)} m`,
+)
 
 // 7. The pitch matches the manoeuvre.
 const pitch = (mode: FlybyMode, t: number) => {
   const path = makePath(300, 90 * DEG, 1, 1)
   return (passState(mode, t, path, 0).pitch * 180) / Math.PI
 }
-check(pitch("takeoff", 200) > 8, "take-off climbs nose up", `${pitch("takeoff", 200).toFixed(1)} deg`)
-check(pitch("takeoff", PASS_LENGTH) < 10 && pitch("takeoff", PASS_LENGTH) >= pitch("takeoff", 100), "take-off settles into a steady climb", `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`)
-check(Math.abs(pitch("landing", PASS_LENGTH)) < 1e-9 && Math.abs(pitch("landing", 0)) < 1e-9, "landing stays level in pitch", `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`)
+check(
+  pitch("takeoff", 200) > 8,
+  "take-off climbs nose up",
+  `${pitch("takeoff", 200).toFixed(1)} deg`,
+)
+check(
+  pitch("takeoff", PASS_LENGTH) < 10 &&
+    pitch("takeoff", PASS_LENGTH) >= pitch("takeoff", 100),
+  "take-off settles into a steady climb",
+  `${pitch("takeoff", PASS_LENGTH).toFixed(1)} deg`,
+)
+check(
+  Math.abs(pitch("landing", PASS_LENGTH)) < 1e-9 &&
+    Math.abs(pitch("landing", 0)) < 1e-9,
+  "landing stays level in pitch",
+  `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`,
+)
 
 // 8. The aircraft is never faded. It flies its line, on past the end of
 //    the path, and is simply switched off when it is gone.
@@ -174,10 +210,18 @@ for (const mode of MODES) {
   const path = makePath(700, 60 * DEG, 1, 1)
   const st = passState("cruise", 200, path, 0)
   const sh = shadowState(st)
-  check(sh.y > 0 && sh.y < 1, "the shadow is on the ground", `y=${sh.y.toFixed(2)}`)
+  check(
+    sh.y > 0 && sh.y < 1,
+    "the shadow is on the ground",
+    `y=${sh.y.toFixed(2)}`,
+  )
   const dx = sh.x - st.x
   const dz = sh.z - st.z
-  check(dx > 0 && dz > 0, "the shadow slides away from the sun", `+${dx.toFixed(1)} x +${dz.toFixed(1)} z`)
+  check(
+    dx > 0 && dz > 0,
+    "the shadow slides away from the sun",
+    `+${dx.toFixed(1)} x +${dz.toFixed(1)} z`,
+  )
   check(
     Math.abs(dx / dz - 2) < 0.01,
     "the shadow offset follows the sun's angle",
@@ -185,8 +229,16 @@ for (const mode of MODES) {
   )
   const low = shadowState(passState("takeoff", 0, path, 0))
   const high = shadowState(passState("takeoff", 400, path, 0))
-  check(high.alpha < low.alpha, "the shadow fades as the aircraft climbs", `${low.alpha.toFixed(2)} -> ${high.alpha.toFixed(2)}`)
-  check(high.span > low.span, "the shadow spreads as the aircraft climbs", `${low.span.toFixed(0)} -> ${high.span.toFixed(0)} m`)
+  check(
+    high.alpha < low.alpha,
+    "the shadow fades as the aircraft climbs",
+    `${low.alpha.toFixed(2)} -> ${high.alpha.toFixed(2)}`,
+  )
+  check(
+    high.span > low.span,
+    "the shadow spreads as the aircraft climbs",
+    `${low.span.toFixed(0)} -> ${high.span.toFixed(0)} m`,
+  )
   check(shadowState(st).alpha > 0, "the shadow is there while the aircraft is")
 }
 
@@ -202,16 +254,39 @@ for (const mode of MODES) {
   const flat: TerrainAt = () => 0
   const pathFor = (s: number) => makePath(s, 60 * DEG, 1, 1)
 
-  check(pathBlocked(pathFor(hillS), "takeoff", withHill), "a hill in the path is detected")
-  check(!pathBlocked(pathFor(hillS), "takeoff", flat), "clear ground is not flagged")
-  check(!pathBlocked(pathFor(hillS + 400), "takeoff", withHill), "a crossing well clear of the hill is fine")
+  check(
+    pathBlocked(pathFor(hillS), "takeoff", withHill),
+    "a hill in the path is detected",
+  )
+  check(
+    !pathBlocked(pathFor(hillS), "takeoff", flat),
+    "clear ground is not flagged",
+  )
+  check(
+    !pathBlocked(pathFor(hillS + 400), "takeoff", withHill),
+    "a crossing well clear of the hill is fine",
+  )
 
   const moved = pickCrossing(hillS, "takeoff", pathFor, withHill, hillS, 0)
-  check(Math.abs(moved - hillS) > 100, "the crossing is moved off the hill", `${hillS} -> ${moved}`)
-  check(!pathBlocked(pathFor(moved), "takeoff", withHill), "the new crossing has a clear path")
-  check(pickCrossing(hillS, "takeoff", pathFor, flat, hillS, 0) === hillS, "a clear crossing is left where it is")
+  check(
+    Math.abs(moved - hillS) > 100,
+    "the crossing is moved off the hill",
+    `${hillS} -> ${moved}`,
+  )
+  check(
+    !pathBlocked(pathFor(moved), "takeoff", withHill),
+    "the new crossing has a clear path",
+  )
+  check(
+    pickCrossing(hillS, "takeoff", pathFor, flat, hillS, 0) === hillS,
+    "a clear crossing is left where it is",
+  )
   const ahead = pickCrossing(hillS, "takeoff", pathFor, withHill, hillS, 100)
-  check(ahead >= hillS + 100, "the crossing is not moved behind the car", `${ahead}`)
+  check(
+    ahead >= hillS + 100,
+    "the crossing is not moved behind the car",
+    `${ahead}`,
+  )
 }
 
 // 11b. The whole aircraft has to clear the ground, wingtips included: a
@@ -319,10 +394,7 @@ for (const deg of ANGLES) {
   let maxDist = 0
   for (let t = 0; t <= PASS_LENGTH; t += 5) {
     const st = passState("takeoff", t, path, 0)
-    maxDist = Math.max(
-      maxDist,
-      Math.hypot(st.x - roadCenterX(300), st.z + 300),
-    )
+    maxDist = Math.max(maxDist, Math.hypot(st.x - roadCenterX(300), st.z + 300))
   }
   check(
     maxDist < FOG_FAR + 200,
@@ -340,7 +412,8 @@ for (const spec of AIRCRAFT) {
 
   const { props, span } = prepareAircraft(model, spec)
   check(
-    props.length === (spec.prop === "separate" ? 4 : spec.prop === "merged" ? 1 : 0),
+    props.length ===
+      (spec.prop === "separate" ? 2 : spec.prop === "merged" ? 1 : spec.prop === "fan" ? 2 : 0),
     `${spec.file} propeller parts found`,
     `found ${props.length}`,
   )
@@ -426,7 +499,9 @@ for (const spec of AIRCRAFT) {
   // The centre of mass is where the group origin is.
   const centre = box.getCenter(new THREE.Vector3())
   check(
-    Math.abs(centre.x) < 0.4 && Math.abs(centre.y) < 0.4 && Math.abs(centre.z) < 0.4,
+    Math.abs(centre.x) < 0.4 &&
+      Math.abs(centre.y) < 0.4 &&
+      Math.abs(centre.z) < 0.4,
     `${spec.file} is centred on its origin`,
     `(${centre.x.toFixed(2)}, ${centre.y.toFixed(2)}, ${centre.z.toFixed(2)})`,
   )
@@ -434,13 +509,18 @@ for (const spec of AIRCRAFT) {
 
 // 15. The traffic: three aircraft, each with a model, a speed and a set
 //     of manoeuvres.
-check(AIRCRAFT.length >= 3, "the sky has more than one kind of traffic", `${AIRCRAFT.length} types`)
+check(
+  AIRCRAFT.length >= 3,
+  "the sky has more than one kind of traffic",
+  `${AIRCRAFT.length} types`,
+)
 {
   const files = new Set(AIRCRAFT.map((a) => a.file))
   check(files.size === AIRCRAFT.length, "every aircraft is a different model")
   let allThere = true
   for (const a of AIRCRAFT) {
-    if (!(await Bun.file(`src/mainview/models/${a.file}`).exists())) allThere = false
+    if (!(await Bun.file(`src/mainview/models/${a.file}`).exists()))
+      allThere = false
     if (a.modes.length === 0) allThere = false
     if (a.span < 5 || a.span > 80) allThere = false
   }
@@ -494,9 +574,20 @@ check(AIRCRAFT.length >= 3, "the sky has more than one kind of traffic", `${AIRC
   check(
     straddleX || straddleY,
     "the blades sit on opposite sides of the hub",
-    `hub ${hub.toArray().map((n) => n.toFixed(2)).join(",")} blades ${bb.min.toArray().map((n) => n.toFixed(2)).join(",")}..${bb.max.toArray().map((n) => n.toFixed(2)).join(",")}`,
+    `hub ${hub
+      .toArray()
+      .map((n) => n.toFixed(2))
+      .join(",")} blades ${bb.min
+      .toArray()
+      .map((n) => n.toFixed(2))
+      .join(",")}..${bb.max
+      .toArray()
+      .map((n) => n.toFixed(2))
+      .join(",")}`,
   )
 }
 
-console.log(fails === 0 ? "\nAll flyby checks passed" : `\n${fails} check(s) failed`)
+console.log(
+  fails === 0 ? "\nAll flyby checks passed" : `\n${fails} check(s) failed`,
+)
 if (fails > 0) process.exit(1)

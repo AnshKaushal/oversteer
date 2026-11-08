@@ -32,7 +32,13 @@ export interface CarStatePacket {
 }
 
 export type NetworkEventType =
-  "HELLO" | "READY" | "START_RACE" | "FINISH_RACE" | "PING" | "PONG" | "DENY"
+  | "HELLO"
+  | "READY"
+  | "START_RACE"
+  | "FINISH_RACE"
+  | "PING"
+  | "PONG"
+  | "DENY"
 
 export interface NetworkEventPacket {
   type: NetworkEventType

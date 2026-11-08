@@ -45,7 +45,7 @@ export class Track {
       area += xs[i] * zs[j] - xs[j] * zs[i]
     }
     const flip = (config.seed & 1) === 1
-    if ((area > 0) !== flip) {
+    if (area > 0 !== flip) {
       xs = Float64Array.from(xs).reverse()
       zs = Float64Array.from(zs).reverse()
     }
@@ -102,7 +102,10 @@ export class Track {
     this.tz.set(rtz)
     this.kappa.set(rk)
     for (let i = 0; i < n; i++) {
-      const key = this.cellKey(Math.floor(rx[i] / this.cell), Math.floor(rz[i] / this.cell))
+      const key = this.cellKey(
+        Math.floor(rx[i] / this.cell),
+        Math.floor(rz[i] / this.cell),
+      )
       const list = this.grid.get(key)
       if (list) list.push(i)
       else this.grid.set(key, [i])

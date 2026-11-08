@@ -78,7 +78,8 @@ class TriggerChannel {
       return raw
     }
     const rate = raw > this.out ? DIGITAL_TRIGGER_RISE : DIGITAL_TRIGGER_FALL
-    this.out += Math.sign(raw - this.out) * Math.min(Math.abs(raw - this.out), rate * dt)
+    this.out +=
+      Math.sign(raw - this.out) * Math.min(Math.abs(raw - this.out), rate * dt)
     return this.out
   }
 
@@ -96,7 +97,11 @@ export class GamepadInput {
 
   constructor() {
     if (typeof window === "undefined") return
-    if (typeof navigator !== "undefined" && navigator.getGamepads?.().some((p) => p)) this.announced = 1
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.getGamepads?.().some((p) => p)
+    )
+      this.announced = 1
     window.addEventListener("gamepadconnected", () => this.announced++)
     window.addEventListener("gamepaddisconnected", () => {
       this.announced = Math.max(0, this.announced - 1)
@@ -115,6 +120,25 @@ export class GamepadInput {
   get name(): string {
     const id = this.active()?.id ?? ""
     return id.replace(/\s*\(.*$/, "").trim() || "Controller"
+  }
+
+  private lastRumble = 0
+
+  rumble(strong: number, weak: number) {
+    const pad = this.active() as (Gamepad & { vibrationActuator?: any }) | null
+    const act = pad?.vibrationActuator
+    if (!act?.playEffect) return
+    const now = performance.now()
+    if (now - this.lastRumble < 70) return
+    this.lastRumble = now
+    try {
+      act.playEffect("dual-rumble", {
+        startDelay: 0,
+        duration: 90,
+        strongMagnitude: Math.max(0, Math.min(1, strong)),
+        weakMagnitude: Math.max(0, Math.min(1, weak)),
+      })
+    } catch {}
   }
 
   poll(dt = 1 / 60): PadState | null {
@@ -136,7 +160,8 @@ export class GamepadInput {
     }
 
     const hb = down(BTN.b)
-    const handbrakeEdge = hb !== this.prevHandbrake ? (hb ? "down" : "up") : null
+    const handbrakeEdge =
+      hb !== this.prevHandbrake ? (hb ? "down" : "up") : null
     this.prevHandbrake = hb
 
     return {

@@ -7,7 +7,9 @@ function readGlb(buf: ArrayBuffer) {
   const dv = new DataView(buf)
   const jsonLen = dv.getUint32(12, true)
   if (dv.getUint32(16, true) !== JSON_CHUNK) throw new Error("no JSON chunk")
-  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)))
+  const json = JSON.parse(
+    new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)),
+  )
   const binLen = dv.getUint32(20 + jsonLen, true)
   const bin = new Uint8Array(buf, 20 + jsonLen + 8, binLen)
   return { json, bin }
@@ -59,7 +61,10 @@ function yaw(a: number): number[] {
   return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]
 }
 
-function appendToBin(bin: Uint8Array, data: Uint8Array): { offset: number; nextBin: Uint8Array } {
+function appendToBin(
+  bin: Uint8Array,
+  data: Uint8Array,
+): { offset: number; nextBin: Uint8Array } {
   const pad = (4 - (data.length % 4)) % 4
   const padded = new Uint8Array(data.length + pad)
   padded.set(data)
@@ -70,17 +75,30 @@ function appendToBin(bin: Uint8Array, data: Uint8Array): { offset: number; nextB
   return { offset, nextBin }
 }
 
-function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: number, cy: number, cz: number) => boolean): { newPrim: any; nextBin: Uint8Array } | null {
+function reindexPrim(
+  json: any,
+  bin: Uint8Array,
+  prim: any,
+  filterFn: (cx: number, cy: number, cz: number) => boolean,
+): { newPrim: any; nextBin: Uint8Array } | null {
   const binDv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
   const posAcc = json.accessors[prim.attributes.POSITION]
   const posBv = json.bufferViews[posAcc.bufferView]
   const posStart = (posBv.byteOffset ?? 0) + (posAcc.byteOffset ?? 0)
-  
-  const normAcc = prim.attributes.NORMAL !== undefined ? json.accessors[prim.attributes.NORMAL] : null
-  const normBv = normAcc ? json.bufferViews[normAcc.bufferView] : null
-  const normStart = normBv ? (normBv.byteOffset ?? 0) + (normAcc.byteOffset ?? 0) : 0
 
-  const uvAcc = prim.attributes.TEXCOORD_0 !== undefined ? json.accessors[prim.attributes.TEXCOORD_0] : null
+  const normAcc =
+    prim.attributes.NORMAL !== undefined
+      ? json.accessors[prim.attributes.NORMAL]
+      : null
+  const normBv = normAcc ? json.bufferViews[normAcc.bufferView] : null
+  const normStart = normBv
+    ? (normBv.byteOffset ?? 0) + (normAcc.byteOffset ?? 0)
+    : 0
+
+  const uvAcc =
+    prim.attributes.TEXCOORD_0 !== undefined
+      ? json.accessors[prim.attributes.TEXCOORD_0]
+      : null
   const uvBv = uvAcc ? json.bufferViews[uvAcc.bufferView] : null
   const uvStart = uvBv ? (uvBv.byteOffset ?? 0) + (uvAcc.byteOffset ?? 0) : 0
 
@@ -102,8 +120,12 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
   for (let t = 0; t < tris; t++) {
     const o = idxStart + t * 3 * stride
     const i0 = isU32 ? binDv.getUint32(o, true) : binDv.getUint16(o, true)
-    const i1 = isU32 ? binDv.getUint32(o + stride, true) : binDv.getUint16(o + stride, true)
-    const i2 = isU32 ? binDv.getUint32(o + stride * 2, true) : binDv.getUint16(o + stride * 2, true)
+    const i1 = isU32
+      ? binDv.getUint32(o + stride, true)
+      : binDv.getUint16(o + stride, true)
+    const i2 = isU32
+      ? binDv.getUint32(o + stride * 2, true)
+      : binDv.getUint16(o + stride * 2, true)
     const x0 = binDv.getFloat32(posStart + i0 * 12, true)
     const x1 = binDv.getFloat32(posStart + i1 * 12, true)
     const x2 = binDv.getFloat32(posStart + i2 * 12, true)
@@ -113,7 +135,8 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
     const z0 = binDv.getFloat32(posStart + i0 * 12 + 8, true)
     const z1 = binDv.getFloat32(posStart + i1 * 12 + 8, true)
     const z2 = binDv.getFloat32(posStart + i2 * 12 + 8, true)
-    if (!filterFn((x0 + x1 + x2) / 3, (y0 + y1 + y2) / 3, (z0 + z1 + z2) / 3)) continue
+    if (!filterFn((x0 + x1 + x2) / 3, (y0 + y1 + y2) / 3, (z0 + z1 + z2) / 3))
+      continue
 
     for (const oldIdx of [i0, i1, i2]) {
       let mapped = oldToNew.get(oldIdx)
@@ -124,8 +147,12 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
         const py = binDv.getFloat32(posStart + oldIdx * 12 + 4, true)
         const pz = binDv.getFloat32(posStart + oldIdx * 12 + 8, true)
         newPositions.push(px, py, pz)
-        min[0] = Math.min(min[0], px); min[1] = Math.min(min[1], py); min[2] = Math.min(min[2], pz)
-        max[0] = Math.max(max[0], px); max[1] = Math.max(max[1], py); max[2] = Math.max(max[2], pz)
+        min[0] = Math.min(min[0], px)
+        min[1] = Math.min(min[1], py)
+        min[2] = Math.min(min[2], pz)
+        max[0] = Math.max(max[0], px)
+        max[1] = Math.max(max[1], py)
+        max[2] = Math.max(max[2], pz)
         if (normAcc) {
           newNormals.push(
             binDv.getFloat32(normStart + oldIdx * 12, true),
@@ -151,9 +178,21 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
   const posRes = appendToBin(bin, posBytes)
   bin = posRes.nextBin
   const posBvIdx = json.bufferViews.length
-  json.bufferViews.push({ buffer: 0, byteOffset: posRes.offset, byteLength: posBytes.length })
+  json.bufferViews.push({
+    buffer: 0,
+    byteOffset: posRes.offset,
+    byteLength: posBytes.length,
+  })
   const newPosAccIdx = json.accessors.length
-  json.accessors.push({ bufferView: posBvIdx, byteOffset: 0, componentType: 5126, count: newPositions.length / 3, type: "VEC3", min, max })
+  json.accessors.push({
+    bufferView: posBvIdx,
+    byteOffset: 0,
+    componentType: 5126,
+    count: newPositions.length / 3,
+    type: "VEC3",
+    min,
+    max,
+  })
 
   const newAttributes: any = { POSITION: newPosAccIdx }
 
@@ -162,9 +201,19 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
     const normRes = appendToBin(bin, normBytes)
     bin = normRes.nextBin
     const normBvIdx = json.bufferViews.length
-    json.bufferViews.push({ buffer: 0, byteOffset: normRes.offset, byteLength: normBytes.length })
+    json.bufferViews.push({
+      buffer: 0,
+      byteOffset: normRes.offset,
+      byteLength: normBytes.length,
+    })
     const newNormAccIdx = json.accessors.length
-    json.accessors.push({ bufferView: normBvIdx, byteOffset: 0, componentType: 5126, count: newNormals.length / 3, type: "VEC3" })
+    json.accessors.push({
+      bufferView: normBvIdx,
+      byteOffset: 0,
+      componentType: 5126,
+      count: newNormals.length / 3,
+      type: "VEC3",
+    })
     newAttributes.NORMAL = newNormAccIdx
   }
 
@@ -173,30 +222,63 @@ function reindexPrim(json: any, bin: Uint8Array, prim: any, filterFn: (cx: numbe
     const uvRes = appendToBin(bin, uvBytes)
     bin = uvRes.nextBin
     const uvBvIdx = json.bufferViews.length
-    json.bufferViews.push({ buffer: 0, byteOffset: uvRes.offset, byteLength: uvBytes.length })
+    json.bufferViews.push({
+      buffer: 0,
+      byteOffset: uvRes.offset,
+      byteLength: uvBytes.length,
+    })
     const newUvAccIdx = json.accessors.length
-    json.accessors.push({ bufferView: uvBvIdx, byteOffset: 0, componentType: 5126, count: newUvs.length / 2, type: "VEC2" })
+    json.accessors.push({
+      bufferView: uvBvIdx,
+      byteOffset: 0,
+      componentType: 5126,
+      count: newUvs.length / 2,
+      type: "VEC2",
+    })
     newAttributes.TEXCOORD_0 = newUvAccIdx
   }
 
-  const idxArr = isU32 ? new Uint32Array(newIndices) : new Uint16Array(newIndices)
+  const idxArr = isU32
+    ? new Uint32Array(newIndices)
+    : new Uint16Array(newIndices)
   const idxBytes = new Uint8Array(idxArr.buffer)
   const idxRes = appendToBin(bin, idxBytes)
   bin = idxRes.nextBin
   const idxBvIdx = json.bufferViews.length
-  json.bufferViews.push({ buffer: 0, byteOffset: idxRes.offset, byteLength: idxBytes.length })
+  json.bufferViews.push({
+    buffer: 0,
+    byteOffset: idxRes.offset,
+    byteLength: idxBytes.length,
+  })
   const newIdxAccIdx = json.accessors.length
-  json.accessors.push({ bufferView: idxBvIdx, byteOffset: 0, componentType: idxAcc.componentType, count: newIndices.length, type: "SCALAR" })
+  json.accessors.push({
+    bufferView: idxBvIdx,
+    byteOffset: 0,
+    componentType: idxAcc.componentType,
+    count: newIndices.length,
+    type: "SCALAR",
+  })
 
-  return { newPrim: { attributes: newAttributes, indices: newIdxAccIdx, material: prim.material, mode: prim.mode ?? 4 }, nextBin: bin }
+  return {
+    newPrim: {
+      attributes: newAttributes,
+      indices: newIdxAccIdx,
+      material: prim.material,
+      mode: prim.mode ?? 4,
+    },
+    nextBin: bin,
+  }
 }
 
-async function prepareCar(filename: string, config: {
-  yawAngle?: number
-  lampMat?: string
-  splitRear?: "x" | "z"
-  isSkyline?: boolean
-}) {
+async function prepareCar(
+  filename: string,
+  config: {
+    yawAngle?: number
+    lampMat?: string
+    splitRear?: "x" | "z"
+    isSkyline?: boolean
+  },
+) {
   const src = `src/mainview/models/${filename}`
   const rawBuf = await Bun.file(src).arrayBuffer()
   let { json, bin } = readGlb(rawBuf)
@@ -205,7 +287,9 @@ async function prepareCar(filename: string, config: {
     const turn = yaw(config.yawAngle)
     for (const idx of json.scenes[json.scene ?? 0].nodes) {
       const node = json.nodes[idx]
-      let local = node.matrix ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+      let local = node.matrix ?? [
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+      ]
       node.matrix = mul(turn, local)
       delete node.translation
       delete node.rotation
@@ -214,17 +298,33 @@ async function prepareCar(filename: string, config: {
   }
 
   if (config.splitRear) {
-    const flNode = json.nodes.find((n: any) => n.name === "Front Left Wheel_0" || n.name === "Front_Left_Wheel_0" || n.name === "Wheel_FL")
-    const frNode = json.nodes.find((n: any) => n.name === "Front Right Wheel_1" || n.name === "Front_Right_Wheel_1" || n.name === "Wheel_FR")
+    const flNode = json.nodes.find(
+      (n: any) =>
+        n.name === "Front Left Wheel_0" ||
+        n.name === "Front_Left_Wheel_0" ||
+        n.name === "Wheel_FL",
+    )
+    const frNode = json.nodes.find(
+      (n: any) =>
+        n.name === "Front Right Wheel_1" ||
+        n.name === "Front_Right_Wheel_1" ||
+        n.name === "Wheel_FR",
+    )
     if (flNode) flNode.name = "Wheel_FL"
     if (frNode) frNode.name = "Wheel_FR"
 
     const rlExisting = json.nodes.find((n: any) => n.name === "Wheel_RL")
     const rrExisting = json.nodes.find((n: any) => n.name === "Wheel_RR")
-    const rwNode = json.nodes.find((n: any) => n.name === "Rear Wheels_2" || n.name === "Rear_Wheels_2")
+    const rwNode = json.nodes.find(
+      (n: any) => n.name === "Rear Wheels_2" || n.name === "Rear_Wheels_2",
+    )
 
-    const sourceNodes = rwNode ? [rwNode] : (rlExisting && rrExisting ? [rlExisting, rrExisting] : [])
-    
+    const sourceNodes = rwNode
+      ? [rwNode]
+      : rlExisting && rrExisting
+        ? [rlExisting, rrExisting]
+        : []
+
     // We want to create fresh Wheel_RL and Wheel_RR
     const rlChildren: number[] = []
     const rrChildren: number[] = []
@@ -234,8 +334,14 @@ async function prepareCar(filename: string, config: {
       if (s.children) s.children.forEach((c: number) => childIndices.add(c))
     }
 
-    const filterRL = config.splitRear === "x" ? (x: number) => x > 0 : (cx: number, cy: number, cz: number) => cz < 0
-    const filterRR = config.splitRear === "x" ? (x: number) => x < 0 : (cx: number, cy: number, cz: number) => cz > 0
+    const filterRL =
+      config.splitRear === "x"
+        ? (x: number) => x > 0
+        : (cx: number, cy: number, cz: number) => cz < 0
+    const filterRR =
+      config.splitRear === "x"
+        ? (x: number) => x < 0
+        : (cx: number, cy: number, cz: number) => cz > 0
 
     for (const childIdx of childIndices) {
       const childNode = json.nodes[childIdx]
@@ -246,7 +352,10 @@ async function prepareCar(filename: string, config: {
       if (resRL) {
         bin = resRL.nextBin
         const mIdx = json.meshes.length
-        json.meshes.push({ name: `${mesh.name}_RL_clean`, primitives: [resRL.newPrim] })
+        json.meshes.push({
+          name: `${mesh.name}_RL_clean`,
+          primitives: [resRL.newPrim],
+        })
         const nIdx = json.nodes.length
         json.nodes.push({ name: `${childNode.name}_RL`, mesh: mIdx })
         rlChildren.push(nIdx)
@@ -256,18 +365,31 @@ async function prepareCar(filename: string, config: {
       if (resRR) {
         bin = resRR.nextBin
         const mIdx = json.meshes.length
-        json.meshes.push({ name: `${mesh.name}_RR_clean`, primitives: [resRR.newPrim] })
+        json.meshes.push({
+          name: `${mesh.name}_RR_clean`,
+          primitives: [resRR.newPrim],
+        })
         const nIdx = json.nodes.length
         json.nodes.push({ name: `${childNode.name}_RR`, mesh: mIdx })
         rrChildren.push(nIdx)
       }
     }
 
-    const baseMatrix = sourceNodes[0]?.matrix ? [...sourceNodes[0].matrix] : undefined
+    const baseMatrix = sourceNodes[0]?.matrix
+      ? [...sourceNodes[0].matrix]
+      : undefined
     const rlIdx = json.nodes.length
-    json.nodes.push({ name: "Wheel_RL", children: rlChildren, matrix: baseMatrix })
+    json.nodes.push({
+      name: "Wheel_RL",
+      children: rlChildren,
+      matrix: baseMatrix,
+    })
     const rrIdx = json.nodes.length
-    json.nodes.push({ name: "Wheel_RR", children: rrChildren, matrix: baseMatrix })
+    json.nodes.push({
+      name: "Wheel_RR",
+      children: rrChildren,
+      matrix: baseMatrix,
+    })
 
     // Replace old source nodes in parents
     const oldIndices = sourceNodes.map((n: any) => json.nodes.indexOf(n))
@@ -275,7 +397,9 @@ async function prepareCar(filename: string, config: {
       if (p.children) {
         const hasOld = p.children.some((c: number) => oldIndices.includes(c))
         if (hasOld) {
-          p.children = p.children.filter((c: number) => !oldIndices.includes(c)).concat([rlIdx, rrIdx])
+          p.children = p.children
+            .filter((c: number) => !oldIndices.includes(c))
+            .concat([rlIdx, rrIdx])
         }
       }
     }
@@ -296,11 +420,16 @@ async function prepareCar(filename: string, config: {
       for (const mIdx of [21, 22]) {
         const mesh = json.meshes[mIdx]
         const prim = mesh.primitives[0]
-        const res = reindexPrim(json, bin, prim, (cx, cy) => quad.filter(cx, cy))
+        const res = reindexPrim(json, bin, prim, (cx, cy) =>
+          quad.filter(cx, cy),
+        )
         if (res) {
           bin = res.nextBin
           const nextMIdx = json.meshes.length
-          json.meshes.push({ name: `${mesh.name}_${quad.name}`, primitives: [res.newPrim] })
+          json.meshes.push({
+            name: `${mesh.name}_${quad.name}`,
+            primitives: [res.newPrim],
+          })
           const nextNIdx = json.nodes.length
           json.nodes.push({ name: `${quad.name}_part`, mesh: nextMIdx })
           quadChildren.push(nextNIdx)
@@ -311,15 +440,25 @@ async function prepareCar(filename: string, config: {
       newWheelIndices.push(wIdx)
     }
 
-    parentNode.children = parentNode.children.filter((c: number) => {
-      const name = json.nodes[c]?.name
-      return name !== "Object_23" && name !== "Object_24" && !name?.startsWith("Wheel_")
-    }).concat(newWheelIndices)
+    parentNode.children = parentNode.children
+      .filter((c: number) => {
+        const name = json.nodes[c]?.name
+        return (
+          name !== "Object_23" &&
+          name !== "Object_24" &&
+          !name?.startsWith("Wheel_")
+        )
+      })
+      .concat(newWheelIndices)
   }
 
   if (config.lampMat) {
     for (const m of json.materials ?? []) {
-      if (m.name === config.lampMat || (config.isSkyline && (m.name === "red_glass" || m.name === "dark_red_glass"))) {
+      if (
+        m.name === config.lampMat ||
+        (config.isSkyline &&
+          (m.name === "red_glass" || m.name === "dark_red_glass"))
+      ) {
         m.emissiveFactor = [0.2, 0.01, 0.004]
         m.pbrMetallicRoughness = m.pbrMetallicRoughness || {}
         m.pbrMetallicRoughness.baseColorFactor = [1, 0.05, 0.02, 1]
@@ -335,7 +474,12 @@ async function prepareCar(filename: string, config: {
   console.log(`Processed ${filename} successfully`)
 }
 
-await prepareCar("bugatti_chiron_pur_sport.glb", { splitRear: "x", lampMat: "Red_Lights" })
-await prepareCar("mitsubishi_lancer_evolution_6.glb", { splitRear: "x", lampMat: "Red_Lights" })
+await prepareCar("bugatti_chiron_pur_sport.glb", {
+  splitRear: "x",
+  lampMat: "Red_Lights",
+})
+await prepareCar("mitsubishi_lancer_evolution_6.glb", {
+  splitRear: "x",
+  lampMat: "Red_Lights",
+})
 await prepareCar("nissan_350z.glb", { splitRear: "z", lampMat: "Red_Light" })
-await prepareCar("nissan_skyline_r32_gt-r.glb", { isSkyline: true, lampMat: "red_glass" })

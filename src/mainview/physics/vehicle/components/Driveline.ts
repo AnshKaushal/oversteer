@@ -52,7 +52,12 @@ export class Driveline {
     let feed = 1
     if (i.gear !== 0) {
       dir = i.gear === -1 ? -1 : 1
-      total = i.engineTorque * i.gearRatio * p.efficiency * i.converterMultiplier * dir
+      total =
+        i.engineTorque *
+        i.gearRatio *
+        p.efficiency *
+        i.converterMultiplier *
+        dir
       if (i.launchArmed) total = 0
       if (
         i.throttle > p.feedThrottle &&
@@ -66,7 +71,12 @@ export class Driveline {
       this.feedT += i.dt
       this.prevThrottle = i.throttle
       this.prevLaunching = i.launching
-      if (dir > 0 && i.gear === 1 && i.throttle > p.feedHoldThrottle && !i.rawPower) {
+      if (
+        dir > 0 &&
+        i.gear === 1 &&
+        i.throttle > p.feedHoldThrottle &&
+        !i.rawPower
+      ) {
         feed =
           i.launching || i.clutchDumping
             ? 1.0

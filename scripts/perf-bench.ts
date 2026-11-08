@@ -26,6 +26,17 @@ const input: DriveInput = {
   escapePressed: false,
 }
 
+// Regression budget (ms per sim step) per car count. Override with PERF_BUDGET_SCALE=<factor> on slower CI hosts.
+const BUDGET_MS: Record<number, number> = {
+  1: 0.3,
+  5: 0.6,
+  10: 1,
+  20: 1.5,
+  30: 2,
+}
+const SCALE = Number(process.env.PERF_BUDGET_SCALE ?? 1)
+let failed = false
+
 async function bench(cars: number) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
   world.timestep = FIXED_DT
@@ -68,6 +79,15 @@ async function bench(cars: number) {
       `${(msPerStep * 120).toFixed(0)} ms sim-work per real second @120Hz | ` +
       `headroom x${(1000 / 120 / msPerStep).toFixed(1)}`,
   )
+  const budget = (BUDGET_MS[cars] ?? Infinity) * SCALE
+  if (msPerStep > budget) {
+    console.error(
+      `  FAIL: ${msPerStep.toFixed(2)} ms > budget ${budget.toFixed(2)} ms`,
+    )
+    failed = true
+  }
 }
 
 for (const n of [1, 5, 10, 20, 30]) await bench(n)
+if (failed) process.exit(1)
+console.log("perf budget OK")

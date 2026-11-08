@@ -15,12 +15,15 @@ export class CenterDiff {
     const p = this.p
     if (!p) return this.baseShare
     const target = clamp(
-      this.baseShare + p.lockStiffness * (Math.abs(omegaRear) - Math.abs(omegaFront)),
+      this.baseShare +
+        p.lockStiffness * (Math.abs(omegaRear) - Math.abs(omegaFront)),
       p.minFrontShare,
       p.maxFrontShare,
     )
     this.share =
-      p.type === "active" ? this.share + (target - this.share) * Math.min(1, dt * p.responseRate) : target
+      p.type === "active"
+        ? this.share + (target - this.share) * Math.min(1, dt * p.responseRate)
+        : target
     return this.share
   }
 

@@ -26,7 +26,8 @@ const LIMITER = car.P.engine.revLimiterRPM
 const IDLE_RPM = car.P.engine.idleRPM
 /** Road speed (m/s) at which a gear turns the engine at the given rpm. */
 const msAt = (gear: number, rpm: number) =>
-  ((rpm * 2 * Math.PI) / 60) * car.P.wheels.radius / (TX.gearRatios[gear - 1] * TX.finalDriveRatio)
+  (((rpm * 2 * Math.PI) / 60) * car.P.wheels.radius) /
+  (TX.gearRatios[gear - 1] * TX.finalDriveRatio)
 
 const idle: DriveInput = {
   throttle: 0,
@@ -118,7 +119,11 @@ for (let i = 0; i < 2 * 120; i++) {
   world.step()
 }
 check("W+S arms launch control", t.launchArmed === true, `rpm=${t.rpm}`)
-check("launch rpm pinned at the car's launch rpm", Math.abs(t.rpm - TX.launchControlRPM) < 600, "rpm=" + t.rpm)
+check(
+  "launch rpm pinned at the car's launch rpm",
+  Math.abs(t.rpm - TX.launchControlRPM) < 600,
+  "rpm=" + t.rpm,
+)
 check(
   "launch staging: zero movement (clutch open)",
   Math.abs(t.speedKmh) < 0.3,
@@ -273,7 +278,11 @@ for (let i = 0; i < 30; i++) {
 }
 car.update(FIXED_DT, { ...idle, downshiftPressed: true })
 world.step()
-check("downshift into over-rev refused", car.gear === overRevGear, "gear=" + car.gear)
+check(
+  "downshift into over-rev refused",
+  car.gear === overRevGear,
+  "gear=" + car.gear,
+)
 // ...but the same downshift at sane speed is allowed
 body.setLinvel({ x: 0, y: 0, z: -msAt(overRevGear - 1, 0.6 * LIMITER) }, true)
 for (let i = 0; i < 30; i++) {
@@ -282,7 +291,11 @@ for (let i = 0; i < 30; i++) {
 }
 car.update(FIXED_DT, { ...idle, downshiftPressed: true })
 world.step()
-check("downshift allowed when safe", car.gear === overRevGear - 1, "gear=" + car.gear)
+check(
+  "downshift allowed when safe",
+  car.gear === overRevGear - 1,
+  "gear=" + car.gear,
+)
 body.setLinvel({ x: 0, y: 0, z: -16.7 }, true)
 body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true)
 car.gear = 3 as any

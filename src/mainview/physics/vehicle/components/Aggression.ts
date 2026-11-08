@@ -10,8 +10,10 @@ export class Aggression {
 
   step(dt: number, throttle: number, brake: number, prevThrottle: number) {
     const p = this.p
-    const rate = throttle > this.decisionThrottle ? p.decisionRateUp : p.decisionRateDown
-    this.decisionThrottle += (throttle - this.decisionThrottle) * Math.min(1, dt * rate)
+    const rate =
+      throttle > this.decisionThrottle ? p.decisionRateUp : p.decisionRateDown
+    this.decisionThrottle +=
+      (throttle - this.decisionThrottle) * Math.min(1, dt * rate)
 
     const throttleRate = (throttle - prevThrottle) / Math.max(dt, p.minDt)
     const tipIn = throttleRate > p.tipInRate ? p.tipInBonus : 0

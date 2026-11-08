@@ -1,4 +1,9 @@
-import type { LoadedPacejkaCurve, PacejkaCurve, TireSpec, Wheels } from "./schema"
+import type {
+  LoadedPacejkaCurve,
+  PacejkaCurve,
+  TireSpec,
+  Wheels,
+} from "./schema"
 
 export interface TyrePreset {
   frictionMu: number
@@ -13,8 +18,20 @@ export interface TyrePreset {
   }
 }
 
-const curve = (B: number, C: number, E: number): PacejkaCurve => ({ B, C, D: 1, E, Sh: 0, Sv: 0 })
-const loaded = (B: number, C: number, E: number, loadSensitivity: number): LoadedPacejkaCurve => ({
+const curve = (B: number, C: number, E: number): PacejkaCurve => ({
+  B,
+  C,
+  D: 1,
+  E,
+  Sh: 0,
+  Sv: 0,
+})
+const loaded = (
+  B: number,
+  C: number,
+  E: number,
+  loadSensitivity: number,
+): LoadedPacejkaCurve => ({
   ...curve(B, C, E),
   loadSensitivity,
 })
@@ -86,7 +103,12 @@ export type TyrePresetName = keyof typeof TYRES
 
 export function tyre(
   name: TyrePresetName,
-  override: Partial<Pick<Wheels, "frictionMu" | "rollingResist" | "relaxationLength" | "slipDampRate">> = {},
+  override: Partial<
+    Pick<
+      Wheels,
+      "frictionMu" | "rollingResist" | "relaxationLength" | "slipDampRate"
+    >
+  > = {},
 ) {
   const p = TYRES[name]
   return {

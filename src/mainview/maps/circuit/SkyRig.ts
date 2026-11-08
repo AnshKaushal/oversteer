@@ -1,5 +1,9 @@
 import * as THREE from "three"
-import { createSunDisc, setSunBlur, SUN_SPRITE_SCALE } from "../../systems/sunDisc"
+import {
+  createSunDisc,
+  setSunBlur,
+  SUN_SPRITE_SCALE,
+} from "../../systems/sunDisc"
 import {
   type TimeOfDayMode,
   type TimeOfDayPreset,
@@ -38,7 +42,7 @@ export class SkyRig {
     const sun = this.sun
     sun.position.set(120, 180, 60)
     sun.castShadow = true
-    sun.shadow.mapSize.set(4096, 4096)
+    sun.shadow.mapSize.set(2048, 2048)
     sun.shadow.bias = -0.0002
     sun.shadow.normalBias = 0.015
     sun.shadow.camera.left = -70
@@ -121,11 +125,19 @@ export class SkyRig {
 
   private applyStars() {
     const m = this.mode
+    const sunrise = m === "sunrise"
     const a =
-      (m === "night" || m === "sunrise" || m === "evening" ? 0.95 : 0) *
-      (1 - this.haze())
+      (m === "night" || sunrise || m === "evening" ? 1 : 0) *
+      (1 - this.haze() * (sunrise ? 0.5 : 1))
+    const mat = this.stars.material as THREE.PointsMaterial
     this.stars.visible = a > 0
-    ;(this.stars.material as THREE.PointsMaterial).opacity = a
+    mat.opacity = a
+    mat.size = sunrise ? 3 : 1.7
+    const blend = sunrise ? THREE.AdditiveBlending : THREE.NormalBlending
+    if (mat.blending !== blend) {
+      mat.blending = blend
+      mat.needsUpdate = true
+    }
   }
 
   private applyFogRange() {
@@ -139,8 +151,9 @@ export class SkyRig {
     this.applySunHaze()
     if (!this.fogEnabled) {
       fog.color.setHex(p.skyColor)
-      fog.near = this.drawDistance * 0.97
-      fog.far = this.drawDistance
+      const reach = Math.min(this.drawDistance, 2200)
+      fog.near = reach * 0.97
+      fog.far = reach
       this.syncDome(fog.color, fog.color)
       return
     }
@@ -157,7 +170,7 @@ export class SkyRig {
   }
 
   setDrawDistance(percent: number) {
-    this.drawDistance = 5000 * Math.min(100, Math.max(20, percent)) / 100
+    this.drawDistance = (5000 * Math.min(100, Math.max(20, percent))) / 100
     this.applyFogRange()
   }
 
@@ -218,13 +231,18 @@ export class SkyRig {
       scene.fog.color
         .setHex(this.fogEnabled ? p.fogColor : p.skyColor)
         .lerp(LIGHTNING_TINT, f * 0.5)
-      this.syncDome(scene.background instanceof THREE.Color ? scene.background : scene.fog.color, scene.fog.color)
+      this.syncDome(
+        scene.background instanceof THREE.Color
+          ? scene.background
+          : scene.fog.color,
+        scene.fog.color,
+      )
     }
   }
 
   setShadowQuality(pct: number) {
     const q = Math.min(100, Math.max(25, pct)) / 100
-    const size = Math.max(1024, Math.round((4096 * q) / 256) * 256)
+    const size = Math.max(1024, Math.round((2048 * q) / 256) * 256)
     const half = 50 + 20 * q
     this.shadowTexel = (2 * half) / size
     const sun = this.sun
@@ -270,6 +288,7 @@ export class SkyRig {
       carPos.z + this.sunOffset.z * k,
     )
     this.dome.follow(carPos.x, carPos.z)
-    if (this.stars.visible) this.stars.position.set(carPos.x, carPos.y, carPos.z)
+    if (this.stars.visible)
+      this.stars.position.set(carPos.x, carPos.y, carPos.z)
   }
 }

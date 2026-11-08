@@ -4,9 +4,12 @@ import { CircuitDriver } from "./CircuitDriver"
 import { CircuitWorld } from "./CircuitWorld"
 import { Track } from "./Track"
 
-export { createCircuitConfig, randomSeed, DEFAULT_CIRCUIT_CONFIG } from "./config"
+export {
+  createCircuitConfig,
+  randomSeed,
+  DEFAULT_CIRCUIT_CONFIG,
+} from "./config"
 export type { CircuitConfig } from "./config"
-
 
 export const circuitMap: GameMap = {
   id: "circuit",

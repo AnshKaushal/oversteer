@@ -44,7 +44,10 @@ export function createChassisBody(
     .setLinearDamping(c.linearDamping)
     .setAngularDamping(c.angularDamping)
     .setCcdEnabled(true)
-  const rideHeight = (physics.wheels.suspension.front.rideHeight + physics.wheels.suspension.rear.rideHeight) / 2
+  const rideHeight =
+    (physics.wheels.suspension.front.rideHeight +
+      physics.wheels.suspension.rear.rideHeight) /
+    2
   bodyDesc.setAdditionalMassProperties(
     mass.chassis,
     { x: 0, y: d.centerOfMassHeight - rideHeight, z: d.centerOfMassOffsetZ },
@@ -62,13 +65,19 @@ export function createChassisBody(
     .setFriction(c.lower.friction)
     .setRestitution(c.lower.restitution)
   world.createCollider(col, body)
-  world.createCollider(createCabinCollider(RAPIER_, physics).setDensity(0), body)
+  world.createCollider(
+    createCabinCollider(RAPIER_, physics).setDensity(0),
+    body,
+  )
   return body
 }
 
 const BOX_INERTIA_DIVISOR = 12
 
-export function boxInertia(m: number, d: { width: number; height: number; length: number }) {
+export function boxInertia(
+  m: number,
+  d: { width: number; height: number; length: number },
+) {
   const k = m / BOX_INERTIA_DIVISOR
   return {
     x: k * (d.height * d.height + d.length * d.length),

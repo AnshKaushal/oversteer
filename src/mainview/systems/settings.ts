@@ -34,7 +34,9 @@ export function setDisplayModes(m: { width: number; height: number }[]) {
   osModes = m
 }
 
-const STANDARD_HEIGHTS = [2160, 1440, 1200, 1080, 1050, 900, 800, 768, 720, 600, 540, 480]
+const STANDARD_HEIGHTS = [
+  2160, 1440, 1200, 1080, 1050, 900, 800, 768, 720, 600, 540, 480,
+]
 
 function tierFor(h: number, nativeH: number): ResolutionPreset["tier"] {
   const r = h / nativeH
@@ -60,19 +62,22 @@ export function resolutionHeight(id: ResolutionId): number | null {
   return p ? Number(p[1]) : null
 }
 
-// The resolutions the OS reports for this monitor, plus intermediate steps at the
-// screen's own aspect ratio, listed largest first like an OS display settings page.
 export function getResolutionPresets(): ResolutionPreset[] {
   const native = nativeDisplaySize()
   const aspect = native.width / native.height
-  const sizes = new Map<string, { width: number; height: number; os: boolean }>()
+  const sizes = new Map<
+    string,
+    { width: number; height: number; os: boolean }
+  >()
   for (const m of osModes) {
-    if (m.height <= native.height && m.width <= native.width) sizes.set(`${m.width}x${m.height}`, { ...m, os: true })
+    if (m.height <= native.height && m.width <= native.width)
+      sizes.set(`${m.width}x${m.height}`, { ...m, os: true })
   }
   for (const h of STANDARD_HEIGHTS) {
     if (h >= native.height) continue
     const w = Math.round((h * aspect) / 2) * 2
-    if (![...sizes.values()].some((s) => s.height === h)) sizes.set(`${w}x${h}`, { width: w, height: h, os: false })
+    if (![...sizes.values()].some((s) => s.height === h))
+      sizes.set(`${w}x${h}`, { width: w, height: h, os: false })
   }
   const list = [...sizes.entries()]
     .filter(([id]) => id !== `${native.width}x${native.height}`)
@@ -95,7 +100,9 @@ export function getResolutionPresets(): ResolutionPreset[] {
       height: m.height,
       badge: BADGES[tier],
       tier,
-      description: m.os ? "Display mode reported by your system" : "Renders at this size and scales up to fill the screen",
+      description: m.os
+        ? "Display mode reported by your system"
+        : "Renders at this size and scales up to fill the screen",
     })
   }
   return out
@@ -124,6 +131,10 @@ export interface AppSettings {
   vegetation?: number
   drawDistance?: number
   displayId?: number
+  qualityPreset?: "low" | "medium" | "high" | "ultra"
+  autoQuality?: boolean
+  rumble?: boolean
+  antiAliasing?: "off" | "fxaa" | "smaa" | "msaa"
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -139,6 +150,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   streetLightsOn: true,
   vegetation: 100,
   drawDistance: 100,
+  autoQuality: false,
+  antiAliasing: "fxaa",
+  rumble: true,
 }
 
 const SETTINGS_KEY = "oversteer_settings"
@@ -169,15 +183,18 @@ export function calculateResolution(
   containerH: number,
   scalePercent: number = 100,
 ): { width: number; height: number; pixelRatio: number; label: string } {
-  const w = containerW || (typeof window !== "undefined" ? window.innerWidth : 1920)
-  const h = containerH || (typeof window !== "undefined" ? window.innerHeight : 1080)
+  const w =
+    containerW || (typeof window !== "undefined" ? window.innerWidth : 1920)
+  const h =
+    containerH || (typeof window !== "undefined" ? window.innerHeight : 1080)
   const aspect = w / h
 
   if (presetId === "native") {
     const scale = Math.max(0.5, Math.min(1.0, scalePercent / 100))
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
     const panel = nativeDisplaySize()
-    const logicalW = (typeof window !== "undefined" && window.screen?.width) || w
+    const logicalW =
+      (typeof window !== "undefined" && window.screen?.width) || w
     const pr = Math.min(dpr, panel.width / logicalW) * scale
     const calcW = Math.round(w * pr)
     const calcH = Math.round(h * pr)
@@ -215,8 +232,12 @@ export function applyRendererResolution(
 ) {
   if (!renderer || !camera) return
 
-  const mountW = container?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1920)
-  const mountH = container?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 1080)
+  const mountW =
+    container?.clientWidth ||
+    (typeof window !== "undefined" ? window.innerWidth : 1920)
+  const mountH =
+    container?.clientHeight ||
+    (typeof window !== "undefined" ? window.innerHeight : 1080)
   const aspect = mountW / mountH
 
   camera.aspect = aspect

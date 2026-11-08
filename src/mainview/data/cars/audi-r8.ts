@@ -64,10 +64,19 @@ export const audiR8: CarSpec = {
         [8700, 0.78],
         [8900, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 10, displacementL: 5.2, flywheel: "sport" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 10,
+        displacementL: 5.2,
+        flywheel: "sport",
+      }),
       frictionTorqueBase: 50,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

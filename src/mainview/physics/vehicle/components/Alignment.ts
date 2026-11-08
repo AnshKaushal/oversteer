@@ -11,7 +11,8 @@ export class Alignment {
 
   camber(front: boolean, left: boolean, compression: number): number {
     const a = front ? this.p.front : this.p.rear
-    const outward = (a.camberDeg - this.p.camberGainDegPerM * compression) * RAD_PER_DEG
+    const outward =
+      (a.camberDeg - this.p.camberGainDegPerM * compression) * RAD_PER_DEG
     return left ? outward : -outward
   }
 }

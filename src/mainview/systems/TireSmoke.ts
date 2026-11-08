@@ -81,7 +81,9 @@ export class TireSmoke {
       this.turf.spawn(p, strength)
       if (Math.random() < 0.7) return
     }
-    const wet = this.wetnessAt ? Math.max(0, Math.min(1, this.wetnessAt(p.x, p.z))) : 0
+    const wet = this.wetnessAt
+      ? Math.max(0, Math.min(1, this.wetnessAt(p.x, p.z)))
+      : 0
     if (wet > 0) this.spray.spawn(p, strength, wet)
     const smokeShare = 1 - wet * (1 - WET_SMOKE_LEFT)
     const n = 1 + Math.floor(strength * 2.99)
@@ -221,7 +223,10 @@ class Spray {
       }
       this.vel[i3 + 1] -= GRAVITY * dt
       this.pos[i3] += this.vel[i3] * dt
-      this.pos[i3 + 1] = Math.max(0.02, this.pos[i3 + 1] + this.vel[i3 + 1] * dt)
+      this.pos[i3 + 1] = Math.max(
+        0.02,
+        this.pos[i3 + 1] + this.vel[i3 + 1] * dt,
+      )
       this.pos[i3 + 2] += this.vel[i3 + 2] * dt
       this.alpha[i] = 0.8 * Math.min(1, (this.life[i] / this.span[i]) * 1.6)
     }
@@ -247,7 +252,8 @@ class Turf {
 
   constructor() {
     for (let i = 0; i < TURF_CAP; i++) this.pos[i * 3 + 1] = -100
-    for (const a of [this.posAttr, this.colAttr, this.sizeAttr, this.alphaAttr]) a.setUsage(THREE.DynamicDrawUsage)
+    for (const a of [this.posAttr, this.colAttr, this.sizeAttr, this.alphaAttr])
+      a.setUsage(THREE.DynamicDrawUsage)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute("position", this.posAttr)
     geo.setAttribute("aColor", this.colAttr)
@@ -298,8 +304,12 @@ class Turf {
       this.vel[i3 + 1] = 2 + Math.random() * 3 + strength * 2.5
       this.vel[i3 + 2] = (Math.random() - 0.5) * 2 * kick
       const green = Math.random() < 0.6
-      this.col[i3] = green ? 0.2 + Math.random() * 0.1 : 0.32 + Math.random() * 0.08
-      this.col[i3 + 1] = green ? 0.4 + Math.random() * 0.15 : 0.22 + Math.random() * 0.06
+      this.col[i3] = green
+        ? 0.2 + Math.random() * 0.1
+        : 0.32 + Math.random() * 0.08
+      this.col[i3 + 1] = green
+        ? 0.4 + Math.random() * 0.15
+        : 0.22 + Math.random() * 0.06
       this.col[i3 + 2] = green ? 0.12 : 0.1
       this.life[i] = 0.5 + Math.random() * 0.6
       this.size[i] = 0.14 + Math.random() * 0.16
@@ -323,7 +333,10 @@ class Turf {
       }
       this.vel[i3 + 1] -= GRAVITY * dt
       this.pos[i3] += this.vel[i3] * dt
-      this.pos[i3 + 1] = Math.max(0.03, this.pos[i3 + 1] + this.vel[i3 + 1] * dt)
+      this.pos[i3 + 1] = Math.max(
+        0.03,
+        this.pos[i3 + 1] + this.vel[i3 + 1] * dt,
+      )
       this.pos[i3 + 2] += this.vel[i3 + 2] * dt
       this.alpha[i] = Math.min(1, this.life[i] * 3)
     }

@@ -9,7 +9,13 @@ export function createSunDisc(color: number): THREE.Sprite {
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, color, fog: false, transparent: true, depthWrite: false }),
+    new THREE.SpriteMaterial({
+      map: tex,
+      color,
+      fog: false,
+      transparent: true,
+      depthWrite: false,
+    }),
   )
   sprite.userData.blur = -1
   setSunBlur(sprite, 0)

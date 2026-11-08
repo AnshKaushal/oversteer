@@ -20,7 +20,12 @@ export class Impact {
 
   constructor(private readonly p: CrashSpec) {}
 
-  update(dt: number, lin: Vec3Like, ang: Vec3Like, touching: () => boolean): ImpactResult {
+  update(
+    dt: number,
+    lin: Vec3Like,
+    ang: Vec3Like,
+    touching: () => boolean,
+  ): ImpactResult {
     const p = this.p
     this.lost = Math.max(0, this.lost - (p.gripLoss / p.gripRecovery) * dt)
     this.gripScale = 1 - this.lost
@@ -35,8 +40,17 @@ export class Impact {
         if (lin.y - prev.y > p.maxLaunchSpeed) {
           out.linvel = { x: lin.x, y: prev.y + p.maxLaunchSpeed, z: lin.z }
         }
-        const lim = (a: number, b: number) => clamp(a, -Math.max(Math.abs(b), p.maxSpin), Math.max(Math.abs(b), p.maxSpin))
-        const a2 = { x: lim(ang.x, this.prevAng.x), y: lim(ang.y, this.prevAng.y), z: lim(ang.z, this.prevAng.z) }
+        const lim = (a: number, b: number) =>
+          clamp(
+            a,
+            -Math.max(Math.abs(b), p.maxSpin),
+            Math.max(Math.abs(b), p.maxSpin),
+          )
+        const a2 = {
+          x: lim(ang.x, this.prevAng.x),
+          y: lim(ang.y, this.prevAng.y),
+          z: lim(ang.z, this.prevAng.z),
+        }
         if (a2.x !== ang.x || a2.y !== ang.y || a2.z !== ang.z) out.angvel = a2
       }
     }

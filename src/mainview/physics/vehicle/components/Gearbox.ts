@@ -46,7 +46,9 @@ export class Gearbox {
 
   predictedRpm(gear: number, drivenOmega: number): number {
     if (gear <= 0) return 0
-    return Math.abs((drivenOmega * this.ratio(gear) * SECONDS_PER_MINUTE) / TWO_PI)
+    return Math.abs(
+      (drivenOmega * this.ratio(gear) * SECONDS_PER_MINUTE) / TWO_PI,
+    )
   }
 
   coupledRpm(drivenOmega: number): number {
@@ -61,13 +63,19 @@ export class Gearbox {
     const j = clamp(i + dir, 0, order.length - 1)
     if (j === i) return null
     const to = order[j]
-    if (to === -1 && Math.abs(fwdSpeed) > this.l.manualReverseMaxSpeed) return null
-    if (to >= 1 && this.gear === 0 && Math.abs(fwdSpeed) > this.l.manualNeutralMaxSpeed)
+    if (to === -1 && Math.abs(fwdSpeed) > this.l.manualReverseMaxSpeed)
+      return null
+    if (
+      to >= 1 &&
+      this.gear === 0 &&
+      Math.abs(fwdSpeed) > this.l.manualNeutralMaxSpeed
+    )
       return null
     if (
       to >= 1 &&
       dir < 0 &&
-      this.predictedRpm(to, drivenOmega) > this.redlineRpm - this.l.overRevMargin
+      this.predictedRpm(to, drivenOmega) >
+        this.redlineRpm - this.l.overRevMargin
     )
       return null
     const prev = this.gear
@@ -82,12 +90,14 @@ export class Gearbox {
     if (next === this.gear) return false
     if (
       delta < 0 &&
-      this.predictedRpm(next, drivenOmega) > this.redlineRpm - this.l.overRevMargin
+      this.predictedRpm(next, drivenOmega) >
+        this.redlineRpm - this.l.overRevMargin
     )
       return false
     this.gear = next
     this.shiftTimer = this.t.shiftTimeAuto
-    this.changeDelay = Math.abs(delta) > 1 ? this.l.changeDelayMulti : this.l.changeDelay
+    this.changeDelay =
+      Math.abs(delta) > 1 ? this.l.changeDelayMulti : this.l.changeDelay
     return true
   }
 

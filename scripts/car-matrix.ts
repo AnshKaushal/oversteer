@@ -107,13 +107,7 @@ for (const def of CARS) {
       .setFriction(1.0),
     gb,
   )
-  const body = createChassisBody(
-    world,
-    0,
-    0.72,
-    0,
-    def.physics,
-  )
+  const body = createChassisBody(world, 0, 0.72, 0, def.physics)
   const car = new Vehicle(
     world,
     body,

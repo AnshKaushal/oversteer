@@ -195,7 +195,11 @@ function runFrame(
   const ref = stateAt(60)
   for (const fps of [30, 144, 240, 360]) {
     const got = stateAt(fps)
-    check(`state identical at ${fps} fps vs 60 fps`, got === ref, got === ref ? "" : `${got} vs ${ref}`)
+    check(
+      `state identical at ${fps} fps vs 60 fps`,
+      got === ref,
+      got === ref ? "" : `${got} vs ${ref}`,
+    )
   }
 }
 
@@ -204,10 +208,18 @@ function runFrame(
   const stepper = createFixedStepper()
   const n = pushFrameTime(stepper, FIXED_DT * 1.25)
   for (let i = 0; i < n; i++) consumeSubstep(stepper)
-  check("alpha is the leftover fraction", Math.abs(stepperAlpha(stepper) - 0.25) < 1e-9, `alpha=${stepperAlpha(stepper)}`)
+  check(
+    "alpha is the leftover fraction",
+    Math.abs(stepperAlpha(stepper) - 0.25) < 1e-9,
+    `alpha=${stepperAlpha(stepper)}`,
+  )
   const none = createFixedStepper()
   const k = pushFrameTime(none, FIXED_DT * 0.4)
-  check("high-refresh frame runs zero steps", k === 0 && Math.abs(stepperAlpha(none) - 0.4) < 1e-9, `k=${k}`)
+  check(
+    "high-refresh frame runs zero steps",
+    k === 0 && Math.abs(stepperAlpha(none) - 0.4) < 1e-9,
+    `k=${k}`,
+  )
 }
 
 // 7. Budget backlog drop keeps the sub-step remainder and counts the rest.
@@ -215,8 +227,16 @@ function runFrame(
   const stepper = createFixedStepper()
   pushFrameTime(stepper, FIXED_DT * 5.5)
   dropBacklog(stepper)
-  check("dropBacklog keeps the fractional step", Math.abs(stepperAlpha(stepper) - 0.5) < 1e-9, `alpha=${stepperAlpha(stepper)}`)
-  check("dropBacklog counts dropped time", Math.abs(stepper.droppedTotal - FIXED_DT * 5) < 1e-9, `dropped=${stepper.droppedTotal}`)
+  check(
+    "dropBacklog keeps the fractional step",
+    Math.abs(stepperAlpha(stepper) - 0.5) < 1e-9,
+    `alpha=${stepperAlpha(stepper)}`,
+  )
+  check(
+    "dropBacklog counts dropped time",
+    Math.abs(stepper.droppedTotal - FIXED_DT * 5) < 1e-9,
+    `dropped=${stepper.droppedTotal}`,
+  )
 }
 
 // 8. PoseHistory: blends between steps and snaps on teleport.
@@ -229,7 +249,11 @@ function runFrame(
   check("pose blends halfway", Math.abs(v.x - 1) < 1e-9, `x=${v.x}`)
   h.capture({ x: 2 + WORLD.teleportDistance * 4, y: 0, z: 0 }, id)
   const t = h.blendPos(0.5, new (h.currPos.constructor as any)())
-  check("teleport is not smeared", Math.abs(t.x - (2 + WORLD.teleportDistance * 4)) < 1e-9, `x=${t.x}`)
+  check(
+    "teleport is not smeared",
+    Math.abs(t.x - (2 + WORLD.teleportDistance * 4)) < 1e-9,
+    `x=${t.x}`,
+  )
 }
 
 console.log(

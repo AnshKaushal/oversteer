@@ -74,7 +74,11 @@ function neutralizedMap(
   if (hit) return hit
   if (typeof document === "undefined") return null
   const img = map.image as
-    HTMLImageElement | HTMLCanvasElement | ImageBitmap | null | undefined
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | null
+    | undefined
   const w = (img as { width?: number } | null)?.width ?? 0
   const h = (img as { height?: number } | null)?.height ?? 0
   if (!img || !w || !h) return null

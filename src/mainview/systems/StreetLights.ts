@@ -46,7 +46,9 @@ export class StreetLights {
 
   async load(baseUrl: string) {
     try {
-      const glb = await new GLTFLoader().loadAsync(`${baseUrl}models/street_light.glb`)
+      const glb = await new GLTFLoader().loadAsync(
+        `${baseUrl}models/street_light.glb`,
+      )
       glb.scene.updateMatrixWorld(true)
       let pole: THREE.BufferGeometry | null = null
       let glass: THREE.BufferGeometry | null = null
@@ -59,7 +61,11 @@ export class StreetLights {
         else pole = g
       })
       if (!pole || !glass) return
-      const poleMat = new THREE.MeshStandardMaterial({ color: 0x6d7076, roughness: 0.7, metalness: 0.4 })
+      const poleMat = new THREE.MeshStandardMaterial({
+        color: 0x6d7076,
+        roughness: 0.7,
+        metalness: 0.4,
+      })
       this.headMat = new THREE.MeshStandardMaterial({
         color: 0xcfc8b8,
         emissive: GLOW,
@@ -117,7 +123,9 @@ export class StreetLights {
     const body = world.createRigidBody(R.RigidBodyDesc.fixed())
     for (let i = 0; i < MAX_LAMPS; i++) {
       const c = world.createCollider(
-        R.ColliderDesc.cuboid(0.3, HEAD_HEIGHT / 2, 0.3).setTranslation(0, -200, 0).setFriction(0.4),
+        R.ColliderDesc.cuboid(0.3, HEAD_HEIGHT / 2, 0.3)
+          .setTranslation(0, -200, 0)
+          .setFriction(0.4),
         body,
       )
       this.colliders.push(c)
@@ -201,11 +209,16 @@ export class StreetLights {
       this.aim[i * 3] = hx + dx * reach
       this.aim[i * 3 + 1] = 0
       this.aim[i * 3 + 2] = hz + dz * reach
-      m.compose(p.set(this.aim[i * 3], 0.03, this.aim[i * 3 + 2]), q.identity(), poolScale)
+      m.compose(
+        p.set(this.aim[i * 3], 0.03, this.aim[i * 3 + 2]),
+        q.identity(),
+        poolScale,
+      )
       this.pools!.setMatrixAt(i, m)
       this.colliders[i]?.setTranslation({ x: px, y: HEAD_HEIGHT / 2, z: pz })
     }
-    for (let i = n; i < this.colliders.length; i++) this.colliders[i].setTranslation({ x: 0, y: -200, z: 0 })
+    for (let i = n; i < this.colliders.length; i++)
+      this.colliders[i].setTranslation({ x: 0, y: -200, z: 0 })
     this.count = n
     for (const im of [this.poles!, this.heads!, this.pools!]) {
       im.count = n
@@ -232,8 +245,16 @@ export class StreetLights {
         continue
       }
       const i = c.i
-      s.position.set(this.head[i * 3], this.head[i * 3 + 1], this.head[i * 3 + 2])
-      s.target.position.set(this.aim[i * 3], this.aim[i * 3 + 1], this.aim[i * 3 + 2])
+      s.position.set(
+        this.head[i * 3],
+        this.head[i * 3 + 1],
+        this.head[i * 3 + 2],
+      )
+      s.target.position.set(
+        this.aim[i * 3],
+        this.aim[i * 3 + 1],
+        this.aim[i * 3 + 2],
+      )
       const f = 1 - smooth((c.d - FULL_BY) / (GONE_BY - FULL_BY))
       s.intensity = 260 * f
     }
@@ -246,5 +267,13 @@ function smooth(t: number): number {
 }
 
 function glowTexture(): THREE.Texture {
-  return makeGlowTexture([[0, 1], [0.35, 0.45], [1, 0]], 128, true)
+  return makeGlowTexture(
+    [
+      [0, 1],
+      [0.35, 0.45],
+      [1, 0],
+    ],
+    128,
+    true,
+  )
 }

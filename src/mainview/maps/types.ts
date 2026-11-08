@@ -28,7 +28,6 @@ export interface CircuitInfo {
   readonly lengthM: number
   readonly seed: number
   progressAt(x: number, z: number): number
-  /** Cumulative distance driven along the lap (unwrapped, 0 = start line). */
   progressTracker(): (x: number, z: number) => number
 }
 
@@ -51,7 +50,12 @@ export interface MapWorld {
   setDrawDistance(percent: number): void
   setLightning(f: number): void
   setClearZones(zones: ClearZone[]): void
-  renderReflections?(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, around?: (on: boolean) => void): void
+  renderReflections?(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    around?: (on: boolean) => void,
+  ): void
 }
 
 export interface MapFeatures {
@@ -67,7 +71,6 @@ export interface MapInstance {
   readonly linear: LinearRoad | null
   readonly circuit: CircuitInfo | null
   readonly world: MapWorld
-  /** Builds the AI that races rivals on this map (circuits). */
   rivalDriver?(profile: AIProfile): RaceDriver
 }
 
@@ -76,7 +79,6 @@ export interface GameMap {
   readonly name: string
   readonly description: string
   readonly features: MapFeatures
-  /** Road gap in metres between two race progress values. Defaults to a plain difference. */
   gapM?(a: number, b: number): number
   create(options?: unknown): MapInstance
 }

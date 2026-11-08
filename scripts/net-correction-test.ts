@@ -57,7 +57,16 @@ function makeWorld() {
   return { world, scene }
 }
 function makeRemote(world: any, scene: THREE.Scene, id: string): RemoteCar {
-  return new RemoteCar(id, id, 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
+  return new RemoteCar(
+    id,
+    id,
+    0xffffff,
+    scene,
+    "./",
+    world,
+    R,
+    TEST_REMOTE_OPTS,
+  )
 }
 function pkt(seq: number, x: number, z: number, vx = 0, vz = 0) {
   const r = validateStatePacket({

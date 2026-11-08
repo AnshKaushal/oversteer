@@ -22,8 +22,7 @@ export function hillNoise(seed: number, x: number, z: number): number {
     return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz
   }
   return (
-    oct(x * 0.02, z * 0.02) * 0.65 +
-    oct(x * 0.06 + 13.7, z * 0.06 + 7.1) * 0.35
+    oct(x * 0.02, z * 0.02) * 0.65 + oct(x * 0.06 + 13.7, z * 0.06 + 7.1) * 0.35
   )
 }
 

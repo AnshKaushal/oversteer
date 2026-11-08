@@ -22,10 +22,16 @@ const ROAD_REPEAT_M = 24
 const KERB_REPEAT_M = 2.4
 const KERB_WIDTH_M = 1.4
 const KERB_CURVATURE = 1 / 280
-const CHUNK_M = 400
+const CHUNK_M = 100
+const TREE_LOD_M = 70
+const TREE_SHADOW_M = 140
+const FAR_LOD_M = 500
 
 interface TreeChunk {
   mesh: THREE.InstancedMesh
+  hi: THREE.BufferGeometry
+  lo?: THREE.BufferGeometry
+  far?: THREE.BufferGeometry
   total: number
   cx: number
   cz: number
@@ -175,7 +181,6 @@ export class CircuitWorld implements MapWorld {
   setPropShadows(on: boolean) {
     if (on === this.propShadows) return
     this.propShadows = on
-    for (const c of this.chunks) c.mesh.castShadow = on
     for (const m of this.hillDress) m.castShadow = on
   }
 
@@ -420,7 +425,12 @@ export class CircuitWorld implements MapWorld {
   }
 
   private treeGeometry(): THREE.BufferGeometry {
-    const paint = (g: THREE.BufferGeometry, r: number, gr: number, b: number) => {
+    const paint = (
+      g: THREE.BufferGeometry,
+      r: number,
+      gr: number,
+      b: number,
+    ) => {
       const out = g.toNonIndexed()
       g.dispose()
       const c = out.attributes.position.count
@@ -450,19 +460,21 @@ export class CircuitWorld implements MapWorld {
     const t = this.track
     const cfg = t.config
     const clear = cfg.widthM / 2 + cfg.runoffM + 3
-    const protos: { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] =
-      this.kit?.trees.length
-        ? this.kit.trees
-        : [
-            {
-              geometry: this.treeGeometry(),
-              material: new THREE.MeshStandardMaterial({
-                vertexColors: true,
-                roughness: 1,
-                flatShading: true,
-              }),
-            },
-          ]
+    const protos: {
+      geometry: THREE.BufferGeometry
+      material: THREE.Material | THREE.Material[]
+    }[] = this.kit?.trees.length
+      ? this.kit.trees
+      : [
+          {
+            geometry: this.treeGeometry(),
+            material: new THREE.MeshStandardMaterial({
+              vertexColors: true,
+              roughness: 1,
+              flatShading: true,
+            }),
+          },
+        ]
     const glb = !!this.kit?.trees.length
     const chunkCount = Math.max(1, Math.ceil(t.lengthM / CHUNK_M))
     const perChunk = Math.round(
@@ -493,7 +505,11 @@ export class CircuitWorld implements MapWorld {
         const v = Math.floor(rng() * protos.length) % protos.length
         e.set(0, rng() * Math.PI * 2, 0)
         q.setFromEuler(e)
-        m4.compose(pos.set(x, 0, z), q, scale.set(sc, sc * (0.9 + rng() * 0.4), sc))
+        m4.compose(
+          pos.set(x, 0, z),
+          q,
+          scale.set(sc, sc * (0.9 + rng() * 0.4), sc),
+        )
         mats[v].push(m4.clone())
         tints[v].push(
           new THREE.Color().setHSL(
@@ -519,12 +535,16 @@ export class CircuitWorld implements MapWorld {
         im.instanceMatrix.needsUpdate = true
         if (im.instanceColor) im.instanceColor.needsUpdate = true
         im.castShadow = this.propShadows
+        im.name = "tree"
         im.receiveShadow = glb
         im.computeBoundingSphere()
         const bs = im.boundingSphere!
         this.group.add(im)
         this.chunks.push({
           mesh: im,
+          hi: pr.geometry,
+          lo: (pr as { lod?: THREE.BufferGeometry }).lod,
+          far: (pr as { far?: THREE.BufferGeometry }).far,
           total: matrices.length,
           cx: bs.center.x,
           cz: bs.center.z,
@@ -598,6 +618,9 @@ export class CircuitWorld implements MapWorld {
     for (const c of this.chunks) {
       const d = Math.hypot(c.cx - carPos.x, c.cz - carPos.z) - c.radius
       c.mesh.visible = d < far && c.mesh.count > 0
+      c.mesh.geometry =
+        c.far && d >= FAR_LOD_M ? c.far : c.lo && d >= TREE_LOD_M ? c.lo : c.hi
+      c.mesh.castShadow = this.propShadows && d < TREE_SHADOW_M
     }
   }
 }

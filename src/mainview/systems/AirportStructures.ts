@@ -3,7 +3,6 @@ import * as THREE from "three"
 import { sharedTexture, releaseTexture } from "./Airport"
 import { makeGlowTexture } from "./GlowTexture"
 
-
 export const FENCE_PAST_ENDS = 40
 export const FENCE_OFFSET = 60
 
@@ -46,7 +45,11 @@ function makeChainLinkTexture(): THREE.CanvasTexture {
 }
 
 function makeTowerGlow(): THREE.Texture {
-  return makeGlowTexture([[0, 1], [0.4, 0.4], [1, 0]])
+  return makeGlowTexture([
+    [0, 1],
+    [0.4, 0.4],
+    [1, 0],
+  ])
 }
 
 export function warmStructureTextures() {
@@ -77,12 +80,28 @@ export class AirportStructures {
     const { half } = input
     const glow = this.share("towerGlow", makeTowerGlow)
 
-    const std = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => {
-      const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.1, ...extra })
+    const std = (
+      color: number,
+      extra: Partial<THREE.MeshStandardMaterialParameters> = {},
+    ) => {
+      const m = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.85,
+        metalness: 0.1,
+        ...extra,
+      })
       this.solid.push(m)
       return m
     }
-    const box = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) => {
+    const box = (
+      w: number,
+      h: number,
+      d: number,
+      mat: THREE.Material,
+      x: number,
+      y: number,
+      z: number,
+    ) => {
       const geo = new THREE.BoxGeometry(w, h, d)
       this.geoms.push(geo)
       const m = new THREE.Mesh(geo, mat)
@@ -149,10 +168,12 @@ export class AirportStructures {
         const qc = (along ? q.z : q.x) - fixed
         if (pc * qc > 0 || pc === qc) continue
         const u = pc / (pc - qc)
-        const sAt = (along ? p.x : p.z) + u * ((along ? q.x : q.z) - (along ? p.x : p.z))
+        const sAt =
+          (along ? p.x : p.z) + u * ((along ? q.x : q.z) - (along ? p.x : p.z))
         const dx = q.x - p.x
         const dz = q.z - p.z
-        const cross = Math.abs(along ? dz : dx) / Math.max(Math.hypot(dx, dz), 1e-6)
+        const cross =
+          Math.abs(along ? dz : dx) / Math.max(Math.hypot(dx, dz), 1e-6)
         const half = 4.5 / Math.max(0.3, cross) + 2
         gaps.push([sAt - half, sAt + half])
       }
@@ -234,7 +255,15 @@ export class AirportStructures {
         const z = sgn * TOWER_Z
         cyl(0.2, 0.36, TOWER_HEIGHT, 8, towerMat, x, TOWER_HEIGHT / 2, z)
         box(4.2, 0.18, 1.2, towerMat, x, TOWER_HEIGHT - 0.2, z)
-        const head = box(4, 0.7, 0.5, headMat, x, TOWER_HEIGHT + 0.3, z - sgn * 0.4)
+        const head = box(
+          4,
+          0.7,
+          0.5,
+          headMat,
+          x,
+          TOWER_HEIGHT + 0.3,
+          z - sgn * 0.4,
+        )
         head.castShadow = false
         for (const dx of [-1.4, 0, 1.4]) {
           this.towerLamps.push({
@@ -293,7 +322,12 @@ export class AirportStructures {
       [0, 4.6],
       [0, -4.6],
     ]) {
-      this.lamps.push({ x: ax + dx, y: 23.9, z: az + dz, color: [1, 0.12, 0.08] })
+      this.lamps.push({
+        x: ax + dx,
+        y: 23.9,
+        z: az + dz,
+        color: [1, 0.12, 0.08],
+      })
     }
     this.lamps.push({ x: ax, y: 29.9, z: az, color: [1, 0.12, 0.08] })
     this.beacon = {

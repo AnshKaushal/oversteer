@@ -1,10 +1,16 @@
 import { Electroview } from "electrobun/view"
 import { setDisplayModes, setNativePanel } from "./settings"
-import type { DisplayInfo, OverSteerRPC, UpdateResult } from "../../shared/updateRpc"
+import type {
+  DisplayInfo,
+  OverSteerRPC,
+  UpdateResult,
+} from "../../shared/updateRpc"
 
 let deltaListener: ((dx: number, dy: number) => void) | null = null
 
-export function onNativeMouseDelta(fn: ((dx: number, dy: number) => void) | null) {
+export function onNativeMouseDelta(
+  fn: ((dx: number, dy: number) => void) | null,
+) {
   deltaListener = fn
 }
 
@@ -36,6 +42,12 @@ function getBridge() {
   return rpc
 }
 
+export function sendPerfLog(text: string) {
+  try {
+    ;(getBridge() as any).send?.perfLog({ text })
+  } catch {}
+}
+
 export async function checkForUpdates(): Promise<UpdateResult> {
   try {
     return await getBridge().request.checkForUpdates()
@@ -54,7 +66,10 @@ function applyPanel(id?: number) {
   const cy = window.screenY + window.innerHeight / 2
   const d =
     knownDisplays.find((x) => x.id === id) ??
-    knownDisplays.find((x) => cx >= x.x && cx < x.x + x.width && cy >= x.y && cy < x.y + x.height) ??
+    knownDisplays.find(
+      (x) =>
+        cx >= x.x && cx < x.x + x.width && cy >= x.y && cy < x.y + x.height,
+    ) ??
     knownDisplays.find((x) => x.isPrimary)
   setNativePanel(d ? { width: d.nativeWidth, height: d.nativeHeight } : null)
   setDisplayModes(d?.modes ?? [])
@@ -79,6 +94,15 @@ export async function moveToDisplay(id: number): Promise<boolean> {
       setTimeout(() => applyPanel(id), 800)
     }
     return ok
+  } catch {
+    return false
+  }
+}
+
+/** Start/stop the LAN relay server in the host process. Resolves true if it is running. */
+export async function setLanRelay(on: boolean): Promise<boolean> {
+  try {
+    return await getBridge().request.setLanRelay({ on })
   } catch {
     return false
   }

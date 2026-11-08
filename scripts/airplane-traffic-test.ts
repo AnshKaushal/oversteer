@@ -14,7 +14,9 @@ import { roadCenterX, roadYaw } from "../src/mainview/systems/WorldManager"
 let fails = 0
 function check(ok: boolean, label: string, detail = "") {
   if (!ok) fails++
-  console.log(`${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`)
+  console.log(
+    `${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`,
+  )
 }
 
 // The shadow texture needs a canvas; three's loader needs a progress event.
@@ -104,7 +106,11 @@ for (let step = 0; step < 60 * 300; step++) {
   const f = (flyby as any).flight
   if (f && f.traveled > 1) passes++
 }
-check(seen.size >= 2, "more than one kind of aircraft flew", [...seen].join(", "))
+check(
+  seen.size >= 2,
+  "more than one kind of aircraft flew",
+  [...seen].join(", "),
+)
 check(passes > 10, "passes kept running", `${passes} frames of flying`)
 check(propTurned > 0, "a propeller turned")
 
@@ -115,7 +121,11 @@ check(propTurned > 0, "a propeller turned")
   )
   check(!!ac, "the Cessna is in the traffic")
   if (ac) {
-    check(ac.props.length === 1, "the Cessna has one propeller", `${ac.props.length}`)
+    check(
+      ac.props.length === 1,
+      "the Cessna has one propeller",
+      `${ac.props.length}`,
+    )
     const node = ac.props[0].node
     const before = node.quaternion.clone()
     for (let i = 0; i < 30; i++) {
@@ -124,7 +134,11 @@ check(propTurned > 0, "a propeller turned")
       )
     }
     const turned = before.angleTo(node.quaternion)
-    check(turned > 1, "the propeller turns about its hub", turned.toFixed(2) + " rad")
+    check(
+      turned > 1,
+      "the propeller turns about its hub",
+      turned.toFixed(2) + " rad",
+    )
   }
 }
 
@@ -164,16 +178,20 @@ check(propTurned > 0, "a propeller turned")
   const visible = ((flyby as any).aircraft as any[]).filter(
     (a) => a.root.visible,
   )
-  check(visible.length <= 1, "only one aircraft is in the air at a time", String(visible.length))
+  check(
+    visible.length <= 1,
+    "only one aircraft is in the air at a time",
+    String(visible.length),
+  )
 }
 
 // The airfield: the runway holds the whole landing roll-out and the start
 // of a take-off, and stays well clear of the main road.
 {
-  const { layoutAirport, airportBlocked, RUNWAY_LENGTH, RUNWAY_WIDTH } = await import(
-    "../src/mainview/systems/Airport"
-  )
-  const { makePath, passState } = await import("../src/mainview/systems/AirplaneFlyby")
+  const { layoutAirport, airportBlocked, RUNWAY_LENGTH, RUNWAY_WIDTH } =
+    await import("../src/mainview/systems/Airport")
+  const { makePath, passState } =
+    await import("../src/mainview/systems/AirplaneFlyby")
   const DEG = Math.PI / 180
   let worstOff = 0
   let minRoad = Infinity
@@ -190,10 +208,17 @@ check(propTurned > 0, "a propeller turned")
         const dz = z - lay.cz
         const along = dx * lay.ux + dz * lay.uz
         const across = -dx * lay.uz + dz * lay.ux
-        return Math.max(Math.abs(along) - RUNWAY_LENGTH / 2, Math.abs(across) - RUNWAY_WIDTH / 2)
+        return Math.max(
+          Math.abs(along) - RUNWAY_LENGTH / 2,
+          Math.abs(across) - RUNWAY_WIDTH / 2,
+        )
       }
       // The landing roll: touchdown to a full stop.
-      for (let t = 0.85 * landing.length; t < 0.85 * landing.length + 600; t += 10) {
+      for (
+        let t = 0.85 * landing.length;
+        t < 0.85 * landing.length + 600;
+        t += 10
+      ) {
         const st = passState("landing", t, landing, 0)
         worstOff = Math.max(worstOff, inRunway(st.x, st.z))
       }
@@ -213,8 +238,16 @@ check(propTurned > 0, "a propeller turned")
     }
   }
   check(n > 10, "airfields were laid out", `${n}`)
-  check(worstOff <= 0, "landing and take-off rolls stay on the runway", `${worstOff.toFixed(1)} m outside`)
-  check(minRoad > 40, "the runway keeps clear of the road", `${minRoad.toFixed(0)} m`)
+  check(
+    worstOff <= 0,
+    "landing and take-off rolls stay on the runway",
+    `${worstOff.toFixed(1)} m outside`,
+  )
+  check(
+    minRoad > 40,
+    "the runway keeps clear of the road",
+    `${minRoad.toFixed(0)} m`,
+  )
   // The lamps light at night only.
   {
     const { AirportView } = await import("../src/mainview/systems/Airport")
@@ -225,23 +258,44 @@ check(propTurned > 0, "a propeller turned")
     view.group.traverse((o) => {
       if (o.type === "Points") halos.push(o as THREE.Points)
     })
-    halos.sort((a, b) => b.geometry.getAttribute("position").count - a.geometry.getAttribute("position").count)
+    halos.sort(
+      (a, b) =>
+        b.geometry.getAttribute("position").count -
+        a.geometry.getAttribute("position").count,
+    )
     const lamps = halos[0]
     for (let i = 0; i < 120; i++) view.step(1 / 60)
     const day = lamps.visible
     view.lit = true
     view.step(1 / 60)
     const count = lamps.geometry.getAttribute("position").count
-    check(!day && lamps.visible, "the airfield lamps are off by day and on at night", `${count} lamps`)
-    check(count > 100, "the airfield has runway, taxi and approach lamps", `${count}`)
+    check(
+      !day && lamps.visible,
+      "the airfield lamps are off by day and on at night",
+      `${count} lamps`,
+    )
+    check(
+      count > 100,
+      "the airfield has runway, taxi and approach lamps",
+      `${count}`,
+    )
     // Fence, light towers and the control tower.
     let posts = 0
     view.group.traverse((o) => {
-      if ((o as THREE.InstancedMesh).isInstancedMesh) posts += (o as THREE.InstancedMesh).count
+      if ((o as THREE.InstancedMesh).isInstancedMesh)
+        posts += (o as THREE.InstancedMesh).count
     })
     const box = new THREE.Box3().setFromObject(view.group)
-    check(posts >= 20, "the road side of the airfield is fenced", `${posts} posts`)
-    check(box.max.y >= 28, "the control tower stands tall", `${box.max.y.toFixed(0)} m`)
+    check(
+      posts >= 20,
+      "the road side of the airfield is fenced",
+      `${posts} posts`,
+    )
+    check(
+      box.max.y >= 28,
+      "the control tower stands tall",
+      `${box.max.y.toFixed(0)} m`,
+    )
     // Every layout that fits has its fence and gate clear of the road.
     let nearest = Infinity
     for (let sC = 400; sC < 2400; sC += 200) {
@@ -250,7 +304,12 @@ check(propTurned > 0, "a propeller turned")
         if (airportBlocked(l, () => 0)) continue
         const nx = -l.uz
         const nz = l.ux
-        for (const [a, b] of [[-510, -60], [-510, 60], [510, -60], [510, 60]]) {
+        for (const [a, b] of [
+          [-510, -60],
+          [-510, 60],
+          [510, -60],
+          [510, 60],
+        ]) {
           const x = l.cx + l.ux * a + nx * b
           const z = l.cz + l.uz * a + nz * b
           for (let s = -z - 300; s <= -z + 300; s += 5) {
@@ -259,7 +318,11 @@ check(propTurned > 0, "a propeller turned")
         }
       }
     }
-    check(nearest > 20, "the fenced corners keep off the road", `${nearest.toFixed(0)} m`)
+    check(
+      nearest > 20,
+      "the fenced corners keep off the road",
+      `${nearest.toFixed(0)} m`,
+    )
     view.dispose()
   }
   check(
@@ -292,15 +355,29 @@ check(propTurned > 0, "a propeller turned")
   const air = first < 0 ? [] : modes.slice(first)
   check(modes.length >= 4, "a parked car sees several flights", modes.join(","))
   check(air.length >= 3, "airfield traffic follows", modes.join(","))
-  check(air.every((m) => m !== "cruise"), "later flights are all airfield traffic", modes.join(","))
-  check(air.every((m, i) => i === 0 || m !== air[i - 1]), "landings and take-offs alternate", modes.join(","))
+  check(
+    air.every((m) => m !== "cruise"),
+    "later flights are all airfield traffic",
+    modes.join(","),
+  )
+  check(
+    air.every((m, i) => i === 0 || m !== air[i - 1]),
+    "landings and take-offs alternate",
+    modes.join(","),
+  )
   const fields = [...views].filter(Boolean)
-  check(fields.length <= 2, "one airfield serves the parked car", `${fields.length} airfields`)
+  check(
+    fields.length <= 2,
+    "one airfield serves the parked car",
+    `${fields.length} airfields`,
+  )
   void lastMode
   parked.dispose()
 }
 
 flyby.dispose()
 server.stop(true)
-console.log(fails === 0 ? "\nAll traffic checks passed" : `\n${fails} check(s) failed`)
+console.log(
+  fails === 0 ? "\nAll traffic checks passed" : `\n${fails} check(s) failed`,
+)
 if (fails) process.exit(1)

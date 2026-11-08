@@ -63,10 +63,19 @@ export const mitsubishiLancerEvo6: CarSpec = {
         [8000, 0.8],
         [8300, 0],
       ],
-      ...engineBuild({ layout: "inline", cylinders: 4, displacementL: 2.0, flywheel: "sport" }),
+      ...engineBuild({
+        layout: "inline",
+        cylinders: 4,
+        displacementL: 2.0,
+        flywheel: "sport",
+      }),
       frictionTorqueBase: 45,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

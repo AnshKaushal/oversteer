@@ -24,7 +24,9 @@ export function listMaps(): readonly GameMap[] {
 }
 
 export function getMap(id?: string | null): GameMap {
-  return MAPS.find((m) => m.id === id) ?? MAPS.find((m) => m.id === DEFAULT_MAP_ID)!
+  return (
+    MAPS.find((m) => m.id === id) ?? MAPS.find((m) => m.id === DEFAULT_MAP_ID)!
+  )
 }
 
 export function createMap(id?: string | null, options?: unknown): MapInstance {

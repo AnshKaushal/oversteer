@@ -83,7 +83,11 @@ export class Cruise {
         const raw = err * p.throttleGain + this.trim
         const u = clamp(raw, 0, p.throttleMax)
         if ((u < p.throttleMax || err < 0) && (u > 0 || err > 0)) {
-          this.trim = clamp(this.trim + err * dt * p.trimGain, p.trimMin, p.trimMax)
+          this.trim = clamp(
+            this.trim + err * dt * p.trimGain,
+            p.trimMin,
+            p.trimMax,
+          )
         }
         const cruiseBrake =
           raw < p.brakeDeadband && !this.pulling

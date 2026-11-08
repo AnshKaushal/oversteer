@@ -65,10 +65,19 @@ export const dodgeChallenger: CarSpec = {
         [6400, 0.6],
         [6600, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 8, displacementL: 6.1, flywheel: "road" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 8,
+        displacementL: 6.1,
+        flywheel: "road",
+      }),
       frictionTorqueBase: 50,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

@@ -205,7 +205,9 @@ export class RemoteCar {
         .setRestitution(rc.remote.restitution),
       body,
     )
-    this.cabinCollider.setCollisionGroups(this.solid ? SOLID_GROUPS : GHOST_GROUPS)
+    this.cabinCollider.setCollisionGroups(
+      this.solid ? SOLID_GROUPS : GHOST_GROUPS,
+    )
   }
 
   private rebuildColliders(phys: CarPhysicsConfig) {
@@ -234,6 +236,7 @@ export class RemoteCar {
         paintTexture: this.paintTexture,
       })
       .then(() => {
+        visual.setHeadlights(this.lightsOn)
         scene?.add(visual.group)
       })
       .catch((e) => {
@@ -426,7 +429,11 @@ export class RemoteCar {
     }
   }
 
+  /** Desired lamp state, re-applied whenever the visual (re)loads. */
+  private lightsOn = false
+
   setHeadlights(on: boolean) {
+    this.lightsOn = on
     this.visual.setHeadlights(on)
   }
 
@@ -484,7 +491,8 @@ export class RemoteCar {
       return
     }
 
-    if (!this.solid && this.placed && !this.overlapsOthers()) this.setSolid(true)
+    if (!this.solid && this.placed && !this.overlapsOthers())
+      this.setSolid(true)
 
     const ageS = Math.max(0, (now - this.lastPacketTime) / 1000)
     _goal.copy(this.targetPos)
@@ -677,9 +685,33 @@ export class RemoteCar {
     } catch {}
   }
 
-  update(dt: number, smokeSystem?: TireSmoke) {
+  private lodAcc = 0
+  private lodFrame = 0
+
+  update(
+    dt: number,
+    smokeSystem?: TireSmoke,
+    viewer?: { x: number; y: number; z: number },
+  ) {
     const b = this.colliderBody
     if (!b || !this.hasReceivedPacket) return
+
+    let far = false
+    if (viewer) {
+      const t = b.translation()
+      const dx = t.x - viewer.x
+      const dz = t.z - viewer.z
+      far = dx * dx + dz * dz > 300 * 300
+    }
+    if (far) {
+      this.lodAcc += dt
+      if (++this.lodFrame % 3 !== 0) return
+      dt = this.lodAcc
+      this.lodAcc = 0
+      smokeSystem = undefined
+    } else {
+      this.lodAcc = 0
+    }
 
     let bp: { x: number; y: number; z: number }
     let bq: { x: number; y: number; z: number; w: number }
@@ -701,7 +733,12 @@ export class RemoteCar {
     } else {
       const vms = Math.sqrt(bv.x * bv.x + bv.y * bv.y + bv.z * bv.z)
       this.wheelOmega = vms / this.wheelRadius
-      omegas = [this.wheelOmega, this.wheelOmega, this.wheelOmega, this.wheelOmega]
+      omegas = [
+        this.wheelOmega,
+        this.wheelOmega,
+        this.wheelOmega,
+        this.wheelOmega,
+      ]
     }
 
     this.visual.syncFromPose(

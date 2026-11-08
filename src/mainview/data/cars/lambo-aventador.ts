@@ -65,10 +65,19 @@ export const lamboAventador: CarSpec = {
         [8500, 0.65],
         [8700, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 12, displacementL: 6.5, flywheel: "sport" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 12,
+        displacementL: 6.5,
+        flywheel: "sport",
+      }),
       frictionTorqueBase: 50,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

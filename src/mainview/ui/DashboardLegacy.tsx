@@ -32,9 +32,22 @@ interface GaugeRefs {
 
 function TextIcon({ label }: { label: string }) {
   return (
-    <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
       <circle cx="12" cy="12" r="9" />
-      <text x="12" y="15" textAnchor="middle" fontSize="8" fontWeight="700" fill="currentColor" stroke="none">
+      <text
+        x="12"
+        y="15"
+        textAnchor="middle"
+        fontSize="8"
+        fontWeight="700"
+        fill="currentColor"
+        stroke="none"
+      >
         {label}
       </text>
     </g>
@@ -49,7 +62,13 @@ const NEEDLE_HALF_TAIL = 2.6
 
 function SafetyIcon() {
   return (
-    <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 3l7 2.6v5.6c0 4.4-3 8-7 9.8-4-1.8-7-5.4-7-9.8V5.6z" />
       <path d="M8.6 12l2.4 2.4 4.4-4.8" />
     </g>
@@ -58,7 +77,13 @@ function SafetyIcon() {
 
 function CruiseIcon() {
   return (
-    <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M4 17a8.5 8.5 0 1 1 16 0" />
       <path d="M12 17l4.2-5.4" />
       <circle cx="12" cy="17" r="1.2" fill="currentColor" />
@@ -147,12 +172,22 @@ function Dial({
     : maxLabel % 20 === 0
       ? (maxLabel / 20) * 4
       : 68
-  const labelEvery = isRpm ? (maxLabel > 10 ? 10 : 5) : maxLabel % 20 === 0 ? (maxLabel > 200 ? 8 : 4) : 8
+  const labelEvery = isRpm
+    ? maxLabel > 10
+      ? 10
+      : 5
+    : maxLabel % 20 === 0
+      ? maxLabel > 200
+        ? 8
+        : 4
+      : 8
 
   for (let i = 0; i <= steps; i++) {
     const frac = i / steps
     const a = angleFor(frac)
-    const labelled = i % labelEvery === 0 || (isRpm && i === steps && steps % labelEvery > labelEvery / 2)
+    const labelled =
+      i % labelEvery === 0 ||
+      (isRpm && i === steps && steps % labelEvery > labelEvery / 2)
     const p1 = polar(CX, CY, CR, a)
     const p2 = polar(CX, CY, CR - (labelled ? 12 : 6), a)
     const rpm = frac * maxLabel * 1000
@@ -293,7 +328,13 @@ function Dial({
         textAnchor="middle"
         fontSize={modeLabel ? "8" : "8.5"}
         fill={
-          modeLabel ? (modeLabel === "ENGINE OFF" ? "#ff3b30" : modeLabel === "AUTO" ? "#7db8ec" : "#cbd5e1") : "#8f99a8"
+          modeLabel
+            ? modeLabel === "ENGINE OFF"
+              ? "#ff3b30"
+              : modeLabel === "AUTO"
+                ? "#7db8ec"
+                : "#cbd5e1"
+            : "#8f99a8"
         }
         fontFamily={SANS}
         letterSpacing={modeLabel ? "1.5" : "2.5"}
@@ -358,8 +399,18 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
   const dashRedFrom = tele.dash?.redFromRpm ?? RED_FROM_RPM
   const dashYellowFrom = dashRedFrom - 1000
   const dashMaxKmh = tele.dash?.maxKmh ?? MAX_KMH
-  const dashRef = useRef({ maxRpm: dashMaxRpm, red: dashRedFrom, yellow: dashYellowFrom, kmh: dashMaxKmh })
-  dashRef.current = { maxRpm: dashMaxRpm, red: dashRedFrom, yellow: dashYellowFrom, kmh: dashMaxKmh }
+  const dashRef = useRef({
+    maxRpm: dashMaxRpm,
+    red: dashRedFrom,
+    yellow: dashYellowFrom,
+    kmh: dashMaxKmh,
+  })
+  dashRef.current = {
+    maxRpm: dashMaxRpm,
+    red: dashRedFrom,
+    yellow: dashYellowFrom,
+    kmh: dashMaxKmh,
+  }
   const spdNeedle = useRef<SVGGElement | null>(null)
   const spdNum = useRef<SVGTextElement | null>(null)
   const spdIcon = useRef<SVGGElement | null>(null)
@@ -416,7 +467,7 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
       if (rpmRim.current) {
         const limiter = dRpm >= dash.red
         const warning = dRpm >= dash.yellow
-        const flash = limiter ? (Math.sin(now * 0.045) > 0 ? 1 : 0.10) : 1
+        const flash = limiter ? (Math.sin(now * 0.045) > 0 ? 1 : 0.1) : 1
 
         rpmRim.current.setAttribute(
           "stroke",
@@ -440,9 +491,24 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
       paintTelltale(spdIcon.current, !!t.parkingBrake, RED, true)
       const blink = Math.floor(now / 170) % 2 === 0
       paintTelltale(rpmIcon.current, !!t.drift, AMBER, blink)
-      paintTelltale(rpmIcon2.current, t.stabilityControl !== false, AMBER, !t.stabilityActive || blink)
-      paintTelltale(rpmIcon3.current, t.tractionControl !== false, AMBER, !t.tractionActive || blink)
-      paintTelltale(rpmIcon4.current, t.absOn !== false, AMBER, !t.absActive || blink)
+      paintTelltale(
+        rpmIcon2.current,
+        t.stabilityControl !== false,
+        AMBER,
+        !t.stabilityActive || blink,
+      )
+      paintTelltale(
+        rpmIcon3.current,
+        t.tractionControl !== false,
+        AMBER,
+        !t.tractionActive || blink,
+      )
+      paintTelltale(
+        rpmIcon4.current,
+        t.absOn !== false,
+        AMBER,
+        !t.absActive || blink,
+      )
       paintTelltale(spdIcon2.current, !!t.cruiseOn, BLUE, true)
 
       if (spdNum.current && now - lastNumT >= 500) {
@@ -483,7 +549,12 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
             redFrom={2}
             redRpm={Infinity}
             yellowRpm={Infinity}
-            refs={{ needleRef: spdNeedle, numRef: spdNum, iconRef: spdIcon, icon2Ref: spdIcon2 }}
+            refs={{
+              needleRef: spdNeedle,
+              numRef: spdNum,
+              iconRef: spdIcon,
+              icon2Ref: spdIcon2,
+            }}
             id="dial-spd"
           />
         </div>
@@ -507,7 +578,17 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
               icon4Ref: rpmIcon4,
             }}
             id="dial-rpm"
-            modeLabel={!tele.engineOn ? (tele.cranking ? "STARTING" : tele.ignitionOn === false ? "IGNITION OFF" : "HOLD V TO START") : tele.autoMode ? "AUTO" : "MANUAL"}
+            modeLabel={
+              !tele.engineOn
+                ? tele.cranking
+                  ? "STARTING"
+                  : tele.ignitionOn === false
+                    ? "IGNITION OFF"
+                    : "HOLD V TO START"
+                : tele.autoMode
+                  ? "AUTO"
+                  : "MANUAL"
+            }
           />
         </div>
       </div>

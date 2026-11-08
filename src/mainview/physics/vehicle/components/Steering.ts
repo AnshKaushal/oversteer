@@ -15,10 +15,13 @@ export class Steering {
     const t = Math.tan(Math.abs(centre))
     const half = this.trackWidth / 2
     const inside = Math.atan((this.wheelbase * t) / (this.wheelbase - half * t))
-    const outside = Math.atan((this.wheelbase * t) / (this.wheelbase + half * t))
+    const outside = Math.atan(
+      (this.wheelbase * t) / (this.wheelbase + half * t),
+    )
     const insideWheel = left === centre > 0
     const ideal = insideWheel ? inside : outside
-    const angle = Math.abs(centre) + this.p.ackermannFactor * (ideal - Math.abs(centre))
+    const angle =
+      Math.abs(centre) + this.p.ackermannFactor * (ideal - Math.abs(centre))
     return Math.sign(centre) * angle
   }
 

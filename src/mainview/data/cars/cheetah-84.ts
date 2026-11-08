@@ -64,10 +64,19 @@ export const cheetah84: CarSpec = {
         [7700, 0.6],
         [7900, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 8, displacementL: 3.0, flywheel: "road" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 8,
+        displacementL: 3.0,
+        flywheel: "road",
+      }),
       frictionTorqueBase: 50,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

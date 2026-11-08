@@ -1,4 +1,9 @@
-import { SURFACES, surfaceGrip, type SurfaceId, type WeatherId } from "../../data/surfaces"
+import {
+  SURFACES,
+  surfaceGrip,
+  type SurfaceId,
+  type WeatherId,
+} from "../../data/surfaces"
 import { Alignment } from "./components/Alignment"
 import { Steering } from "./components/Steering"
 import * as THREE from "three"
@@ -93,8 +98,16 @@ export class WheelSolver {
     private readonly steering: Steering,
     private readonly alignment: Alignment,
   ) {
-    this.relaxation = new TireRelaxation(wheels.length, P.contact, P.wheels.relaxationLength, P.wheels.tire.maxSlip)
-    this.centerDiff = new CenterDiff(P.drivetrain.centerDiff, P.drivetrain.frontTorqueSplit)
+    this.relaxation = new TireRelaxation(
+      wheels.length,
+      P.contact,
+      P.wheels.relaxationLength,
+      P.wheels.tire.maxSlip,
+    )
+    this.centerDiff = new CenterDiff(
+      P.drivetrain.centerDiff,
+      P.drivetrain.frontTorqueSplit,
+    )
     this.frontDiff = new Differential(P.differential)
     this.rearDiff = new Differential(P.differential)
     this.lastLoad = wheels.map(() => 0)
@@ -113,7 +126,14 @@ export class WheelSolver {
     const radius = this.P.wheels.radius
     const linVec = new THREE.Vector3(k.linvel.x, k.linvel.y, k.linvel.z)
     const angVec = new THREE.Vector3(k.angvel.x, k.angvel.y, k.angvel.z)
-    const states = this.suspension.update(dt, k.quat, k.pos, linVec, angVec, k.com)
+    const states = this.suspension.update(
+      dt,
+      k.quat,
+      k.pos,
+      linVec,
+      angVec,
+      k.com,
+    )
     let grounded = 0
     for (const st of states) {
       this.lastLoad[st.wi] = st.load
@@ -127,23 +147,41 @@ export class WheelSolver {
     for (let wi = 0; wi < this.wheels.length; wi++) {
       const w = this.wheels[wi]
       const st = states[wi]
-      const steer = this.steering.wheelAngle(w.front, w.left, c.steerAngle) + this.alignment.toe(w.front, w.left)
-      const heading = new THREE.Vector3(Math.sin(steer) * -1, 0, -Math.cos(steer)).applyQuaternion(k.quat)
+      const steer =
+        this.steering.wheelAngle(w.front, w.left, c.steerAngle) +
+        this.alignment.toe(w.front, w.left)
+      const heading = new THREE.Vector3(
+        Math.sin(steer) * -1,
+        0,
+        -Math.cos(steer),
+      ).applyQuaternion(k.quat)
       heading.y = 0
       heading.normalize()
       const spin = this.dynamics.wheels[wi].omega
       const raw = driveTorque[wi]
-      const driveT = (c.gear === -1 ? raw > 0 && spin >= 0 : raw < 0 && spin <= 0) ? 0 : raw
+      const driveT = (
+        c.gear === -1 ? raw > 0 && spin >= 0 : raw < 0 && spin <= 0
+      )
+        ? 0
+        : raw
       const groundSpeed = st.pointVel.dot(heading)
       const wheelSpeed = spin * radius
       const axleMax = this.brakes.maxTorque(w.front)
       const tcFraction =
         c.tractionBrake && st.grounded && this.driveline.isDriven(w.front)
-          ? this.traction.brakeFraction(wheelSpeed, groundSpeed, c.gear === -1 ? -1 : 1)
+          ? this.traction.brakeFraction(
+              wheelSpeed,
+              groundSpeed,
+              c.gear === -1 ? -1 : 1,
+            )
           : 0
-      const tcTorque = Math.min(tcFraction * axleMax, Math.abs(driveT) * this.traction.brakeDriveShare)
+      const tcTorque = Math.min(
+        tcFraction * axleMax,
+        Math.abs(driveT) * this.traction.brakeDriveShare,
+      )
       if (tcTorque > 0) this.tractionBraking = true
-      const assist = c.stabilityBrake[wi] * this.stability.gripScale(wheelSpeed, groundSpeed)
+      const assist =
+        c.stabilityBrake[wi] * this.stability.gripScale(wheelSpeed, groundSpeed)
       const brakeM = this.abs.modulate(
         wi,
         this.brakes.torque({
@@ -157,7 +195,9 @@ export class WheelSolver {
           steer: pedals.steer,
           throttle: pedals.throttle,
           speedKmh: k.speedKmh,
-        }) + assist * axleMax + tcTorque,
+        }) +
+          assist * axleMax +
+          tcTorque,
         Math.max(pedals.brake, assist, tcTorque / axleMax),
         wheelSpeed,
         groundSpeed,
@@ -167,18 +207,40 @@ export class WheelSolver {
         this.dynamics.step(wi, dt, driveT, brakeM, 0, undefined)
         this.relaxation.zero(wi)
         solves.push({
-          w, wi, grounded: false, load: 0, contactY: 0, anchor: st.anchorWorld,
-          patchVel: new THREE.Vector3(), heading, normal: new THREE.Vector3(0, 1, 0),
-          driveT, brakeM, camber: 0, surface: st.surface,
+          w,
+          wi,
+          grounded: false,
+          load: 0,
+          contactY: 0,
+          anchor: st.anchorWorld,
+          patchVel: new THREE.Vector3(),
+          heading,
+          normal: new THREE.Vector3(0, 1, 0),
+          driveT,
+          brakeM,
+          camber: 0,
+          surface: st.surface,
         })
         continue
       }
-      const contactPoint = new THREE.Vector3(st.anchorWorld.x, st.contactY, st.anchorWorld.z)
+      const contactPoint = new THREE.Vector3(
+        st.anchorWorld.x,
+        st.contactY,
+        st.anchorWorld.z,
+      )
       const lever = contactPoint.clone().sub(k.com)
       solves.push({
-        w, wi, grounded: true, load: st.load, contactY: st.contactY, anchor: st.anchorWorld,
-        patchVel: linVec.clone().add(angVec.clone().cross(lever)), heading,
-        normal: st.contactNormal.clone(), driveT, brakeM,
+        w,
+        wi,
+        grounded: true,
+        load: st.load,
+        contactY: st.contactY,
+        anchor: st.anchorWorld,
+        patchVel: linVec.clone().add(angVec.clone().cross(lever)),
+        heading,
+        normal: st.contactNormal.clone(),
+        driveT,
+        brakeM,
         camber: this.alignment.camber(w.front, w.left, st.compression),
         surface: st.surface,
       })
@@ -201,7 +263,11 @@ export class WheelSolver {
   }
 
   private axleTorques(c: WheelStepInput): number[] {
-    const frontShare = this.centerDiff.step(c.dt, this.axleOmega(true), this.axleOmega(false))
+    const frontShare = this.centerDiff.step(
+      c.dt,
+      this.axleOmega(true),
+      this.axleOmega(false),
+    )
     const out = this.wheels.map((w) =>
       this.driveline.wheelTorque(w.front, c.drive, c.gear, frontShare),
     )
@@ -251,9 +317,21 @@ export class WheelSolver {
       rollingScale: SURFACES[s.surface].rolling,
     }
     const axes = this.tires.basis(contact)
-    const rollSpeed = s.patchVel.x * axes.t.x + s.patchVel.y * axes.t.y + s.patchVel.z * axes.t.z
-    const sideSpeed = s.patchVel.x * axes.l.x + s.patchVel.y * axes.l.y + s.patchVel.z * axes.l.z
-    const slips = this.relaxation.step(wi, dt, omega * radius - rollSpeed, sideSpeed, rollSpeed)
+    const rollSpeed =
+      s.patchVel.x * axes.t.x +
+      s.patchVel.y * axes.t.y +
+      s.patchVel.z * axes.t.z
+    const sideSpeed =
+      s.patchVel.x * axes.l.x +
+      s.patchVel.y * axes.l.y +
+      s.patchVel.z * axes.l.z
+    const slips = this.relaxation.step(
+      wi,
+      dt,
+      omega * radius - rollSpeed,
+      sideSpeed,
+      rollSpeed,
+    )
     contact.slipRatio = slips.slipRatio
     contact.slipTan = slips.slipTan
     const res = this.tires.eval(contact)
@@ -274,14 +352,30 @@ export class WheelSolver {
     })
     this.lastTireDiag[wi] = res
     if (driven) this.slip.addDriven(res.sx)
-    const patchGain = radius * dt / (1 + dt * (Math.abs(rollSpeed) + this.P.contact.relaxationSpeedFloor) / this.P.wheels.relaxationLength)
-    const torqueSlope = (res.slopeX / this.P.wheels.relaxationLength) * patchGain * radius
-    this.dynamics.step(wi, dt, s.driveT, s.brakeM, res.fx * radius, res.vx, torqueSlope, res.fmax * radius)
+    const patchGain =
+      (radius * dt) /
+      (1 +
+        (dt * (Math.abs(rollSpeed) + this.P.contact.relaxationSpeedFloor)) /
+          this.P.wheels.relaxationLength)
+    const torqueSlope =
+      (res.slopeX / this.P.wheels.relaxationLength) * patchGain * radius
+    this.dynamics.step(
+      wi,
+      dt,
+      s.driveT,
+      s.brakeM,
+      res.fx * radius,
+      res.vx,
+      torqueSlope,
+      res.fmax * radius,
+    )
 
     const fx = res.fx + creepF
     const fy = res.fy
     this.lastLong[wi] = fx
-    const applyY = s.contactY + (s.anchor.y - s.contactY) * this.P.contact.applyHeightFraction
+    const applyY =
+      s.contactY +
+      (s.anchor.y - s.contactY) * this.P.contact.applyHeightFraction
     this.body.applyImpulseAtPoint(
       {
         x: (res.t.x * fx + res.l.x * fy) * dt,

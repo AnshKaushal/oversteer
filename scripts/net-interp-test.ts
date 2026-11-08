@@ -170,7 +170,9 @@ function snap(
   const mode = b.sampleInto(out, 1000, stats)
   check(
     "6 clamped",
-    mode === "extrap" && approx(out.x, (10 * EXTRAP_MAX_MS) / 2000) && stats.extrapMs === EXTRAP_MAX_MS,
+    mode === "extrap" &&
+      approx(out.x, (10 * EXTRAP_MAX_MS) / 2000) &&
+      stats.extrapMs === EXTRAP_MAX_MS,
     { mode, out, stats },
   )
 }
@@ -253,10 +255,14 @@ function snap(
   const o2 = newInterpTarget()
   b.sampleInto(o1, 10_000)
   b.sampleInto(o2, 60_000)
-  check("11 frozen target", approx(o1.x, (10 * EXTRAP_MAX_MS) / 2000) && approx(o2.x, o1.x), {
-    o1: o1.x,
-    o2: o2.x,
-  })
+  check(
+    "11 frozen target",
+    approx(o1.x, (10 * EXTRAP_MAX_MS) / 2000) && approx(o2.x, o1.x),
+    {
+      o1: o1.x,
+      o2: o2.x,
+    },
+  )
 }
 
 // ---------- 12. irregular arrival intervals ----------
@@ -331,7 +337,16 @@ function snap(
     groundBody,
   )
   const local = createChassisBody(world, 0, 0.72, 0, TEST_CAR.physics)
-  const remote = new RemoteCar("rp", "r", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
+  const remote = new RemoteCar(
+    "rp",
+    "r",
+    0xffffff,
+    scene,
+    "./",
+    world,
+    R,
+    TEST_REMOTE_OPTS,
+  )
   // keep the ghost off the local car, which sits at the origin
   remote.colliderBody?.setTranslation({ x: 20, y: 0.72, z: -50 }, true)
   // Settle suspension under gravity first: a fresh body drops a few cm on

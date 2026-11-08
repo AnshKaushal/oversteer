@@ -12,7 +12,8 @@ const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
 
 const N = 24
 const CELL = 1.5
-const height = (x: number, z: number) => 0.35 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.002 * x
+const height = (x: number, z: number) =>
+  0.35 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.002 * x
 const verts = new Float32Array((N + 1) * (N + 1) * 3)
 for (let i = 0; i <= N; i++) {
   for (let j = 0; j <= N; j++) {
@@ -37,7 +38,9 @@ world.step()
 let fails = 0
 function check(name: string, ok: boolean, detail = "") {
   if (!ok) fails++
-  console.log(`${ok ? "PASS" : "FAIL"} | ${name}${detail ? ` | ${detail}` : ""}`)
+  console.log(
+    `${ok ? "PASS" : "FAIL"} | ${name}${detail ? ` | ${detail}` : ""}`,
+  )
 }
 
 function cast(x: number, z: number) {
@@ -45,8 +48,10 @@ function cast(x: number, z: number) {
   return world.castRayAndGetNormal(ray, 10, true)
 }
 
-const angle = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) =>
-  Math.acos(Math.min(1, Math.max(-1, a.x * b.x + a.y * b.y + a.z * b.z)))
+const angle = (
+  a: { x: number; y: number; z: number },
+  b: { x: number; y: number; z: number },
+) => Math.acos(Math.min(1, Math.max(-1, a.x * b.x + a.y * b.y + a.z * b.z)))
 
 // sweep lines: across cells, along a grid line (every ray on an edge), along a diagonal (every ray on an edge too)
 const lines: { name: string; at: (t: number) => [number, number] }[] = [
@@ -64,7 +69,10 @@ for (const line of lines) {
   let maxHeightErr = 0
   for (let t = 0; t < 12; t += step) {
     const [x, z] = line.at(t)
-    const hit = cast(x, z) as { timeOfImpact: number; normal: { x: number; y: number; z: number } } | null
+    const hit = cast(x, z) as {
+      timeOfImpact: number
+      normal: { x: number; y: number; z: number }
+    } | null
     if (!hit) {
       misses++
       continue
@@ -72,12 +80,23 @@ for (const line of lines) {
     if (hit.normal.y < 0.5) flips++
     if (prev) maxJump = Math.max(maxJump, angle(prev, hit.normal))
     prev = hit.normal
-    maxHeightErr = Math.max(maxHeightErr, Math.abs(5 - hit.timeOfImpact - height(x, z)))
+    maxHeightErr = Math.max(
+      maxHeightErr,
+      Math.abs(5 - hit.timeOfImpact - height(x, z)),
+    )
   }
   check(`seam ${line.name}: every ray hits`, misses === 0, `${misses} misses`)
   check(`seam ${line.name}: normals point up`, flips === 0, `${flips} flipped`)
-  check(`seam ${line.name}: normals change by no more than the crease angle`, maxJump < 0.25, `max jump ${((maxJump * 180) / Math.PI).toFixed(1)} deg`)
-  check(`seam ${line.name}: height stays on the surface`, maxHeightErr < 0.05, `${maxHeightErr.toFixed(3)} m off`)
+  check(
+    `seam ${line.name}: normals change by no more than the crease angle`,
+    maxJump < 0.25,
+    `max jump ${((maxJump * 180) / Math.PI).toFixed(1)} deg`,
+  )
+  check(
+    `seam ${line.name}: height stays on the surface`,
+    maxHeightErr < 0.05,
+    `${maxHeightErr.toFixed(3)} m off`,
+  )
 }
 
 // rays through every vertex
@@ -87,7 +106,13 @@ for (let i = 1; i < N; i++) {
     if (!cast(i * CELL, j * CELL)) vertexMisses++
   }
 }
-check("seam: rays through every vertex hit", vertexMisses === 0, `${vertexMisses} misses`)
+check(
+  "seam: rays through every vertex hit",
+  vertexMisses === 0,
+  `${vertexMisses} misses`,
+)
 
-console.log(fails === 0 ? "ALL SEAM CHECKS PASSED" : `${fails} SEAM CHECKS FAILED`)
+console.log(
+  fails === 0 ? "ALL SEAM CHECKS PASSED" : `${fails} SEAM CHECKS FAILED`,
+)
 process.exit(fails === 0 ? 0 : 1)

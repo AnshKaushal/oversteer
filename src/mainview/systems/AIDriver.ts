@@ -26,6 +26,9 @@ export const ZERO_EDGES = {
   cruiseTogglePressed: false,
   toggleTimeOfDayPressed: false,
   toggleHeadlightsPressed: false,
+  indicatorLeftPressed: false,
+  indicatorRightPressed: false,
+  hazardPressed: false,
   toggleFreeCameraPressed: false,
 } as const
 
@@ -118,7 +121,6 @@ export function makeTrafficProfile(
 
 let crossingBody: RAPIER.RigidBody | null = null
 
-/** Anything that can steer a rival car around a race. */
 export interface RaceDriver {
   readonly profile: AIProfile
   readonly recovering: boolean
@@ -185,7 +187,10 @@ export class AIDriver implements RaceDriver {
     const dir = this.profile.dir ?? 1
     const curv =
       Math.abs(wrapPi(this.road.yaw(s + dir * 40) - this.road.yaw(s))) +
-      Math.abs(wrapPi(this.road.yaw(s + dir * 80) - this.road.yaw(s + dir * 40))) * 0.5
+      Math.abs(
+        wrapPi(this.road.yaw(s + dir * 80) - this.road.yaw(s + dir * 40)),
+      ) *
+        0.5
     const look = clamp((18 + speed * 0.85) / (1 + curv * 1.2), 10, 72)
     const targetS = s + dir * look
     const cx = this.road.centerX(targetS)

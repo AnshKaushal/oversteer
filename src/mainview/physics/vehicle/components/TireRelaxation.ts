@@ -17,7 +17,13 @@ export class TireRelaxation {
     this.patch = Array.from({ length: wheelCount }, () => ({ ux: 0, uy: 0 }))
   }
 
-  step(wi: number, dt: number, slipSpeedX: number, slipSpeedY: number, rollSpeed: number) {
+  step(
+    wi: number,
+    dt: number,
+    slipSpeedX: number,
+    slipSpeedY: number,
+    rollSpeed: number,
+  ) {
     const d = this.patch[wi]
     const L = this.relaxationLength
     const rate = (Math.abs(rollSpeed) + this.p.relaxationSpeedFloor) / L

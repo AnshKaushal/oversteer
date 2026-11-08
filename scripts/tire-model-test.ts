@@ -1,7 +1,10 @@
 import * as THREE from "three"
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
 import { Vehicle } from "../src/mainview/physics/vehicle/Vehicle"
-import { TireModel, magicFormula } from "../src/mainview/physics/vehicle/components/TireModel"
+import {
+  TireModel,
+  magicFormula,
+} from "../src/mainview/physics/vehicle/components/TireModel"
 import {
   createChassisBody,
   initPhysics,
@@ -69,8 +72,10 @@ function contact(over: Record<string, any> = {}) {
     ...over,
   }
   const ax = model.basis(c)
-  const vx = c.patchVel.x * ax.t.x + c.patchVel.y * ax.t.y + c.patchVel.z * ax.t.z
-  const vy = c.patchVel.x * ax.l.x + c.patchVel.y * ax.l.y + c.patchVel.z * ax.l.z
+  const vx =
+    c.patchVel.x * ax.t.x + c.patchVel.y * ax.t.y + c.patchVel.z * ax.t.z
+  const vy =
+    c.patchVel.x * ax.l.x + c.patchVel.y * ax.l.y + c.patchVel.z * ax.l.z
   if (Math.abs(vx) > 1e-9) {
     c.slipRatio = (c.wheelOmega * RADIUS - vx) / Math.abs(vx)
     c.slipTan = vy / Math.abs(vx)

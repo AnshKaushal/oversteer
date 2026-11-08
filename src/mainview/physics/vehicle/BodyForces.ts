@@ -62,10 +62,16 @@ export class BodyForces {
     launchActive: boolean,
   ) {
     const body = this.body
-    const hit = this.impact.update(dt, body.linvel(), body.angvel(), () => this.touching())
+    const hit = this.impact.update(dt, body.linvel(), body.angvel(), () =>
+      this.touching(),
+    )
     if (hit.linvel) body.setLinvel(hit.linvel, true)
     if (hit.angvel) body.setAngvel(hit.angvel, true)
-    this.aero.update(dt, Math.hypot(k.linvel.x, k.linvel.z), Math.abs(input.steer))
+    this.aero.update(
+      dt,
+      Math.hypot(k.linvel.x, k.linvel.z),
+      Math.abs(input.steer),
+    )
     const aero = this.aero.force(k.linvel.x, k.linvel.z, this.yawToAirflow(k))
     if (aero) {
       body.applyImpulse(
@@ -96,31 +102,56 @@ export class BodyForces {
 
     const lv = body.linvel()
     const ls = this.limiter.linearScale(lv.x, lv.y, lv.z)
-    if (ls !== 1) body.setLinvel({ x: lv.x * ls, y: lv.y * ls, z: lv.z * ls }, true)
+    if (ls !== 1)
+      body.setLinvel({ x: lv.x * ls, y: lv.y * ls, z: lv.z * ls }, true)
     const av = body.angvel()
     const as = this.limiter.angularScale(av.x, av.y, av.z)
-    if (as !== 1) body.setAngvel({ x: av.x * as, y: av.y * as, z: av.z * as }, true)
+    if (as !== 1)
+      body.setAngvel({ x: av.x * as, y: av.y * as, z: av.z * as }, true)
 
     const yaw = body.angvel().y
-    body.applyTorqueImpulse({ x: 0, y: -yaw * this.chassis.yawDamping * dt, z: 0 }, true)
+    body.applyTorqueImpulse(
+      { x: 0, y: -yaw * this.chassis.yawDamping * dt, z: 0 },
+      true,
+    )
 
     const b = this.stability
-    if (Math.abs(k.fwdSpeed) > b.minSpeed && groundedWheels >= b.minGrounded && !input.handbrake) {
+    if (
+      Math.abs(k.fwdSpeed) > b.minSpeed &&
+      groundedWheels >= b.minGrounded &&
+      !input.handbrake
+    ) {
       const steering = Math.abs(input.steer) >= b.steeringThreshold
-      const excess = Math.abs(k.beta) - (steering ? b.deadzoneSteering : b.deadzone)
+      const excess =
+        Math.abs(k.beta) - (steering ? b.deadzoneSteering : b.deadzone)
       if (excess > 0) {
         const speedF = clamp(Math.abs(k.fwdSpeed) / b.speedRef, 0, 1)
         const powerOn = input.throttle > b.powerOnThrottle && !launchActive
         const authority =
-          (steering ? b.steeringAuthorityLow + (b.steeringAuthorityHigh - b.steeringAuthorityLow) * speedF : 1) *
+          (steering
+            ? b.steeringAuthorityLow +
+              (b.steeringAuthorityHigh - b.steeringAuthorityLow) * speedF
+            : 1) *
           (b.baseAuthority + b.authority) *
           (powerOn ? 1 : b.liftBoost)
         const countersteering = Math.sign(input.steer) === -Math.sign(k.beta)
         const intent = countersteering
-          ? input.steer * clamp(excess / b.countersteerRange, 0, 1) * b.countersteer
+          ? input.steer *
+            clamp(excess / b.countersteerRange, 0, 1) *
+            b.countersteer
           : 0
-        const torque = -Math.sign(k.beta) * excess * b.sideSlipGain - yaw * b.yawDamp + intent
-        body.applyTorqueImpulse({ x: 0, y: clamp(torque * authority, -b.maxTorque, b.maxTorque) * dt, z: 0 }, true)
+        const torque =
+          -Math.sign(k.beta) * excess * b.sideSlipGain -
+          yaw * b.yawDamp +
+          intent
+        body.applyTorqueImpulse(
+          {
+            x: 0,
+            y: clamp(torque * authority, -b.maxTorque, b.maxTorque) * dt,
+            z: 0,
+          },
+          true,
+        )
       }
     }
     this.impact.record(body.linvel(), body.angvel())
