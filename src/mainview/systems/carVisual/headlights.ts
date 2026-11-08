@@ -3,6 +3,7 @@ import { applyBrakeHeat, lampPartsWithin } from "../carLights"
 import { AVENTADOR_HEADLIGHT, BRAKE_LAMP_THRESHOLD } from "../carVisual/shared"
 import type { CarVisual } from "../CarVisual"
 import { HEADLIGHT_CONE } from "../headlightCutoff"
+import { setLampChannels } from "./lampChannels"
 
 function makeBeams(
   spacing: number,
@@ -135,6 +136,7 @@ export function setupHeadlights(
         const meshName = (o.name || "").toLowerCase()
 
         const isGWagonHeadlight =
+          !std.userData.lampChannels &&
           meshName.includes("carbody") &&
           matName === "body" &&
           !!std.emissiveMap
@@ -367,6 +369,9 @@ export function applyLamps(this: CarVisual) {
   for (const l of this.brakeLights) {
     applyBrakeHeat(l, this.brakeLevel, this.headlightsOn, p)
   }
+  for (const ch of this.lampChannels) {
+    setLampChannels(ch, lit, p, this.headlightDim, this.brakeLevel)
+  }
 }
 
 export function hasHeadlights(this: CarVisual): boolean {
@@ -374,10 +379,18 @@ export function hasHeadlights(this: CarVisual): boolean {
 }
 
 export function setBrake(this: CarVisual, level: number) {
-  if (this.brakeLights.length === 0) return
+  if (this.brakeLights.length === 0 && this.lampChannels.length === 0) return
   const want = level > BRAKE_LAMP_THRESHOLD ? 1 : 0
   if (want === this.brakeLevel) return
   this.brakeLevel = want
+  for (const ch of this.lampChannels)
+    setLampChannels(
+      ch,
+      this.headlightsOn && this.power > 0.02,
+      this.power,
+      this.headlightDim,
+      want,
+    )
   for (const l of this.brakeLights)
     applyBrakeHeat(l, want, this.headlightsOn, this.power)
 }

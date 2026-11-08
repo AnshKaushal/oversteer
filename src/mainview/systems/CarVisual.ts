@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { enableLampChannels, type LampChannels } from "./carVisual/lampChannels"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { WheelDef } from "../physics/vehicle/components/Suspension"
 import { CARS } from "../data/cars"
@@ -103,6 +104,7 @@ export class CarVisual {
   brakeLights: BrakeLight[] = []
   brakeMeshes: THREE.Object3D[] = []
   brakeLevel = 0
+  lampChannels: LampChannels[] = []
   headlightsOn = false
   headlightsWanted = false
   power = 1
@@ -157,6 +159,25 @@ export class CarVisual {
       }
     })
     authorTailLamps(model, opts.tailLampMeshes)
+    this.lampChannels = []
+    if (CARS.some((c) => c.modelFile === modelFile && c.emissiveLampMap)) {
+      const owned = new Map<THREE.Material, THREE.MeshStandardMaterial>()
+      model.traverse((o: any) => {
+        if (!o.isMesh || !o.material) return
+        const mats = Array.isArray(o.material) ? o.material : [o.material]
+        const next = mats.map((m: THREE.MeshStandardMaterial) => {
+          if (!m.emissiveMap) return m
+          let own = owned.get(m)
+          if (!own) {
+            own = this.tintedMats.includes(m) ? m : m.clone()
+            this.lampChannels.push(enableLampChannels(own))
+            owned.set(m, own)
+          }
+          return own
+        })
+        o.material = Array.isArray(o.material) ? next : next[0]
+      })
+    }
     const flatLamps = CARS.some(
       (c) => c.modelFile === modelFile && c.flatTailLamps,
     )

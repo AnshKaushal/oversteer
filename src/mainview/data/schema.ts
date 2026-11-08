@@ -551,6 +551,8 @@ export interface CarSpec {
   paintMatch?: string[]
   tailLampMeshes?: string[]
   flatTailLamps?: boolean
+  /** Lamps are painted into the body's emissive map, not separate meshes. */
+  emissiveLampMap?: boolean
   paintTexture?: PaintTextureRule
 }
 
