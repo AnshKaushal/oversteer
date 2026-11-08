@@ -226,18 +226,11 @@ export function electricalPower(
   if (!ignitionOn) return 0
   if (cranking) {
     if (crankTime < 0.12) return 0.55 - 0.4 * smooth01(crankTime / 0.06)
-    const sag =
-      0.42 +
-      0.13 * Math.sin(crankTime * 36) +
-      0.06 * Math.sin(crankTime * 93 + 1.1)
-    return Math.min(
-      0.7,
-      Math.max(
-        0.15,
-        sag * smooth01((crankTime - 0.08) / 0.15) +
-          0.2 * (1 - smooth01((crankTime - 0.08) / 0.15)),
-      ),
-    )
+    // Battery sag under the starter: a steady dim with only a slow, shallow
+    // ripple per compression stroke, so lamps do not strobe while cranking.
+    const sag = 0.5 + 0.05 * Math.sin(crankTime * 12)
+    const settle = smooth01((crankTime - 0.08) / 0.3)
+    return Math.min(0.7, Math.max(0.2, sag * settle + 0.2 * (1 - settle)))
   }
   if (sinceStart < 1.2) {
     const recover = 0.5 + 0.5 * smooth01(sinceStart / 0.7)
