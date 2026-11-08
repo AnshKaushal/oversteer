@@ -2,6 +2,7 @@ import * as THREE from "three"
 import { applyBrakeHeat, lampPartsWithin } from "../carLights"
 import { AVENTADOR_HEADLIGHT, BRAKE_LAMP_THRESHOLD } from "../carVisual/shared"
 import type { CarVisual } from "../CarVisual"
+import { HEADLIGHT_CONE } from "../headlightCutoff"
 
 function makeBeams(
   spacing: number,
@@ -16,7 +17,7 @@ function makeBeams(
       0xfff0cc,
       on ? 260 : 0,
       160,
-      Math.PI / 4.2,
+      HEADLIGHT_CONE,
       0.8,
       1.0,
     )
