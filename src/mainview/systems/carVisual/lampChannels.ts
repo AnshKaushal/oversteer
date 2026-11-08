@@ -36,7 +36,7 @@ export function enableLampChannels(
 ): LampChannels {
   const existing = mat.userData.lampChannels as LampChannels | undefined
   if (existing) return existing
-  const ch: LampChannels = { head: { value: 0 }, tail: { value: 0 } }
+  const ch: LampChannels = { head: { value: 0 }, tail: { value: TAIL_IDLE } }
   const prev = mat.onBeforeCompile
   mat.onBeforeCompile = (shader, renderer) => {
     prev?.call(mat, shader, renderer)
@@ -56,6 +56,8 @@ export function enableLampChannels(
 }
 
 const HEAD_GAIN = 6
+/** Dim red glow of the tail lamp when the lights are off. */
+const TAIL_IDLE = 0.3
 const TAIL_ON = 0.6
 const BRAKE_GAIN = 2
 
@@ -68,5 +70,8 @@ export function setLampChannels(
   brake: number,
 ) {
   ch.head.value = lit ? HEAD_GAIN * power * dim : 0
-  ch.tail.value = Math.max(lit ? TAIL_ON * power : 0, BRAKE_GAIN * brake)
+  ch.tail.value = Math.max(
+    lit ? TAIL_ON * power : TAIL_IDLE,
+    BRAKE_GAIN * brake,
+  )
 }
