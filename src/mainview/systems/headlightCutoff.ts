@@ -1,7 +1,7 @@
 import * as THREE from "three"
 
 /** Cone half-angles (radians) of car headlight spots. */
-export const HEADLIGHT_CONE = Math.PI / 4.2
+export const HEADLIGHT_CONE = Math.PI / 3.2
 export const NPC_HEADLIGHT_CONE = Math.PI / 3.0
 
 /**
