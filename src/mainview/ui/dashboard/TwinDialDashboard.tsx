@@ -68,7 +68,7 @@ export function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
       dRpm += (tRpm - dRpm) * (1 - Math.exp(-dt * 14))
       dKmh += (tKmh - dKmh) * (1 - Math.exp(-dt * 10))
 
-      paintDial(spd, "left", dKmh / dash.kmh, BLUE, 0.9)
+      paintDial(spd, "left", dKmh / dash.kmh, BLUE, 0.9, dt)
       if (spd.num.current && (booting || now - lastNumT >= 500)) {
         lastNumT = now
         spd.num.current.textContent = String(Math.round(dKmh))
@@ -83,6 +83,7 @@ export function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
         dRpm / dash.maxRpm,
         limiter ? "#ff2d2d" : warning ? "#facc15" : BLUE,
         limiter ? flash : 0.9,
+        dt,
       )
 
       const rim = rpm.rim.current

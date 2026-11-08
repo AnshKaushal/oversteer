@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { NeedleGhosts, blurNeedle } from "./dashboard/needleBlur"
 import type { CarTelemetry } from "../physics/vehicle/Vehicle"
 
 const RED_FROM_RPM = 6750
@@ -371,6 +372,16 @@ function Dial({
       })}
 
       <g ref={refs.needleRef}>
+        <NeedleGhosts
+          render={(props, i) => (
+            <g key={i} {...props}>
+              <polygon
+                points={`${tip.x},${tip.y} ${CX + NEEDLE_HALF_BASE},${CY} ${CX + NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_BASE},${CY}`}
+                fill="#e30613"
+              />
+            </g>
+          )}
+        />
         <polygon
           points={`${tip.x},${tip.y} ${CX + NEEDLE_HALF_BASE},${CY} ${CX + NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_TAIL},${tail.y} ${CX - NEEDLE_HALF_BASE},${CY}`}
           fill="#e30613"
@@ -439,17 +450,15 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
       dKmh += (Math.abs(t.speedKmh) - dKmh) * (1 - Math.exp(-dt * 10))
 
       if (rpmNeedle.current) {
-        rpmNeedle.current.setAttribute(
-          "transform",
-          `rotate(${angleFor(dRpm / dash.maxRpm)} 100 100)`,
-        )
+        const a = angleFor(dRpm / dash.maxRpm)
+        rpmNeedle.current.setAttribute("transform", `rotate(${a} 100 100)`)
+        blurNeedle(rpmNeedle.current, a, 100, 100, dt)
       }
 
       if (spdNeedle.current) {
-        spdNeedle.current.setAttribute(
-          "transform",
-          `rotate(${angleFor(dKmh / dash.kmh)} 100 100)`,
-        )
+        const a = angleFor(dKmh / dash.kmh)
+        spdNeedle.current.setAttribute("transform", `rotate(${a} 100 100)`)
+        blurNeedle(spdNeedle.current, a, 100, 100, dt)
       }
 
       if (rpmNum.current) {
