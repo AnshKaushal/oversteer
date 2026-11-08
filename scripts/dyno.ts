@@ -13,7 +13,11 @@
  * The numbers are for judging a new car's data against its real figures; no
  * pass/fail here. `--csv` prints the pull as rows for a spreadsheet.
  */
-import { initPhysics, moveGroundBody, stepVehicleOnce } from "../src/mainview/physics/core/PhysicsSystem"
+import {
+  initPhysics,
+  moveGroundBody,
+  stepVehicleOnce,
+} from "../src/mainview/physics/core/PhysicsSystem"
 import { FIXED_DT } from "../src/mainview/data/world"
 import { curveLookup } from "../src/mainview/physics/math"
 import { enginePeaks } from "../src/mainview/physics/vehicle/components/Engine"
@@ -35,10 +39,16 @@ console.log(`\n${def.name} (${def.id})`)
 const peaks = enginePeaks(E)
 console.log("\nEngine (crank, from data)")
 console.log("  rpm    Nm     kW     hp")
-for (let rpm = Math.ceil(E.idleRPM / 500) * 500; rpm <= E.redlineRPM; rpm += 500) {
+for (
+  let rpm = Math.ceil(E.idleRPM / 500) * 500;
+  rpm <= E.redlineRPM;
+  rpm += 500
+) {
   const nm = E.maxTorqueNm * curveLookup(E.torqueCurve, rpm)
   const kw = (nm * rpm * RAD_PER_RPM) / 1000
-  console.log(`  ${String(rpm).padStart(5)} ${nm.toFixed(0).padStart(5)} ${kw.toFixed(0).padStart(6)} ${(kw * HP_PER_KW).toFixed(0).padStart(6)}`)
+  console.log(
+    `  ${String(rpm).padStart(5)} ${nm.toFixed(0).padStart(5)} ${kw.toFixed(0).padStart(6)} ${(kw * HP_PER_KW).toFixed(0).padStart(6)}`,
+  )
 }
 console.log(
   `  peak ${peaks.torqueNm.toFixed(0)} Nm @ ${peaks.torqueRPM} rpm, ${peaks.powerHP.toFixed(0)} hp @ ${peaks.powerRPM} rpm (${(peaks.powerHP / HP_PER_KW).toFixed(0)} kW)`,
@@ -46,14 +56,24 @@ console.log(
 console.log(
   `  mass ${P.mass.chassis + 2 * (P.mass.frontWheel + P.mass.rearWheel)} kg, ${((peaks.powerHP * 1000) / (P.mass.chassis + 2 * (P.mass.frontWheel + P.mass.rearWheel))).toFixed(0)} hp/t`,
 )
-console.log(`  dash: ${def.dash.maxRpm} rpm / ${def.dash.maxKmh} km/h, redline ${E.redlineRPM}, limiter ${E.revLimiterRPM}`)
+console.log(
+  `  dash: ${def.dash.maxRpm} rpm / ${def.dash.maxKmh} km/h, redline ${E.redlineRPM}, limiter ${E.revLimiterRPM}`,
+)
 
 // ---- 2. full-throttle pull ----
 const idle = {
-  throttle: 0, brake: 0, steer: 0, handbrake: false,
-  upshiftPressed: false, downshiftPressed: false, toggleModePressed: false,
-  toggleLaunchPressed: false, resetPressed: false, toggleCameraPressed: false,
-  startPressed: false, escapePressed: false,
+  throttle: 0,
+  brake: 0,
+  steer: 0,
+  handbrake: false,
+  upshiftPressed: false,
+  downshiftPressed: false,
+  toggleModePressed: false,
+  toggleLaunchPressed: false,
+  resetPressed: false,
+  toggleCameraPressed: false,
+  startPressed: false,
+  escapePressed: false,
 } as DriveInput
 
 const r = makeRig(RAPIER, def)
@@ -92,7 +112,9 @@ for (let i = 0; i < maxSteps; i++) {
   const kmh = v * 3.6
   const T = tel as unknown as { rpm: number; gear: number }
   if (T.gear > maxGear && lastGear > 0) {
-    shifts.push(`${lastGear}>${T.gear} at ${kmh.toFixed(0)} km/h, ${Math.round(rpmAtGear[lastGear] ?? T.rpm)} rpm`)
+    shifts.push(
+      `${lastGear}>${T.gear} at ${kmh.toFixed(0)} km/h, ${Math.round(rpmAtGear[lastGear] ?? T.rpm)} rpm`,
+    )
   }
   if (T.gear > 0) rpmAtGear[T.gear] = T.rpm
   lastGear = T.gear
@@ -108,20 +130,32 @@ for (let i = 0; i < maxSteps; i++) {
     const roll = P.wheels.rollingResist * mass * G
     const wheelKw = ((mass * a + drag + roll) * v) / 1000
     const crankKw =
-      (E.maxTorqueNm * curveLookup(E.torqueCurve, T.rpm) * T.rpm * RAD_PER_RPM) / 1000
+      (E.maxTorqueNm *
+        curveLookup(E.torqueCurve, T.rpm) *
+        T.rpm *
+        RAD_PER_RPM) /
+      1000
     if (crankKw > 0) lossSamples.push(1 - wheelKw / crankKw)
-    rows.push(`${t.toFixed(2)},${kmh.toFixed(1)},${Math.round(T.rpm)},${T.gear},${wheelKw.toFixed(0)},${crankKw.toFixed(0)}`)
+    rows.push(
+      `${t.toFixed(2)},${kmh.toFixed(1)},${Math.round(T.rpm)},${T.gear},${wheelKw.toFixed(0)},${crankKw.toFixed(0)}`,
+    )
   }
   if (t > 12 && kmh < top - 1 && thr >= 1 && a < 0.05 && kmh > 50) break
 }
 
 console.log("\nFull-throttle pull (automatic, flat)")
-console.log(`  0-100 km/h  ${t100 ? t100.toFixed(2) + " s" : "not reached"}   (data says ${def.tested.zeroToHundredS} s)`)
+console.log(
+  `  0-100 km/h  ${t100 ? t100.toFixed(2) + " s" : "not reached"}   (data says ${def.tested.zeroToHundredS} s)`,
+)
 console.log(`  0-200 km/h  ${t200 ? t200.toFixed(2) + " s" : "not reached"}`)
-console.log(`  top speed   ${top.toFixed(0)} km/h   (data says ${def.tested.topSpeedKmh} km/h)`)
+console.log(
+  `  top speed   ${top.toFixed(0)} km/h   (data says ${def.tested.topSpeedKmh} km/h)`,
+)
 if (shifts.length) console.log(`  shifts      ${shifts.join("; ")}`)
 if (lossSamples.length) {
-  const mid = lossSamples.slice().sort((a, b) => a - b)[Math.floor(lossSamples.length / 2)]
+  const mid = lossSamples.slice().sort((a, b) => a - b)[
+    Math.floor(lossSamples.length / 2)
+  ]
   console.log(
     `  drivetrain loss implied by the pull: ${(mid * 100).toFixed(0)}% median (data efficiency ${(P.drivetrain.efficiency * 100).toFixed(0)}%; clutch slip, tyre slip and converter add to it)`,
   )

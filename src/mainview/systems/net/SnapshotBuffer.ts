@@ -221,10 +221,14 @@ export class SnapshotBuffer {
         const dy = wy * k
         const dz = wz * k
         const dw = Math.cos(half)
-        out.qx = dw * newest.qx + dx * newest.qw + dy * newest.qz - dz * newest.qy
-        out.qy = dw * newest.qy - dx * newest.qz + dy * newest.qw + dz * newest.qx
-        out.qz = dw * newest.qz + dx * newest.qy - dy * newest.qx + dz * newest.qw
-        out.qw = dw * newest.qw - dx * newest.qx - dy * newest.qy - dz * newest.qz
+        out.qx =
+          dw * newest.qx + dx * newest.qw + dy * newest.qz - dz * newest.qy
+        out.qy =
+          dw * newest.qy - dx * newest.qz + dy * newest.qw + dz * newest.qx
+        out.qz =
+          dw * newest.qz + dx * newest.qy - dy * newest.qx + dz * newest.qw
+        out.qw =
+          dw * newest.qw - dx * newest.qx - dy * newest.qy - dz * newest.qz
       } else {
         out.qx = newest.qx
         out.qy = newest.qy

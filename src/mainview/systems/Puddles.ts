@@ -11,8 +11,8 @@ const MAX_CHANCE = 0.52
 const ROAD_Y = 0.018
 const GRASS_Y = 0.012
 const MIRROR_Y = 0
-const REFLECT_SCALE = 0.5
-const REFLECT_FAR = 700
+const REFLECT_SCALE = 0.4
+const REFLECT_FAR = 400
 const REFLECT_MIN_WET = 0.05
 
 export type PuddleSurface = "road" | "grass" | null
@@ -20,7 +20,11 @@ export type PuddleSurface = "road" | "grass" | null
 export type PuddleSurfaceFn = (x: number, z: number, r: number) => PuddleSurface
 
 function hash(a: number, b: number, salt: number): number {
-  let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(salt, 2147483647)) | 0
+  let h =
+    (Math.imul(a, 374761393) +
+      Math.imul(b, 668265263) +
+      Math.imul(salt, 2147483647)) |
+    0
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   h ^= h >>> 16
   return (h >>> 0) / 4294967296
@@ -34,7 +38,11 @@ function makeSoftDisc(): THREE.DataTexture {
       const dx = ((x + 0.5) / size) * 2 - 1
       const dy = ((y + 0.5) / size) * 2 - 1
       const ang = Math.atan2(dy, dx)
-      const rim = 0.8 + 0.1 * Math.sin(ang * 3 + 1.3) + 0.06 * Math.sin(ang * 5 + 0.4) + 0.04 * Math.sin(ang * 9)
+      const rim =
+        0.8 +
+        0.1 * Math.sin(ang * 3 + 1.3) +
+        0.06 * Math.sin(ang * 5 + 0.4) +
+        0.04 * Math.sin(ang * 9)
       const d = Math.hypot(dx, dy) / rim
       const v = Math.round(Math.max(0, Math.min(1, (1 - d) / 0.22)) * 255)
       const i = (y * size + x) * 4
@@ -87,7 +95,10 @@ export class Puddles {
   private readonly col = new THREE.Color()
   private reflTarget: THREE.WebGLRenderTarget | null = null
   private readonly reflCam = new THREE.PerspectiveCamera()
-  private readonly reflPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -MIRROR_Y)
+  private readonly reflPlane = new THREE.Plane(
+    new THREE.Vector3(0, 1, 0),
+    -MIRROR_Y,
+  )
   private readonly reflUniforms = {
     uRefl: { value: null as THREE.Texture | null },
     uReflMat: { value: new THREE.Matrix4() },
@@ -126,7 +137,10 @@ export class Puddles {
     this.mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.reflUniforms)
       sh.vertexShader = sh.vertexShader
-        .replace("#include <common>", "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;\nvarying vec2 vWorldXZ;")
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;\nvarying vec2 vWorldXZ;",
+        )
         .replace(
           "#include <project_vertex>",
           "#include <project_vertex>\nvec4 pwp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);\nvReflUv = uReflMat * pwp;\nvWorldXZ = pwp.xz;",
@@ -156,7 +170,10 @@ export class Puddles {
     }
     this.mesh = new THREE.InstancedMesh(geo, this.mat, MAX)
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 3), 3)
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(
+      new Float32Array(MAX * 3),
+      3,
+    )
     this.mesh.count = 0
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 2
@@ -181,15 +198,32 @@ export class Puddles {
     this.mat.emissiveIntensity = this.baseGlow + f * 2.2
   }
 
-  renderReflection(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, around?: (on: boolean) => void) {
+  renderReflection(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    around?: (on: boolean) => void,
+  ) {
     this.reflUniforms.uReflOn.value = 0
-    if (!this.mesh.visible || this.mesh.count === 0 || this.wet < REFLECT_MIN_WET) return
+    if (
+      !this.mesh.visible ||
+      this.mesh.count === 0 ||
+      this.wet < REFLECT_MIN_WET
+    )
+      return
     renderer.getDrawingBufferSize(this.size)
     const w = Math.max(2, Math.floor(this.size.x * REFLECT_SCALE))
     const h = Math.max(2, Math.floor(this.size.y * REFLECT_SCALE))
-    if (!this.reflTarget || this.reflTarget.width !== w || this.reflTarget.height !== h) {
+    if (
+      !this.reflTarget ||
+      this.reflTarget.width !== w ||
+      this.reflTarget.height !== h
+    ) {
       this.reflTarget?.dispose()
-      this.reflTarget = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 0 })
+      this.reflTarget = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.HalfFloatType,
+        samples: 0,
+      })
       this.reflUniforms.uRefl.value = this.reflTarget.texture
     }
 
@@ -252,7 +286,8 @@ export class Puddles {
     this.reflUniforms.uRainAmt.value = Math.min(1, this.target * this.wet * 1.5)
     this.reflUniforms.uCar.value.set(carPos.x, carPos.z, this.carSpeed)
 
-    if (this.wet < this.target) this.wet = Math.min(this.target, this.wet + WET_RATE * dt)
+    if (this.wet < this.target)
+      this.wet = Math.min(this.target, this.wet + WET_RATE * dt)
     else if (this.wet > this.target) {
       const drain = Math.max(dt / DRY_SECONDS, dist / DRY_METRES)
       this.wet = Math.max(this.target, this.wet - drain)
@@ -288,7 +323,11 @@ export class Puddles {
         const z = (j + 0.15 + hash(i, j, 4) * 0.7) * CELL
         const stretch = 1 + hash(i, j, 5) * 0.9
         let surf = this.surfaceAt(x, z, r * 1.25 * 1.3)
-        if (surf === "grass" && this.surfaceAt(x, z, r * stretch * 1.3) !== "grass") surf = null
+        if (
+          surf === "grass" &&
+          this.surfaceAt(x, z, r * stretch * 1.3) !== "grass"
+        )
+          surf = null
         if (!surf) continue
         const road = surf === "road"
         spots.push({

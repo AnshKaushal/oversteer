@@ -32,7 +32,14 @@ export class Aero {
     const dragScale = a ? 1 + (a.dragScale - 1) * this.open : 1
     const downScale = a ? 1 + (a.downforceScale - 1) * this.open : 1
     const dragF =
-      0.5 * p.airDensity * p.dragCoefficient * p.frontalArea * v * v * (1 + p.yawDragGain * side) * dragScale
+      0.5 *
+      p.airDensity *
+      p.dragCoefficient *
+      p.frontalArea *
+      v *
+      v *
+      (1 + p.yawDragGain * side) *
+      dragScale
     const down =
       (p.downforceAt100kmh / Math.pow(p.downforceRefSpeed, 2)) *
       v *

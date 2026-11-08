@@ -25,9 +25,15 @@ export class SlipTracker {
     this.count++
   }
 
-  end(dt: number, groundedWheels: number, lateralVelocity: number, speedKmh: number) {
+  end(
+    dt: number,
+    groundedWheels: number,
+    lateralVelocity: number,
+    speedKmh: number,
+  ) {
     this.slipRatioAvg +=
-      ((groundedWheels > 0 && this.count > 0 ? this.total / this.count : 0) - this.slipRatioAvg) *
+      ((groundedWheels > 0 && this.count > 0 ? this.total / this.count : 0) -
+        this.slipRatioAvg) *
       Math.min(1, dt * this.c.slipAverageRate)
     if (this.count > 0) this.rearSlip = this.sum / this.count
     this.drifting =

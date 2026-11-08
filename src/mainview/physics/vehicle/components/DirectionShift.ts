@@ -27,7 +27,11 @@ export class DirectionShift {
 
     if (standstill && g.gear === 1 && brakeOn && i.throttle < p.pedalRelease) {
       this.reverseHold += i.dt
-      if (this.reverseHold > p.holdTime && g.shiftTimer <= 0 && !this.reversePending) {
+      if (
+        this.reverseHold > p.holdTime &&
+        g.shiftTimer <= 0 &&
+        !this.reversePending
+      ) {
         g.gear = 0
         g.shiftTimer = 0
         this.reverseHold = 0
@@ -67,7 +71,11 @@ export class DirectionShift {
       i.brake < p.pedalRelease
     ) {
       this.forwardHold += i.dt
-      if (this.forwardHold > p.holdTime && g.shiftTimer <= 0 && !this.forwardPending) {
+      if (
+        this.forwardHold > p.holdTime &&
+        g.shiftTimer <= 0 &&
+        !this.forwardPending
+      ) {
         g.gear = 0
         g.shiftTimer = 0
         this.forwardHold = 0

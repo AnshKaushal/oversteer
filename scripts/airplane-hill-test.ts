@@ -32,7 +32,9 @@ const ctx2d = { fillStyle: "", fillRect: () => {} }
 let fails = 0
 function check(ok: boolean, label: string, detail = "") {
   if (!ok) fails++
-  console.log(`${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`)
+  console.log(
+    `${ok ? "PASS" : "FAIL"} | ${label}${detail ? " — " + detail : ""}`,
+  )
 }
 
 const scene = new THREE.Scene()
@@ -58,7 +60,11 @@ wm.update(0, carPos, 1)
     const h = wm.terrainHeightAt(roadCenterX(s), -s)
     if (h > 0.5) onRoad++
   }
-  check(onHill > 0, "hills are detected off the road", `${onHill}/${samples} samples`)
+  check(
+    onHill > 0,
+    "hills are detected off the road",
+    `${onHill}/${samples} samples`,
+  )
   check(
     onRoad === 0,
     "the road itself is clear of hills",
@@ -82,48 +88,49 @@ wm.update(0, carPos, 1)
   let none = 0
 
   for (const mode of modes) {
-   for (const deg of angles) {
-    const pathFor = (s: number) => makePath(s, deg * DEG, 1, 1)
-    for (let base = -600; base < 2000; base += 120) {
-      checked++
-      if (pathBlocked(pathFor(base), mode, terrainAt)) blocked++
-      const s = pickCrossing(base, mode, pathFor, terrainAt, base - 190, 66)
-      if (s !== base) moved++
-      // Nothing clear along the road: the game waits and tries again.
-      if (s === -1) {
-        none++
-        continue
-      }
-      if (pathBlocked(pathFor(s), mode, terrainAt)) {
-        stillBlocked++
-        continue
-      }
-      // How much clearance does the chosen path have?
-      const yaw = Math.atan2(
-        roadCenterX(s + 4) - roadCenterX(s - 4),
-        8,
-      )
-      const steps = Math.max(16, Math.round(PASS_LENGTH / 15))
-      for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * PASS_LENGTH
-        const lateral = t - PASS_HALF
-        const p = pathFor(s)
-        const x = p.x + (t - PASS_LENGTH / 2) * p.dx
-        const z = p.z + (t - PASS_LENGTH / 2) * p.dz
-        const h = wm.terrainHeightAt(x, z)
-        const st = passState(mode, t, pathFor(s), 0)
-        // A landing rolls out on flat ground: no hill may rise into its path.
-        if (mode === "landing") {
-          if (h > Math.max(0.3, st.y - 4)) landingOnHill++
+    for (const deg of angles) {
+      const pathFor = (s: number) => makePath(s, deg * DEG, 1, 1)
+      for (let base = -600; base < 2000; base += 120) {
+        checked++
+        if (pathBlocked(pathFor(base), mode, terrainAt)) blocked++
+        const s = pickCrossing(base, mode, pathFor, terrainAt, base - 190, 66)
+        if (s !== base) moved++
+        // Nothing clear along the road: the game waits and tries again.
+        if (s === -1) {
+          none++
           continue
         }
-        if (h > 0.3) worstClearance = Math.min(worstClearance, st.y - h)
+        if (pathBlocked(pathFor(s), mode, terrainAt)) {
+          stillBlocked++
+          continue
+        }
+        // How much clearance does the chosen path have?
+        const yaw = Math.atan2(roadCenterX(s + 4) - roadCenterX(s - 4), 8)
+        const steps = Math.max(16, Math.round(PASS_LENGTH / 15))
+        for (let i = 0; i <= steps; i++) {
+          const t = (i / steps) * PASS_LENGTH
+          const lateral = t - PASS_HALF
+          const p = pathFor(s)
+          const x = p.x + (t - PASS_LENGTH / 2) * p.dx
+          const z = p.z + (t - PASS_LENGTH / 2) * p.dz
+          const h = wm.terrainHeightAt(x, z)
+          const st = passState(mode, t, pathFor(s), 0)
+          // A landing rolls out on flat ground: no hill may rise into its path.
+          if (mode === "landing") {
+            if (h > Math.max(0.3, st.y - 4)) landingOnHill++
+            continue
+          }
+          if (h > 0.3) worstClearance = Math.min(worstClearance, st.y - h)
+        }
       }
     }
-   }
   }
 
-  check(none <= checked * 0.05, "almost every base crossing finds a clear path", `${none} of ${checked} found none`)
+  check(
+    none <= checked * 0.05,
+    "almost every base crossing finds a clear path",
+    `${none} of ${checked} found none`,
+  )
   check(checked > 0, "crossings were checked", `${checked}`)
   check(
     blocked > 0,
@@ -140,7 +147,11 @@ wm.update(0, carPos, 1)
     "every chosen crossing has a clear path",
     `${stillBlocked} still blocked`,
   )
-  check(landingOnHill === 0, "landings never meet a hill", `${landingOnHill} samples`)
+  check(
+    landingOnHill === 0,
+    "landings never meet a hill",
+    `${landingOnHill} samples`,
+  )
   check(
     worstClearance > 4,
     "the chosen path keeps its clearance",
@@ -181,7 +192,8 @@ wm.update(0, carPos, 1)
       )
       if (s < 0) continue
       if (pathBlocked(pathFor(s), "takeoff", terrainAt, SPAN, CLEARANCE)) {
-        stillBlocked++; console.log("STILL", mode, deg, base, s)
+        stillBlocked++
+        console.log("STILL", mode, deg, base, s)
         continue
       }
       // Check the wingtips along the chosen path as well.
@@ -204,7 +216,11 @@ wm.update(0, carPos, 1)
     }
   }
   check(checked > 0, "the jet's crossings were checked", `${checked}`)
-  check(blocked > 0, "the big jet is blocked by more hills", `${blocked} of ${checked}`)
+  check(
+    blocked > 0,
+    "the big jet is blocked by more hills",
+    `${blocked} of ${checked}`,
+  )
   check(
     stillBlocked === 0,
     "every crossing the jet is given is clear for the whole aircraft",
@@ -217,5 +233,7 @@ wm.update(0, carPos, 1)
   )
 }
 
-console.log(fails === 0 ? "\nAll hill checks passed" : `\n${fails} check(s) failed`)
+console.log(
+  fails === 0 ? "\nAll hill checks passed" : `\n${fails} check(s) failed`,
+)
 if (fails > 0) process.exit(1)

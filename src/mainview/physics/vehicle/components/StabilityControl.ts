@@ -58,10 +58,18 @@ export class StabilityControl {
     this.engineFactor = 1
   }
 
-  referenceYaw(steerAngle: number, fwdSpeed: number, downforceAccel = 0): number {
-    const r = (fwdSpeed * steerAngle) / (this.wheelbase + this.gradient * fwdSpeed * fwdSpeed)
+  referenceYaw(
+    steerAngle: number,
+    fwdSpeed: number,
+    downforceAccel = 0,
+  ): number {
+    const r =
+      (fwdSpeed * steerAngle) /
+      (this.wheelbase + this.gradient * fwdSpeed * fwdSpeed)
     const limit =
-      (this.lateralLimit + this.gripFraction * this.frictionMu * downforceAccel) / Math.max(Math.abs(fwdSpeed), Number.EPSILON)
+      (this.lateralLimit +
+        this.gripFraction * this.frictionMu * downforceAccel) /
+      Math.max(Math.abs(fwdSpeed), Number.EPSILON)
     return clamp(r, -limit, limit)
   }
 
@@ -69,19 +77,29 @@ export class StabilityControl {
     const p = this.p
     const target = this.wheels.map(() => 0)
     const active =
-      i.fwdSpeed > p.minSpeed && i.groundedWheels >= p.minGroundedWheels && !i.handbrake && !i.launchActive
+      i.fwdSpeed > p.minSpeed &&
+      i.groundedWheels >= p.minGroundedWheels &&
+      !i.handbrake &&
+      !i.launchActive
     if (active) {
       const ref = this.referenceYaw(i.steerAngle, i.fwdSpeed, i.downforceAccel)
       const yawErr = i.yawRate - ref
       const intent = clamp(Math.abs(ref) / p.yawDeadzone, 0, 1)
-      const yawExcess = Math.sign(yawErr) * Math.max(0, Math.abs(yawErr) - p.yawDeadzone * intent)
-      const betaExcess = Math.sign(i.beta) * Math.max(0, Math.abs(i.beta) - p.betaDeadzone * intent)
+      const yawExcess =
+        Math.sign(yawErr) *
+        Math.max(0, Math.abs(yawErr) - p.yawDeadzone * intent)
+      const betaExcess =
+        Math.sign(i.beta) *
+        Math.max(0, Math.abs(i.beta) - p.betaDeadzone * intent)
       const demand = -p.yawGain * yawExcess - p.betaGain * betaExcess
       if (demand !== 0) {
         const turn = Math.sign(Math.abs(ref) > p.yawDeadzone ? ref : i.yawRate)
         const oversteer = demand * turn < 0
         const left = demand > 0
-        const amount = Math.min(p.maxBrakeFraction, Math.abs(demand) * (oversteer ? 1 : p.understeerScale))
+        const amount = Math.min(
+          p.maxBrakeFraction,
+          Math.abs(demand) * (oversteer ? 1 : p.understeerScale),
+        )
         this.wheels.forEach((w, wi) => {
           if (w.left === left && w.front === oversteer) target[wi] = amount
         })

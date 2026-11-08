@@ -1,0 +1,30 @@
+export interface IndicatorZone {
+  end: "front" | "rear"
+  mesh?: string
+  dx?: [number, number]
+  y?: [number, number]
+  idle?: number
+}
+
+const AMBER_LENS = 0x6a3300
+
+export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
+  "cheetah_84.glb": [
+    { end: "front", mesh: "Blinkers" },
+    { end: "rear", mesh: "Blinkers" },
+  ],
+  "mitsubishi_lancer_evolution_6.glb": [
+    { end: "front", mesh: "^Object_5$", idle: AMBER_LENS },
+  ],
+  "nissan_350z.glb": [
+    { end: "front", mesh: "^Object_6$", dx: [0.3, 0.42], y: [0.15, 0.42] },
+  ],
+  "porsche_997.1_gt2.glb": [
+    { end: "front", mesh: "^Object_23$", dx: [0.23, 0.35], y: [0.27, 0.325] },
+    { end: "front", mesh: "^Object_23$", dx: [0.42, 0.5], y: [0.39, 0.45] },
+  ],
+  "audi_r8.glb": [{ end: "front", mesh: "headlightGlass", dx: [0.3, 0.45] }],
+  "lamborghini_aventador.glb": [
+    { end: "front", mesh: "^glasses_glass0(17|18|20|24)" },
+  ],
+}

@@ -68,7 +68,10 @@ export class Engine {
         curveLookup(p.throttleMap, throttle) *
         (this.turbo ? this.turbo.torqueFactor() : 1) -
       this.frictionTorque()
-    return Math.max(0, (net / p.engineInertia) * dt * (SECONDS_PER_MINUTE / TWO_PI))
+    return Math.max(
+      0,
+      (net / p.engineInertia) * dt * (SECONDS_PER_MINUTE / TWO_PI),
+    )
   }
 
   stepRpm(c: RpmInput) {
@@ -95,8 +98,11 @@ export class Engine {
           d.neutralDecayBase +
           d.neutralDecayExtra * Math.min(1, excess / d.neutralDecayRefRpm)
         const open = curveLookup(p.throttleMap, c.throttle)
-        const loss = this.frictionTorque() + (1 - open) * (p.engineBrakeBase + this.rpm * p.engineBrakeRPMFactor)
-        const coast = (loss / p.engineInertia) * c.dt * (SECONDS_PER_MINUTE / TWO_PI)
+        const loss =
+          this.frictionTorque() +
+          (1 - open) * (p.engineBrakeBase + this.rpm * p.engineBrakeRPMFactor)
+        const coast =
+          (loss / p.engineInertia) * c.dt * (SECONDS_PER_MINUTE / TWO_PI)
         const soft = excess * (1 - Math.exp(-decay * c.dt))
         this.rpm -= Math.min(coast, soft)
       }
@@ -113,7 +119,11 @@ export class Engine {
           c.coupledRpm,
           idle + c.throttle * (p.redlineRPM - idle) * d.dumpRevFraction,
         )
-      } else if (c.shifting || c.kickdownTimer > 0 || (c.throttle > d.airborneThrottle && c.airborne)) {
+      } else if (
+        c.shifting ||
+        c.kickdownTimer > 0 ||
+        (c.throttle > d.airborneThrottle && c.airborne)
+      ) {
         target = Math.max(idle * d.idleFloorFraction, c.coupledRpm)
       } else {
         clutched = true
@@ -161,10 +171,16 @@ export class Engine {
     let next = 0
     if (free && !this.limiterCut) {
       const cyl = Math.max(1, p.config.cylinders)
-      const sigma = ((CYCLIC_VARIATION / Math.sqrt(cyl)) * this.frictionTorque() * RPM_PER_RADS) / p.engineInertia
+      const sigma =
+        ((CYCLIC_VARIATION / Math.sqrt(cyl)) *
+          this.frictionTorque() *
+          RPM_PER_RADS) /
+        p.engineInertia
       const settle = p.dynamics.neutralRiseRate * 0.25
       const lowRev = Math.min(1, p.idleRPM / Math.max(this.rpm, 1))
-      next = this.jitter * Math.exp(-settle * c.dt) + sigma * lowRev * Math.sqrt(c.dt) * this.gauss()
+      next =
+        this.jitter * Math.exp(-settle * c.dt) +
+        sigma * lowRev * Math.sqrt(c.dt) * this.gauss()
     } else {
       next = this.jitter * Math.exp(-c.dt * 12)
     }
@@ -188,7 +204,10 @@ export class Engine {
       }
       this.crankWobble += c.dt * 38
       const ramp = Math.min(1, this.starterT / 0.25)
-      const cyl = 1 + 0.28 * Math.sin(this.crankWobble) + 0.12 * Math.sin(this.crankWobble * 2.3)
+      const cyl =
+        1 +
+        0.28 * Math.sin(this.crankWobble) +
+        0.12 * Math.sin(this.crankWobble * 2.3)
       const target = 230 * ramp * cyl
       this.rpm += (target - this.rpm) * Math.min(1, c.dt * 14)
       this.limiterCut = false
@@ -207,7 +226,11 @@ export class Engine {
 
   fullPedalTorque(rpm: number): number {
     const p = this.p
-    return p.maxTorqueNm * curveLookup(p.torqueCurve, rpm) * curveLookup(p.throttleMap, 1)
+    return (
+      p.maxTorqueNm *
+      curveLookup(p.torqueCurve, rpm) *
+      curveLookup(p.throttleMap, 1)
+    )
   }
 
   get cranking(): boolean {
@@ -266,15 +289,30 @@ export class Engine {
       return
     }
     const wf = Math.max(c.flareRpm, p.idleRPM) * rad
-    const fullAtFlare = p.maxTorqueNm * curveLookup(p.torqueCurve, wf / rad) * curveLookup(p.throttleMap, 1)
+    const fullAtFlare =
+      p.maxTorqueNm *
+      curveLookup(p.torqueCurve, wf / rad) *
+      curveLookup(p.throttleMap, 1)
     const pump = (fullAtFlare / (wf * wf)) * w * w
     const idleW = p.idleRPM * rad
-    const lockGain = (p.dynamics.clutchHoldMargin * p.maxTorqueNm) / ((fullAtFlare / (wf * wf)) * idleW * idleW)
-    const grip = clamp((wIn / w - p.dynamics.clutchLockStart) / (1 - p.dynamics.clutchLockStart), 0, 1)
+    const lockGain =
+      (p.dynamics.clutchHoldMargin * p.maxTorqueNm) /
+      ((fullAtFlare / (wf * wf)) * idleW * idleW)
+    const grip = clamp(
+      (wIn / w - p.dynamics.clutchLockStart) / (1 - p.dynamics.clutchLockStart),
+      0,
+      1,
+    )
     const cap = pump * (1 + lockGain * smoothstep(grip))
     const sag = clamp((p.idleRPM - this.rpm) / (p.idleRPM - floor), 0, 1)
-    this.governorTorque = Math.min(cap, p.dynamics.idleHoldFraction * p.maxTorqueNm * sag)
-    const te = Math.max(this.torque(c.throttle, c.gear, false), this.governorTorque)
+    this.governorTorque = Math.min(
+      cap,
+      p.dynamics.idleHoldFraction * p.maxTorqueNm * sag,
+    )
+    const te = Math.max(
+      this.torque(c.throttle, c.gear, false),
+      this.governorTorque,
+    )
     const next = w + ((te - cap) / p.engineInertia) * c.dt
     if (next <= wIn) {
       this.lock(c, floor)
@@ -287,7 +325,8 @@ export class Engine {
 
   private lock(c: RpmInput, floor: number) {
     const follow = Math.max(c.coupledRpm, floor)
-    this.rpm += (follow - this.rpm) * Math.min(1, c.dt * this.p.dynamics.rateNormal)
+    this.rpm +=
+      (follow - this.rpm) * Math.min(1, c.dt * this.p.dynamics.rateNormal)
     this.slipping = false
     this.clutchCapacity = Infinity
   }
@@ -349,8 +388,15 @@ export interface EnginePeaks {
   torqueRPM: number
 }
 
-export function enginePeaks(p: Pick<EngineSpec, "idleRPM" | "redlineRPM" | "maxTorqueNm" | "torqueCurve">): EnginePeaks {
-  const out: EnginePeaks = { powerHP: 0, powerRPM: p.idleRPM, torqueNm: 0, torqueRPM: p.idleRPM }
+export function enginePeaks(
+  p: Pick<EngineSpec, "idleRPM" | "redlineRPM" | "maxTorqueNm" | "torqueCurve">,
+): EnginePeaks {
+  const out: EnginePeaks = {
+    powerHP: 0,
+    powerRPM: p.idleRPM,
+    torqueNm: 0,
+    torqueRPM: p.idleRPM,
+  }
   for (let rpm = p.idleRPM; rpm <= p.redlineRPM; rpm++) {
     const nm = p.maxTorqueNm * curveLookup(p.torqueCurve, rpm)
     const hp = (nm * rpm * (TWO_PI / SECONDS_PER_MINUTE)) / WATT_PER_HP

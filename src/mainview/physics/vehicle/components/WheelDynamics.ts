@@ -87,7 +87,9 @@ export class WheelDynamics {
       omega =
         (w.omega +
           ((driveTorque - sat) / w.inertia) * dt +
-          (roadSpeed === undefined ? 0 : ((dt * this.slipDampRate * w.radius) / w.inertia) * roadSpeed)) /
+          (roadSpeed === undefined
+            ? 0
+            : ((dt * this.slipDampRate * w.radius) / w.inertia) * roadSpeed)) /
         (1 + stiff)
     }
     w.slipDampTorque =

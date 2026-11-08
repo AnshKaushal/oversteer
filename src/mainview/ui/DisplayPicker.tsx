@@ -53,7 +53,8 @@ export function DisplayList({
                 {d.isPrimary ? " (primary)" : ""}
               </div>
               <div className="font-mono text-xs text-gray-300">
-                {Math.round(d.width * d.scaleFactor)} × {Math.round(d.height * d.scaleFactor)}
+                {Math.round(d.width * d.scaleFactor)} ×{" "}
+                {Math.round(d.height * d.scaleFactor)}
               </div>
             </div>
             {sel && <Check size={16} className="text-[#6ec2f0]" />}

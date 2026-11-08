@@ -41,8 +41,16 @@ export function createCircuitConfig(
   const c = { ...DEFAULT_CIRCUIT_CONFIG, ...overrides }
   const clamp = (v: number, lo: number, hi: number) =>
     Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : lo))
-  c.lengthM = clamp(c.lengthM, CIRCUIT_LIMITS.lengthM.min, CIRCUIT_LIMITS.lengthM.max)
-  c.widthM = clamp(c.widthM, CIRCUIT_LIMITS.widthM.min, CIRCUIT_LIMITS.widthM.max)
+  c.lengthM = clamp(
+    c.lengthM,
+    CIRCUIT_LIMITS.lengthM.min,
+    CIRCUIT_LIMITS.lengthM.max,
+  )
+  c.widthM = clamp(
+    c.widthM,
+    CIRCUIT_LIMITS.widthM.min,
+    CIRCUIT_LIMITS.widthM.max,
+  )
   c.twistiness = clamp(c.twistiness, 0, 1)
   c.gravelM = clamp(c.gravelM, 0, 40)
   c.runoffM = clamp(c.runoffM, c.gravelM, 80)

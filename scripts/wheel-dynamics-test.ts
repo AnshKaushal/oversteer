@@ -224,8 +224,15 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
       // the differential may bias the split, but only inside its lock cap
       const D = activeCar().physics.differential
       const sum = ws[2].driveTorque + ws[3].driveTorque
-      const cap = D.type === "open" ? 0 : D.type === "locked" ? Math.abs(sum) : D.preloadTorque + Math.max(D.lsdAccelLock, D.lsdDecelLock) * Math.abs(sum)
-      if (Math.abs(ws[2].driveTorque - ws[3].driveTorque) > cap + 1e-6) splitOk = false
+      const cap =
+        D.type === "open"
+          ? 0
+          : D.type === "locked"
+            ? Math.abs(sum)
+            : D.preloadTorque +
+              Math.max(D.lsdAccelLock, D.lsdDecelLock) * Math.abs(sum)
+      if (Math.abs(ws[2].driveTorque - ws[3].driveTorque) > cap + 1e-6)
+        splitOk = false
     }
   }
   const ws = s.car.wheelDynamics.wheels
@@ -286,7 +293,8 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   check(
     "axles differ: driven vs undriven",
     // an AWD car drives both axles, so only 2WD cars must show a difference
-    activeCar().physics.drivetrain.type === "awd" || Math.abs(om[2] - om[0]) > 1,
+    activeCar().physics.drivetrain.type === "awd" ||
+      Math.abs(om[2] - om[0]) > 1,
     `RL-FL=${(om[2] - om[0]).toFixed(1)}`,
   )
 }

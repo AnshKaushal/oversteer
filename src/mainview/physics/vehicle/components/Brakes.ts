@@ -42,8 +42,10 @@ export class Brakes {
     const f = this.p.fade
     if (!f) return
     const i = c.wheelIndex
-    const cool = (f.coolBase + f.coolPerKmh * c.speedKmh) * (this.temps[i] - f.ambientC)
-    this.temps[i] += ((service * Math.abs(c.omega)) / f.heatCapacity - cool) * c.dt
+    const cool =
+      (f.coolBase + f.coolPerKmh * c.speedKmh) * (this.temps[i] - f.ambientC)
+    this.temps[i] +=
+      ((service * Math.abs(c.omega)) / f.heatCapacity - cool) * c.dt
   }
 
   maxTorque(front: boolean): number {
@@ -51,7 +53,8 @@ export class Brakes {
   }
 
   reset() {
-    for (let i = 0; i < this.temps.length; i++) this.temps[i] = this.p.fade?.ambientC ?? 0
+    for (let i = 0; i < this.temps.length; i++)
+      this.temps[i] = this.p.fade?.ambientC ?? 0
   }
 
   releaseOnThrottle(throttle: number) {
@@ -63,9 +66,15 @@ export class Brakes {
     const max = c.front
       ? this.wheels.brakeForce.front
       : this.wheels.brakeForce.rear
-    const lock = clamp((c.speedKmh - HANDBRAKE_LOCK_FROM) / HANDBRAKE_LOCK_SPAN, 0, 1)
+    const lock = clamp(
+      (c.speedKmh - HANDBRAKE_LOCK_FROM) / HANDBRAKE_LOCK_SPAN,
+      0,
+      1,
+    )
     const hb =
-      c.handbrake && !c.front ? this.wheels.handbrakeForce * (1 + (HANDBRAKE_LOCK - 1) * lock) : 0
+      c.handbrake && !c.front
+        ? this.wheels.handbrakeForce * (1 + (HANDBRAKE_LOCK - 1) * lock)
+        : 0
     const service = c.brake * max * this.fadeFactor(this.temps[c.wheelIndex])
     this.heat(c, service)
     let base = service + hb

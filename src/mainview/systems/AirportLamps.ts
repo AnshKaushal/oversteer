@@ -1,7 +1,6 @@
 import { fadeWithFog } from "./fogFade"
 import * as THREE from "three"
 
-
 const BEZEL = 0x2b2e33
 const UNLIT = 0.28
 
@@ -37,13 +36,30 @@ export class LampSet {
     for (let i = 0; i < n; i++) if (flat(i)) pos[i * 3 + 1] = 0.03
 
     const bezelGeo = new THREE.CylinderGeometry(1.0, 1.25, 0.5, 16)
-    const lensGeo = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+    const lensGeo = new THREE.SphereGeometry(
+      1,
+      16,
+      8,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI / 2,
+    )
     lensGeo.scale(1, 0.7, 1)
     const stemGeo = new THREE.CylinderGeometry(1, 1, 1, 6)
     this.geoms.push(bezelGeo, lensGeo, stemGeo)
 
-    const bezelMat = new THREE.MeshStandardMaterial({ color: BEZEL, roughness: 0.55, metalness: 0.5, transparent: true })
-    const lensMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true })
+    const bezelMat = new THREE.MeshStandardMaterial({
+      color: BEZEL,
+      roughness: 0.55,
+      metalness: 0.5,
+      transparent: true,
+    })
+    const lensMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      toneMapped: false,
+      transparent: true,
+    })
     this.fadeMats.push(bezelMat, lensMat)
 
     const stems: number[] = []
@@ -51,7 +67,11 @@ export class LampSet {
 
     const bezel = new THREE.InstancedMesh(bezelGeo, bezelMat, n)
     this.lens = new THREE.InstancedMesh(lensGeo, lensMat, n)
-    const stem = new THREE.InstancedMesh(stemGeo, bezelMat, Math.max(1, stems.length))
+    const stem = new THREE.InstancedMesh(
+      stemGeo,
+      bezelMat,
+      Math.max(1, stems.length),
+    )
     stem.count = stems.length
 
     const m = new THREE.Matrix4()
@@ -128,7 +148,11 @@ export class LampSet {
     for (let i = 0; i < this.count; i++) {
       const k = lit ? this.level[i] : 0
       const v = UNLIT + (1 - UNLIT) * k
-      this.lensColor.setRGB(this.base[i * 3] * v, this.base[i * 3 + 1] * v, this.base[i * 3 + 2] * v)
+      this.lensColor.setRGB(
+        this.base[i * 3] * v,
+        this.base[i * 3 + 1] * v,
+        this.base[i * 3 + 2] * v,
+      )
       this.lens.setColorAt(i, this.lensColor)
       for (let j = 0; j < 3; j++) hc[i * 3 + j] = this.base[i * 3 + j] * k
     }

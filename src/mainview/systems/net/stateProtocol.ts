@@ -46,7 +46,8 @@ export interface ValidatedState {
 }
 
 export type ValidateFailure =
-  { ok: false; reason: string } | { ok: true; state: ValidatedState }
+  | { ok: false; reason: string }
+  | { ok: true; state: ValidatedState }
 
 function isFiniteNum(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v)
@@ -122,7 +123,10 @@ export function validateStatePacket(pkt: unknown): ValidateFailure {
 
   for (const k of ["wx", "wy", "wz"] as const) {
     const v = p[k]
-    if (v !== undefined && (!isFiniteNum(v) || Math.abs(v) > NET.limits.angVelComp)) {
+    if (
+      v !== undefined &&
+      (!isFiniteNum(v) || Math.abs(v) > NET.limits.angVelComp)
+    ) {
       return { ok: false, reason: "bad-angvel" }
     }
   }

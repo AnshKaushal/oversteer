@@ -40,9 +40,15 @@ export class TractionControl {
     return this.p.brakeDriveShare
   }
 
-  brakeFraction(wheelSpeed: number, groundSpeed: number, direction: 1 | -1): number {
+  brakeFraction(
+    wheelSpeed: number,
+    groundSpeed: number,
+    direction: 1 | -1,
+  ): number {
     const p = this.p
-    const slip = (direction * (wheelSpeed - groundSpeed)) / Math.max(Math.abs(groundSpeed), p.slipSpeedFloor)
+    const slip =
+      (direction * (wheelSpeed - groundSpeed)) /
+      Math.max(Math.abs(groundSpeed), p.slipSpeedFloor)
     if (!(slip > p.brakeSlipStart)) return 0
     return Math.min(p.brakeMaxFraction, p.brakeGain * (slip - p.brakeSlipStart))
   }

@@ -66,10 +66,19 @@ export const f1Car: CarSpec = {
         [15000, 0.7],
         [15500, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 6, displacementL: 1.6, flywheel: "race" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 6,
+        displacementL: 1.6,
+        flywheel: "race",
+      }),
       frictionTorqueBase: 20,
       frictionTorqueRPMFactor: 0.008,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

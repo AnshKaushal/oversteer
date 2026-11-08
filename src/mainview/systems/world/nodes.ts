@@ -1,0 +1,25 @@
+export const TREE_NODES = [
+  "ARVORE_SEM",
+  "Branches01",
+  "Componen12",
+  "Group23",
+  "Group27",
+  "Group4",
+  "Group5",
+  "Group6",
+  "skp3703_1",
+  "skp4847_1",
+  "skp5771_1",
+  "skp665F1",
+  "skp7EEA1",
+  "skp7EEA_1_",
+  "skpC133_1",
+  "skpEFB7_1",
+]
+export const CLOUD_NODES = [
+  "NUVEM1",
+  "NUVEM_0201",
+  "NUVEM_02_1",
+  "NUVEM_1_1",
+  "NUVEM_2_1",
+]

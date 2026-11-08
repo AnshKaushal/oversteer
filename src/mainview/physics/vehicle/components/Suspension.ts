@@ -137,7 +137,11 @@ export class SuspensionSystem {
 
       const toi = hit.timeOfImpact
       const axle = w.front ? sp.front : sp.rear
-      const compression = clamp(this.restLengths[wi] - toi, sp.droopLimit, travelLimit)
+      const compression = clamp(
+        this.restLengths[wi] - toi,
+        sp.droopLimit,
+        travelLimit,
+      )
       const suspVel = -pointVel.dot(up)
 
       const bump = 1 + Math.max(0, compression - sp.bumpStart) * sp.bumpGain
@@ -153,7 +157,12 @@ export class SuspensionSystem {
       st.damperF = damperF
       st.arbF = 0
       st.contactY = contact.y
-      st.surface = surfaceOf(this.world, (hit as { collider?: RAPIER.Collider }).collider, contact.x, contact.z)
+      st.surface = surfaceOf(
+        this.world,
+        (hit as { collider?: RAPIER.Collider }).collider,
+        contact.x,
+        contact.z,
+      )
       const n = (hit as { normal?: { x: number; y: number; z: number } }).normal
       if (n) st.contactNormal.set(n.x, n.y, n.z)
       else st.contactNormal.set(0, 1, 0)

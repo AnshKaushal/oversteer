@@ -65,10 +65,19 @@ export const dodgeCharger69: CarSpec = {
         [6800, 0.75],
         [7000, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 8, displacementL: 7.0, flywheel: "road" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 8,
+        displacementL: 7.0,
+        flywheel: "road",
+      }),
       frictionTorqueBase: 22,
       frictionTorqueRPMFactor: 0.005,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 10,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

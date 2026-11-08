@@ -7,6 +7,14 @@ import {
   Updater,
 } from "electrobun/main"
 import os from "os"
+import { appendFileSync, writeFileSync } from "fs"
+import path from "path"
+
+const PERF_LOG =
+  process.env.OVERSTEER_PERF_LOG ?? path.join(os.tmpdir(), "oversteer-perf.log")
+try {
+  writeFileSync(PERF_LOG, "")
+} catch {}
 import { UPDATE_ICON_DATA_URI } from "./updateIcon"
 import { displayModes, nativePanelSize } from "./nativePanel"
 import { grabCursor, releaseCursor } from "./macCursor"
@@ -126,7 +134,11 @@ async function runUpdate(manual: boolean): Promise<UpdateResult> {
     updateRunning = false
 
     if (closeAfterMs > 0) {
-      setUpdateStatus(updateWin, result.message, result.outcome === "error" ? undefined : 100)
+      setUpdateStatus(
+        updateWin,
+        result.message,
+        result.outcome === "error" ? undefined : 100,
+      )
       const win = updateWin
       setTimeout(() => {
         try {
@@ -152,16 +164,18 @@ async function runUpdate(manual: boolean): Promise<UpdateResult> {
           | undefined
         const mb = (n?: number) => ((n ?? 0) / 1048576).toFixed(1)
         const pct = d?.progress
-        const detail =
-          d?.totalBytes
-            ? `${Math.round(pct ?? 0)}%  ·  ${mb(d.bytesDownloaded)} / ${mb(d.totalBytes)} MB`
-            : d?.bytesDownloaded
-              ? `${mb(d.bytesDownloaded)} MB`
-              : ""
+        const detail = d?.totalBytes
+          ? `${Math.round(pct ?? 0)}%  ·  ${mb(d.bytesDownloaded)} / ${mb(d.totalBytes)} MB`
+          : d?.bytesDownloaded
+            ? `${mb(d.bytesDownloaded)} MB`
+            : ""
         setUpdateStatus(updateWin, "Downloading update…", pct, detail)
       } else if (entry.status === "downloading-full-bundle") {
         setUpdateStatus(updateWin, "Downloading update…")
-      } else if (entry.status === "applying" || entry.status === "replacing-app") {
+      } else if (
+        entry.status === "applying" ||
+        entry.status === "replacing-app"
+      ) {
         setUpdateStatus(updateWin, "Installing update…")
       } else if (entry.status === "launching-new-version") {
         setUpdateStatus(updateWin, "Restarting…")
@@ -210,12 +224,21 @@ async function runUpdate(manual: boolean): Promise<UpdateResult> {
       console.log("[update] applying, relaunching on the new version")
       setUpdateStatus(updateWin, "Installing update…")
       await Updater.applyUpdate()
-      return { outcome: "updating", message: `Updating to version ${info.version}…` }
+      return {
+        outcome: "updating",
+        message: `Updating to version ${info.version}…`,
+      }
     }
 
-    return finish({ outcome: "error", message: "The update could not be installed." }, manual ? 2500 : 0)
+    return finish(
+      { outcome: "error", message: "The update could not be installed." },
+      manual ? 2500 : 0,
+    )
   } catch {
-    return finish({ outcome: "error", message: "The update failed." }, manual ? 2500 : 0)
+    return finish(
+      { outcome: "error", message: "The update failed." },
+      manual ? 2500 : 0,
+    )
   }
 }
 
@@ -256,58 +279,76 @@ function getLocalIp(): string {
 }
 
 const lanClients = new Set<any>()
+let lanServer: ReturnType<typeof Bun.serve> | null = null
 
-try {
-  Bun.serve({
-    port: LAN_PORT,
+/** Starts the LAN relay on demand (host only). Returns whether it is running. */
+function startLanRelay(): boolean {
+  if (lanServer) return true
+  try {
+    lanServer = Bun.serve({
+      port: LAN_PORT,
 
-    fetch(req, server) {
-      if (req.method === "OPTIONS") {
-        return new Response(null, {
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-          },
-        })
-      }
-
-      if (server.upgrade(req)) return undefined
-
-      return new Response(
-        `OverSteer LAN Relay Server (${getLocalIp()}:${LAN_PORT})`,
-        { status: 200 },
-      )
-    },
-
-    websocket: {
-      open(ws) {
-        lanClients.add(ws)
-      },
-
-      message(ws, msg) {
-        const message = msg
-
-        for (const client of lanClients) {
-          if (client === ws) continue
-
-          try {
-            client.send(message)
-          } catch {}
+      fetch(req, server) {
+        if (req.method === "OPTIONS") {
+          return new Response(null, {
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type",
+            },
+          })
         }
+
+        if (server.upgrade(req, { data: undefined })) return undefined
+
+        return new Response(
+          `OverSteer LAN Relay Server (${getLocalIp()}:${LAN_PORT})`,
+          { status: 200 },
+        )
       },
 
-      close(ws) {
-        lanClients.delete(ws)
-      },
-    },
-  })
+      websocket: {
+        open(ws) {
+          lanClients.add(ws)
+        },
 
-  console.log(`[LAN Relay] Server running on ws://${getLocalIp()}:${LAN_PORT}`)
-} catch {
-  console.log(
-    `[LAN Relay] Port ${LAN_PORT} in use or already bound by host instance`,
-  )
+        message(ws, msg) {
+          const message = msg
+
+          for (const client of lanClients) {
+            if (client === ws) continue
+
+            try {
+              client.send(message)
+            } catch {}
+          }
+        },
+
+        close(ws) {
+          lanClients.delete(ws)
+        },
+      },
+    })
+    console.log(
+      `[LAN Relay] Server running on ws://${getLocalIp()}:${LAN_PORT}`,
+    )
+    return true
+  } catch {
+    console.log(
+      `[LAN Relay] Port ${LAN_PORT} in use or already bound by host instance`,
+    )
+    return false
+  }
+}
+
+function stopLanRelay() {
+  if (!lanServer) return
+  try {
+    lanServer.stop(true)
+  } catch {}
+  lanServer = null
+  lanClients.clear()
+  console.log("[LAN Relay] Stopped")
 }
 
 const isWindowed =
@@ -324,20 +365,28 @@ function createWindow(winUrl: string, windowed = isWindowed) {
     handlers: {
       requests: {
         checkForUpdates: () => runUpdate(true),
+        setLanRelay: (p?: any) => {
+          const on = !!p?.on
+          if (on) return startLanRelay()
+          stopLanRelay()
+          return false
+        },
         getDisplays: () =>
           Screen.getAllDisplays().map((d) => {
             const panel = nativePanelSize(d.id)
             return {
-            nativeWidth: panel?.width ?? Math.round(d.bounds.width * d.scaleFactor),
-            nativeHeight: panel?.height ?? Math.round(d.bounds.height * d.scaleFactor),
-            modes: displayModes(d.id),
-            id: d.id,
-            isPrimary: d.isPrimary,
-            x: d.bounds.x,
-            y: d.bounds.y,
-            width: d.bounds.width,
-            height: d.bounds.height,
-            scaleFactor: d.scaleFactor,
+              nativeWidth:
+                panel?.width ?? Math.round(d.bounds.width * d.scaleFactor),
+              nativeHeight:
+                panel?.height ?? Math.round(d.bounds.height * d.scaleFactor),
+              modes: displayModes(d.id),
+              id: d.id,
+              isPrimary: d.isPrimary,
+              x: d.bounds.x,
+              y: d.bounds.y,
+              width: d.bounds.width,
+              height: d.bounds.height,
+              scaleFactor: d.scaleFactor,
             }
           }),
         moveToDisplay: (p?: any) => {
@@ -350,7 +399,12 @@ function createWindow(winUrl: string, windowed = isWindowed) {
             const a = d.workArea
             const width = Math.min(a.width, 1440)
             const height = Math.min(a.height, 900)
-            w.setFrame(a.x + Math.round((a.width - width) / 2), a.y + Math.round((a.height - height) / 2), width, height)
+            w.setFrame(
+              a.x + Math.round((a.width - width) / 2),
+              a.y + Math.round((a.height - height) / 2),
+              width,
+              height,
+            )
             if (wasFull) setTimeout(() => w.setFullScreen(true), 350)
             return true
           } catch {
@@ -369,7 +423,14 @@ function createWindow(winUrl: string, windowed = isWindowed) {
           )
         },
       },
-      messages: {},
+      messages: {
+        perfLog: ({ text }: { text: string }) => {
+          console.log(text)
+          try {
+            appendFileSync(PERF_LOG, text + "\n")
+          } catch {}
+        },
+      },
     },
   })
 
@@ -477,9 +538,16 @@ if (process.platform === "darwin") {
       const sel = libobjc.symbols.sel_registerName("cancelOperation:")
       const method = libobjc.symbols.class_getInstanceMethod(cls, sel)
       if (method && macCancelOp.ptr) {
-        const oldImp = libobjc.symbols.method_setImplementation(method, macCancelOp.ptr)
+        const oldImp = libobjc.symbols.method_setImplementation(
+          method,
+          macCancelOp.ptr,
+        )
         if (oldImp) {
-          originalCancelOpFn = CFunction({ ptr: oldImp, args: ["ptr", "ptr", "ptr"], returns: "void" })
+          originalCancelOpFn = CFunction({
+            ptr: oldImp,
+            args: ["ptr", "ptr", "ptr"],
+            returns: "void",
+          })
         }
       }
     }

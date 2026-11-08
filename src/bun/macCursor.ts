@@ -17,16 +17,28 @@ function load(): Cg | null {
   if (cg !== undefined) return cg
   if (process.platform !== "darwin") return (cg = null)
   try {
-    const lib = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", {
-      CGAssociateMouseAndMouseCursorPosition: { args: [FFIType.bool], returns: FFIType.i32 },
-      CGGetLastMouseDelta: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
-      CGDisplayHideCursor: { args: [FFIType.u32], returns: FFIType.i32 },
-      CGDisplayShowCursor: { args: [FFIType.u32], returns: FFIType.i32 },
-      CGMainDisplayID: { args: [], returns: FFIType.u32 },
-      CGDisplayPixelsWide: { args: [FFIType.u32], returns: FFIType.u64 },
-      CGDisplayPixelsHigh: { args: [FFIType.u32], returns: FFIType.u64 },
-      CGWarpMouseCursorPosition: { args: [FFIType.f64, FFIType.f64], returns: FFIType.i32 },
-    })
+    const lib = dlopen(
+      "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+      {
+        CGAssociateMouseAndMouseCursorPosition: {
+          args: [FFIType.bool],
+          returns: FFIType.i32,
+        },
+        CGGetLastMouseDelta: {
+          args: [FFIType.ptr, FFIType.ptr],
+          returns: FFIType.void,
+        },
+        CGDisplayHideCursor: { args: [FFIType.u32], returns: FFIType.i32 },
+        CGDisplayShowCursor: { args: [FFIType.u32], returns: FFIType.i32 },
+        CGMainDisplayID: { args: [], returns: FFIType.u32 },
+        CGDisplayPixelsWide: { args: [FFIType.u32], returns: FFIType.u64 },
+        CGDisplayPixelsHigh: { args: [FFIType.u32], returns: FFIType.u64 },
+        CGWarpMouseCursorPosition: {
+          args: [FFIType.f64, FFIType.f64],
+          returns: FFIType.i32,
+        },
+      },
+    )
     const s = lib.symbols
     cg = {
       associate: (on) => s.CGAssociateMouseAndMouseCursorPosition(on),
@@ -50,7 +62,10 @@ let timer: ReturnType<typeof setInterval> | null = null
 const dxBuf = new Int32Array(1)
 const dyBuf = new Int32Array(1)
 
-export function grabCursor(send: (dx: number, dy: number) => void, centre: boolean): boolean {
+export function grabCursor(
+  send: (dx: number, dy: number) => void,
+  centre: boolean,
+): boolean {
   const c = load()
   if (!c) return false
   if (grabbed) return true

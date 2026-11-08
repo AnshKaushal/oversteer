@@ -82,7 +82,7 @@ function unpackQuat(bits: number, out: number[]): void {
   for (let i = 0; i < 4; i++) {
     if (i === big) continue
     const n = (bits >>> shift) & 1023
-    const v = ((n / 1023 - 0.5) * 2) * SQRT1_2
+    const v = (n / 1023 - 0.5) * 2 * SQRT1_2
     out[i] = v
     sum += v * v
     shift += 10
@@ -126,7 +126,8 @@ export function encodeState(s: WireState, buf?: ArrayBuffer): Uint8Array {
 }
 
 export type DecodeResult =
-  { ok: true; state: WireState } | { ok: false; reason: string }
+  | { ok: true; state: WireState }
+  | { ok: false; reason: string }
 
 const _q = [0, 0, 0, 1]
 
@@ -170,9 +171,13 @@ export function decodeState(data: ArrayBuffer | ArrayBufferView): DecodeResult {
       smoke: (flags & 2) !== 0,
       handbrake: (flags & 4) !== 0,
       progress: dv.getFloat32(51, true),
-      wheelOmega: [0, 1, 2, 3].map((k) => i(55 + k * 2, WHEEL_SCALE)) as WireState["wheelOmega"],
+      wheelOmega: [0, 1, 2, 3].map((k) =>
+        i(55 + k * 2, WHEEL_SCALE),
+      ) as WireState["wheelOmega"],
       smokeLevel: dv.getUint8(71) / 255,
-      compression: [0, 1, 2, 3].map((k) => i(63 + k * 2, COMP_SCALE)) as WireState["compression"],
+      compression: [0, 1, 2, 3].map((k) =>
+        i(63 + k * 2, COMP_SCALE),
+      ) as WireState["compression"],
     },
   }
 }

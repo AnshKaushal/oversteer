@@ -6,13 +6,18 @@
  * wheels, at the given vertical load (default: the car's reference load).
  */
 import { TYRES, tyre, type TyrePresetName } from "../src/mainview/data/tyres"
-import { TireModel, tireParamsFrom } from "../src/mainview/physics/vehicle/components/TireModel"
+import {
+  TireModel,
+  tireParamsFrom,
+} from "../src/mainview/physics/vehicle/components/TireModel"
 import { carById } from "./lib/cars"
 import type { Wheels } from "../src/mainview/data/schema"
 
 const name = process.argv[2]
 if (!name) {
-  console.log(`usage: tire-curves.ts <${Object.keys(TYRES).join("|")}|car-id> [loadN]`)
+  console.log(
+    `usage: tire-curves.ts <${Object.keys(TYRES).join("|")}|car-id> [loadN]`,
+  )
   process.exit(1)
 }
 let wheels: Wheels
@@ -40,14 +45,29 @@ const bar = (v: number, max: number) => {
   return (v < 0 ? "-" : "+") + "#".repeat(Math.min(WIDTH, n))
 }
 const peak = wheels.frictionMu * load
-console.log(`${name} at ${load.toFixed(0)} N  (mu ${wheels.frictionMu}, peak ${peak.toFixed(0)} N)`)
+console.log(
+  `${name} at ${load.toFixed(0)} N  (mu ${wheels.frictionMu}, peak ${peak.toFixed(0)} N)`,
+)
 console.log("\nslip ratio   Fx (N)")
 for (const sx of [0.02, 0.05, 0.08, 0.12, 0.2, 0.35, 0.6, 1]) {
   const r = model.eval({ ...base, slipRatio: sx, slipTan: 0 })
-  console.log(sx.toFixed(2).padStart(10), r.fx.toFixed(0).padStart(8), bar(r.fx, peak))
+  console.log(
+    sx.toFixed(2).padStart(10),
+    r.fx.toFixed(0).padStart(8),
+    bar(r.fx, peak),
+  )
 }
 console.log("\nslip angle   Fy (N)     Mz (N m)")
 for (const deg of [1, 2, 4, 6, 8, 12, 16, 24, 40]) {
-  const r = model.eval({ ...base, slipRatio: 0, slipTan: Math.tan((deg * Math.PI) / 180) })
-  console.log(`${String(deg).padStart(7)}°`, r.fy.toFixed(0).padStart(8), r.mz.toFixed(1).padStart(10), bar(r.fy, peak))
+  const r = model.eval({
+    ...base,
+    slipRatio: 0,
+    slipTan: Math.tan((deg * Math.PI) / 180),
+  })
+  console.log(
+    `${String(deg).padStart(7)}°`,
+    r.fy.toFixed(0).padStart(8),
+    r.mz.toFixed(1).padStart(10),
+    bar(r.fy, peak),
+  )
 }

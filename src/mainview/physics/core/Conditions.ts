@@ -1,4 +1,8 @@
-import { DEFAULT_WEATHER, TIME_OF_DAY_GRIP, type WeatherId } from "../../data/surfaces"
+import {
+  DEFAULT_WEATHER,
+  TIME_OF_DAY_GRIP,
+  type WeatherId,
+} from "../../data/surfaces"
 
 export const conditions: { weather: WeatherId; timeOfDay: string } = {
   weather: DEFAULT_WEATHER,

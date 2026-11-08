@@ -60,7 +60,6 @@ export interface TireResult {
   slopeX: number
 }
 
-
 export function magicFormula(
   s: number,
   B: number,
@@ -133,7 +132,10 @@ export class TireModel {
     this.peakSlipY = peakSlip(params.lat)
   }
 
-  basis(c: Pick<TireContact, "normal" | "wheelHeading" | "bodyForward">): { t: Vec3; l: Vec3 } {
+  basis(c: Pick<TireContact, "normal" | "wheelHeading" | "bodyForward">): {
+    t: Vec3
+    l: Vec3
+  } {
     const n = norm(c.normal)
     let t = sub(c.wheelHeading, scale(n, dot(c.wheelHeading, n)))
     if (Math.hypot(t.x, t.y, t.z) < 1e-4) {
@@ -197,10 +199,20 @@ export class TireModel {
     let fx = 0
     let fy = 0
     if (k > 0) {
-      fx = (magicFormula(k * this.peakSlipX, P.long.B, P.long.C, Dx, P.long.E) * kx) / k
-      fy = (-magicFormula(k * this.peakSlipY, P.lat.B, P.lat.C, Dy, P.lat.E) * ky) / k
+      fx =
+        (magicFormula(k * this.peakSlipX, P.long.B, P.long.C, Dx, P.long.E) *
+          kx) /
+        k
+      fy =
+        (-magicFormula(k * this.peakSlipY, P.lat.B, P.lat.C, Dy, P.lat.E) *
+          ky) /
+        k
     }
-    const rollingForce = -P.rollingResist * (c.rollingScale ?? 1) * Fz * Math.tanh(vx / P.rollingV0)
+    const rollingForce =
+      -P.rollingResist *
+      (c.rollingScale ?? 1) *
+      Fz *
+      Math.tanh(vx / P.rollingV0)
     fx += rollingForce
 
     const m = Math.hypot(fx / Dx, fy / Dy)

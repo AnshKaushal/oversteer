@@ -7,7 +7,12 @@
  * lateral g, steady yaw gain at 50 km/h, and a 10-point trajectory under
  * fixed throttle and steer. Tolerances: metrics 2 %, trajectory 0.3 m.
  */
-import { initPhysics, moveGroundBody, FIXED_DT, stepVehicleOnce } from "../src/mainview/physics/core/PhysicsSystem"
+import {
+  initPhysics,
+  moveGroundBody,
+  FIXED_DT,
+  stepVehicleOnce,
+} from "../src/mainview/physics/core/PhysicsSystem"
 import type { DriveInput } from "../src/mainview/systems/InputManager"
 import { CARS, makeRig } from "./lib/cars"
 
@@ -17,16 +22,30 @@ const BASELINE = new URL("./golden-baseline.json", import.meta.url).pathname
 const RAPIER = await initPhysics()
 
 const idle = {
-  throttle: 0, brake: 0, steer: 0, handbrake: false,
-  upshiftPressed: false, downshiftPressed: false, toggleModePressed: false,
-  toggleLaunchPressed: false, toggleParkPressed: false, resetPressed: false,
-  toggleCameraPressed: false, startPressed: false, escapePressed: false,
+  throttle: 0,
+  brake: 0,
+  steer: 0,
+  handbrake: false,
+  upshiftPressed: false,
+  downshiftPressed: false,
+  toggleModePressed: false,
+  toggleLaunchPressed: false,
+  toggleParkPressed: false,
+  resetPressed: false,
+  toggleCameraPressed: false,
+  startPressed: false,
+  escapePressed: false,
 } as DriveInput
 
 type Rig = ReturnType<typeof makeRig>
 const HZ = Math.round(1 / FIXED_DT)
 
-function advance(r: Rig, inp: DriveInput, steps: number, each?: (i: number) => boolean | void) {
+function advance(
+  r: Rig,
+  inp: DriveInput,
+  steps: number,
+  each?: (i: number) => boolean | void,
+) {
   for (let i = 0; i < steps; i++) {
     stepVehicleOnce(r.world, () => r.car.update(FIXED_DT, inp))
     if (i % 60 === 0) {
@@ -57,7 +76,9 @@ function measure(def: (typeof CARS)[number]) {
   {
     const r = fresh(def)
     const W = { ...idle, throttle: 1 }
-    let t100 = -1, top = 0, elapsed = 0
+    let t100 = -1,
+      top = 0,
+      elapsed = 0
     for (let chunk = 0; chunk < 30; chunk++) {
       const before = top
       advance(r, W, 3 * HZ, (i) => {
@@ -91,7 +112,8 @@ function measure(def: (typeof CARS)[number]) {
     const target = 60
     advance(r, { ...idle, steer: 1, throttle: 0.4 }, 6 * HZ, (i) => {
       if (i > 3 * HZ) {
-        const g = (Math.abs(r.car.forwardSpeed) * Math.abs(r.body.angvel().y)) / 9.81
+        const g =
+          (Math.abs(r.car.forwardSpeed) * Math.abs(r.body.angvel().y)) / 9.81
         if (g > gMax) gMax = g
       }
     })
@@ -122,14 +144,20 @@ function measure(def: (typeof CARS)[number]) {
   return { metrics: out, traj }
 }
 
-const results: Record<string, { metrics: Record<string, number>; traj: [number, number][] }> = {}
+const results: Record<
+  string,
+  { metrics: Record<string, number>; traj: [number, number][] }
+> = {}
 for (const def of CARS) {
   results[def.id] = measure(def)
   console.log(def.id, JSON.stringify(results[def.id].metrics))
 }
 
 if (process.argv.includes("--record")) {
-  await Bun.write(BASELINE, JSON.stringify({ hz: HZ, cars: results }, null, 2) + "\n")
+  await Bun.write(
+    BASELINE,
+    JSON.stringify({ hz: HZ, cars: results }, null, 2) + "\n",
+  )
   console.log("baseline written: " + BASELINE)
   process.exit(0)
 }
@@ -142,13 +170,19 @@ const base = await Bun.file(BASELINE).json()
 let drift = 0
 for (const [id, cur] of Object.entries(results)) {
   const b = base.cars[id]
-  if (!b) { console.log(`DRIFT | ${id} | not in baseline`); drift++; continue }
+  if (!b) {
+    console.log(`DRIFT | ${id} | not in baseline`)
+    drift++
+    continue
+  }
   for (const [k, v] of Object.entries(cur.metrics)) {
     const ref = b.metrics[k]
     const rel = Math.abs(v - ref) / Math.max(Math.abs(ref), 1e-9)
     if (!(rel <= METRIC_TOL)) {
       drift++
-      console.log(`DRIFT | ${id} | ${k} | ${ref.toFixed(3)} -> ${v.toFixed(3)} (${(rel * 100).toFixed(1)}%)`)
+      console.log(
+        `DRIFT | ${id} | ${k} | ${ref.toFixed(3)} -> ${v.toFixed(3)} (${(rel * 100).toFixed(1)}%)`,
+      )
     }
   }
   cur.traj.forEach(([x, z], i) => {
@@ -159,5 +193,9 @@ for (const [id, cur] of Object.entries(results)) {
     }
   })
 }
-console.log(drift ? `\n${drift} drift(s) from golden baseline` : "\nGolden master matches")
+console.log(
+  drift
+    ? `\n${drift} drift(s) from golden baseline`
+    : "\nGolden master matches",
+)
 process.exit(drift ? 1 : 0)

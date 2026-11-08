@@ -40,7 +40,8 @@ const WIDTHS = [
   { label: "Wide", value: 18 },
 ]
 
-const heading = "mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]"
+const heading =
+  "mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]"
 
 function Choice({
   on,
@@ -93,7 +94,9 @@ export function MapPicker({
           </Choice>
         ))}
       </div>
-      <div className="mt-1 text-[12px] text-gray-400">{current?.description}</div>
+      <div className="mt-1 text-[12px] text-gray-400">
+        {current?.description}
+      </div>
 
       {mapId === "circuit" && (
         <>
@@ -135,19 +138,31 @@ export function MapPicker({
           </div>
           <div className={heading}>BARRIERS</div>
           <div className="mt-2 flex gap-1.5">
-            <Choice on={circuit.barriers} onClick={() => onCircuit({ barriers: true })}>
+            <Choice
+              on={circuit.barriers}
+              onClick={() => onCircuit({ barriers: true })}
+            >
               On
             </Choice>
-            <Choice on={!circuit.barriers} onClick={() => onCircuit({ barriers: false })}>
+            <Choice
+              on={!circuit.barriers}
+              onClick={() => onCircuit({ barriers: false })}
+            >
               Off
             </Choice>
           </div>
           <div className={heading}>LAYOUT</div>
           <div className="mt-2 flex gap-1.5">
-            <Choice on={!circuit.lockSeed} onClick={() => onCircuit({ lockSeed: false }, )}>
+            <Choice
+              on={!circuit.lockSeed}
+              onClick={() => onCircuit({ lockSeed: false })}
+            >
               New every start
             </Choice>
-            <Choice on={circuit.lockSeed} onClick={() => onCircuit({ lockSeed: true })}>
+            <Choice
+              on={circuit.lockSeed}
+              onClick={() => onCircuit({ lockSeed: true })}
+            >
               Keep this one
             </Choice>
             <button

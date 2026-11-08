@@ -1,6 +1,12 @@
 import type { WeatherId } from "../data/surfaces"
 
-export type TimeOfDayMode = "sunrise" | "day" | "evening" | "night" | "rainy" | "stormy"
+export type TimeOfDayMode =
+  | "sunrise"
+  | "day"
+  | "evening"
+  | "night"
+  | "rainy"
+  | "stormy"
 
 export const TIME_OF_DAY_MODES: readonly TimeOfDayMode[] = [
   "sunrise",
@@ -170,7 +176,12 @@ export function isLowLight(mode: TimeOfDayMode): boolean {
 
 const WEATHER_SEVERITY: readonly WeatherId[] = ["dry", "damp", "wet", "storm"]
 
-export function effectiveWeather(chosen: WeatherId, mode: TimeOfDayMode): WeatherId {
+export function effectiveWeather(
+  chosen: WeatherId,
+  mode: TimeOfDayMode,
+): WeatherId {
   const sky = TIME_OF_DAY_PRESETS[mode]?.weather ?? "dry"
-  return WEATHER_SEVERITY.indexOf(sky) > WEATHER_SEVERITY.indexOf(chosen) ? sky : chosen
+  return WEATHER_SEVERITY.indexOf(sky) > WEATHER_SEVERITY.indexOf(chosen)
+    ? sky
+    : chosen
 }

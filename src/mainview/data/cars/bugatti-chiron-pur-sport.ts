@@ -64,10 +64,19 @@ export const bugattiChironPurSport: CarSpec = {
         [6900, 0.92],
         [7100, 0],
       ],
-      ...engineBuild({ layout: "v", cylinders: 16, displacementL: 8.0, flywheel: "sport" }),
+      ...engineBuild({
+        layout: "v",
+        cylinders: 16,
+        displacementL: 8.0,
+        flywheel: "sport",
+      }),
       frictionTorqueBase: 55,
       frictionTorqueRPMFactor: 0.015,
-      throttleMap: [[0, 0], [0.5, 0.5], [1, 1]],
+      throttleMap: [
+        [0, 0],
+        [0.5, 0.5],
+        [1, 1],
+      ],
       engineBrakeBase: 12,
       engineBrakeRPMFactor: 0.004,
       dynamics: {

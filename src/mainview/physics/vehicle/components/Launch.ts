@@ -59,9 +59,16 @@ export class Launch {
     return { rpm, wheelOmega: spinOmega * p.dumpSpinFraction }
   }
 
-  dumpTriggers(prevGear: number, gear: number, prevRpm: number, idleRpm: number) {
+  dumpTriggers(
+    prevGear: number,
+    gear: number,
+    prevRpm: number,
+    idleRpm: number,
+  ) {
     return (
-      prevGear === 0 && gear === 1 && prevRpm > idleRpm * this.p.dumpTriggerRpmFactor
+      prevGear === 0 &&
+      gear === 1 &&
+      prevRpm > idleRpm * this.p.dumpTriggerRpmFactor
     )
   }
 

@@ -76,7 +76,13 @@ function segBetween(
   const length = len + padStart + padEnd
   const sx = x0 - ux * padStart
   const sz = z0 - uz * padStart
-  return { cx: sx + (ux * length) / 2, cz: sz + (uz * length) / 2, ux, uz, length }
+  return {
+    cx: sx + (ux * length) / 2,
+    cz: sz + (uz * length) / 2,
+    ux,
+    uz,
+    length,
+  }
 }
 
 const SERVICE_OFFSET = 32
@@ -85,7 +91,10 @@ const TOWER_B = 44
 const TOWER_HALF = 6.5
 const ROAD_JOIN = 6.5
 
-function nearestRoad(x: number, z: number): { x: number; z: number; dist: number } {
+function nearestRoad(
+  x: number,
+  z: number,
+): { x: number; z: number; dist: number } {
   const s0 = -z
   let bs = s0
   let best = Infinity
@@ -114,12 +123,16 @@ export function layoutAirport(path: FlightPath): AirportLayout {
   const nx = -uz
   const nz = ux
   const bearing = ((Math.atan2(ux, -uz) * 180) / Math.PI + 360) % 360
-  const at = (a: number, b: number) => ({ x: mid.x + ux * a + nx * b, z: mid.z + uz * a + nz * b })
+  const at = (a: number, b: number) => ({
+    x: mid.x + ux * a + nx * b,
+    z: mid.z + uz * a + nz * b,
+  })
 
   const jA = RUNWAY_START_D + 90 - (RUNWAY_START_D + RUNWAY_END_D) / 2
   const onLine = at(jA, 0)
   const roadPt = nearestRoad(onLine.x, onLine.z)
-  const side = (roadPt.x - onLine.x) * nx + (roadPt.z - onLine.z) * nz >= 0 ? 1 : -1
+  const side =
+    (roadPt.x - onLine.x) * nx + (roadPt.z - onLine.z) * nz >= 0 ? 1 : -1
   const jB = side * SERVICE_OFFSET
   const j = at(jA, jB)
 
@@ -137,18 +150,30 @@ export function layoutAirport(path: FlightPath): AirportLayout {
   const spurEnd = at(TOWER_A, tb)
   const e1 = { x: -d1x, z: -d1z }
   const e2 = { x: ux, z: uz }
-  const along = (p: { x: number; z: number }, e: { x: number; z: number }, d: number) => ({
+  const along = (
+    p: { x: number; z: number },
+    e: { x: number; z: number },
+    d: number,
+  ) => ({
     x: p.x + e.x * d,
     z: p.z + e.z * d,
   })
-  const bend = (p0: { x: number; z: number }, c: { x: number; z: number }, p1: { x: number; z: number }, n: number) => {
+  const bend = (
+    p0: { x: number; z: number },
+    c: { x: number; z: number },
+    p1: { x: number; z: number },
+    n: number,
+  ) => {
     const out: { x: number; z: number }[] = []
     for (let i = 1; i <= n; i++) {
       const u = i / n
       const k0 = (1 - u) * (1 - u)
       const k1 = 2 * u * (1 - u)
       const k2 = u * u
-      out.push({ x: k0 * p0.x + k1 * c.x + k2 * p1.x, z: k0 * p0.z + k1 * c.z + k2 * p1.z })
+      out.push({
+        x: k0 * p0.x + k1 * c.x + k2 * p1.x,
+        z: k0 * p0.z + k1 * c.z + k2 * p1.z,
+      })
     }
     return out
   }
@@ -156,10 +181,17 @@ export function layoutAirport(path: FlightPath): AirportLayout {
   const turn1b = along(j, e2, R1)
   const turn2a = along(t, e2, -R2)
   const road: { x: number; z: number }[] = [start]
-  const straight = (p: { x: number; z: number }, q: { x: number; z: number }) => {
+  const straight = (
+    p: { x: number; z: number },
+    q: { x: number; z: number },
+  ) => {
     const n = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.z - p.z) / 10))
     const last = road[road.length - 1]
-    for (let i = 1; i <= n; i++) road.push({ x: last.x + ((q.x - last.x) * i) / n, z: last.z + ((q.z - last.z) * i) / n })
+    for (let i = 1; i <= n; i++)
+      road.push({
+        x: last.x + ((q.x - last.x) * i) / n,
+        z: last.z + ((q.z - last.z) * i) / n,
+      })
   }
   straight(start, turn1a)
   road.push(...bend(turn1a, j, turn1b, 10))
@@ -212,8 +244,23 @@ export function layoutAirport(path: FlightPath): AirportLayout {
   }
   for (const s of merged) {
     zones.push(
-      { x: s.cx, z: s.cz, ux: s.ux, uz: s.uz, hl: s.length / 2 + 5, hw: CONNECTOR_WIDTH / 2 + 8 },
-      { x: s.cx, z: s.cz, ux: s.ux, uz: s.uz, hl: s.length / 2, hw: CONNECTOR_WIDTH / 2 + 0.5, paved: true },
+      {
+        x: s.cx,
+        z: s.cz,
+        ux: s.ux,
+        uz: s.uz,
+        hl: s.length / 2 + 5,
+        hw: CONNECTOR_WIDTH / 2 + 8,
+      },
+      {
+        x: s.cx,
+        z: s.cz,
+        ux: s.ux,
+        uz: s.uz,
+        hl: s.length / 2,
+        hw: CONNECTOR_WIDTH / 2 + 0.5,
+        paved: true,
+      },
     )
   }
   return {
@@ -257,7 +304,11 @@ export function airportBlocked(
     }
     if (roadDistance(x, z) < ROAD_CLEARANCE) return true
   }
-  for (let a = -RUNWAY_LENGTH / 2 - APPROACH_LENGTH; a < -RUNWAY_LENGTH / 2; a += 10) {
+  for (
+    let a = -RUNWAY_LENGTH / 2 - APPROACH_LENGTH;
+    a < -RUNWAY_LENGTH / 2;
+    a += 10
+  ) {
     const x = cx + ux * a
     const z = cz + uz * a
     if (roadDistance(x, z) < 24) return true
@@ -280,7 +331,6 @@ export function airportBlocked(
   return false
 }
 
-
 function noise(g: CanvasRenderingContext2D, w: number, h: number, n: number) {
   for (let i = 0; i < n; i++) {
     const v = 38 + Math.random() * 26
@@ -288,7 +338,6 @@ function noise(g: CanvasRenderingContext2D, w: number, h: number, n: number) {
     g.fillRect(Math.random() * w, Math.random() * h, 2, 2)
   }
 }
-
 
 const shared = new Map<string, { tex: THREE.Texture; refs: number }>()
 const SPARE_RUNWAYS = 3
@@ -313,8 +362,13 @@ export function releaseTexture(tex: THREE.Texture) {
       break
     }
   }
-  const idle = [...shared].filter(([k, e]) => k.startsWith("runway") && e.refs === 0)
-  for (const [k, e] of idle.slice(0, Math.max(0, idle.length - SPARE_RUNWAYS))) {
+  const idle = [...shared].filter(
+    ([k, e]) => k.startsWith("runway") && e.refs === 0,
+  )
+  for (const [k, e] of idle.slice(
+    0,
+    Math.max(0, idle.length - SPARE_RUNWAYS),
+  )) {
     e.tex.dispose()
     shared.delete(k)
   }
@@ -352,7 +406,12 @@ function makeRunwayTexture(bearing: number): THREE.CanvasTexture {
       const x = end === 0 ? along : RUNWAY_LENGTH - along - len
       const across = (end === 0 ? 8 : 8) + Math.random() * 3
       for (const sgn of [-1, 1]) {
-        g.fillRect(x * mx, (RUNWAY_WIDTH / 2 + sgn * across - 0.4) * my, len * mx, 0.8 * my)
+        g.fillRect(
+          x * mx,
+          (RUNWAY_WIDTH / 2 + sgn * across - 0.4) * my,
+          len * mx,
+          0.8 * my,
+        )
       }
     }
   }
@@ -364,7 +423,12 @@ function makeRunwayTexture(bearing: number): THREE.CanvasTexture {
     g.fillRect(x * mx, (RUNWAY_WIDTH / 2 - 0.45) * my, 30 * mx, 0.9 * my)
   }
   const bar = (xm: number, lenM: number, yFromCentre: number, wM: number) => {
-    g.fillRect(xm * mx, (RUNWAY_WIDTH / 2 + yFromCentre) * my, lenM * mx, wM * my)
+    g.fillRect(
+      xm * mx,
+      (RUNWAY_WIDTH / 2 + yFromCentre) * my,
+      lenM * mx,
+      wM * my,
+    )
   }
   for (const end of [0, 1]) {
     for (let i = 0; i < 6; i++) {
@@ -430,7 +494,11 @@ function makeConnectorTexture(): THREE.CanvasTexture {
 }
 
 function makeLampGlow(): THREE.Texture {
-  return makeGlowTexture([[0, 1], [0.25, 0.55], [1, 0]])
+  return makeGlowTexture([
+    [0, 1],
+    [0.25, 0.55],
+    [1, 0],
+  ])
 }
 
 type Rgb = [number, number, number]
@@ -464,7 +532,8 @@ function buildLamps(layout: AirportLayout, extra: LocalLamp[]) {
   }
   for (let a = -half + 150; a <= half - 150; a += 30) add(a, 0, WHITE, 0.15)
   const papiA = -half + 300
-  for (let i = 0; i < 4; i++) add(papiA, -(19 + i * 4), i < 2 ? RED : WHITE, 0.8)
+  for (let i = 0; i < 4; i++)
+    add(papiA, -(19 + i * 4), i < 2 ? RED : WHITE, 0.8)
   {
     const pts = layout.path
     let run = 0
@@ -488,7 +557,10 @@ function buildLamps(layout: AirportLayout, extra: LocalLamp[]) {
     strobes.push(add(-half - d, 0, WHITE, 0.5))
     if (d > 30) add(-half - d + 15, 0, WHITE, 0.5)
   }
-  for (const [d, reach] of [[60, 9], [120, 12]] as const) {
+  for (const [d, reach] of [
+    [60, 9],
+    [120, 12],
+  ] as const) {
     for (let b = 3; b <= reach; b += 3) {
       add(-half - d, b, WHITE, 0.5)
       add(-half - d, -b, WHITE, 0.5)
@@ -517,7 +589,8 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
   const idx: number[] = []
   let run = 0
   for (let i = 0; i < n; i++) {
-    if (i > 0) run += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
+    if (i > 0)
+      run += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
     const p0 = pts[Math.max(0, i - 1)]
     const p1 = pts[Math.min(n - 1, i + 1)]
     const tx = p1.x - p0.x
@@ -527,7 +600,14 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
     const pz = tx * k
     const f = Math.max(0, 1 - run / MOUTH_LENGTH)
     const half = CONNECTOR_WIDTH / 2 + MOUTH_EXTRA * f * f
-    pos.push(pts[i].x + px * half, 0, pts[i].z + pz * half, pts[i].x - px * half, 0, pts[i].z - pz * half)
+    pos.push(
+      pts[i].x + px * half,
+      0,
+      pts[i].z + pz * half,
+      pts[i].x - px * half,
+      0,
+      pts[i].z - pz * half,
+    )
     nor.push(0, 1, 0, 0, 1, 0)
     uv.push(run / 12, 0, run / 12, 1)
     if (i > 0) {
@@ -694,8 +774,10 @@ export class AirportView {
 
   step(dt: number): boolean {
     const rate = dt / 1.5
-    if (this.alpha < this.target) this.alpha = Math.min(this.target, this.alpha + rate)
-    else if (this.alpha > this.target) this.alpha = Math.max(this.target, this.alpha - rate)
+    if (this.alpha < this.target)
+      this.alpha = Math.min(this.target, this.alpha + rate)
+    else if (this.alpha > this.target)
+      this.alpha = Math.max(this.target, this.alpha - rate)
     for (const m of this.mats) m.opacity = this.alpha
     this.group.visible = this.alpha > 0.001
     this.structures.fade(this.alpha)
@@ -715,7 +797,10 @@ export class AirportView {
     })
     const turn = this.clock % 2.4
     this.bigLamps.setLevel(this.beaconIndex, turn < 0.25 ? 1 : 0)
-    this.bigLamps.setLevel(this.beaconIndex + 1, turn > 1.2 && turn < 1.45 ? 1 : 0)
+    this.bigLamps.setLevel(
+      this.beaconIndex + 1,
+      turn > 1.2 && turn < 1.45 ? 1 : 0,
+    )
     this.lamps.update(on, this.alpha)
     this.bigLamps.update(on, this.alpha)
   }

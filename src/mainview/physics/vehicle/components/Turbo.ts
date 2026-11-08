@@ -8,7 +8,9 @@ export class Turbo {
 
   step(dt: number, throttle: number, rpm: number) {
     const target =
-      throttle > this.p.minThrottle ? throttle * curveLookup(this.p.boostCurve, rpm) : 0
+      throttle > this.p.minThrottle
+        ? throttle * curveLookup(this.p.boostCurve, rpm)
+        : 0
     const rate = target > this.boost ? this.p.spoolUpRate : this.p.spoolDownRate
     this.boost += (target - this.boost) * Math.min(1, dt * rate)
     this.boost = clamp(this.boost, 0, 1)

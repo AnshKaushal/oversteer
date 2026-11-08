@@ -33,7 +33,11 @@ export class Abs {
     dt: number,
   ): number {
     const p = this.p
-    if (!this.enabled || !(brakeInput > p.brakeMin) || !(Math.abs(groundSpeed) > p.minSpeed)) {
+    if (
+      !this.enabled ||
+      !(brakeInput > p.brakeMin) ||
+      !(Math.abs(groundSpeed) > p.minSpeed)
+    ) {
       this.pressure[wheel] = 1
       return base
     }

@@ -5,7 +5,10 @@
  * Follows the repo's scripts/ convention — plain bun, zero new dependencies.
  */
 import * as THREE from "three"
-import { initPhysics, createWorld } from "../src/mainview/physics/core/PhysicsSystem"
+import {
+  initPhysics,
+  createWorld,
+} from "../src/mainview/physics/core/PhysicsSystem"
 import {
   validateStatePacket,
   PeerSessionTracker,
@@ -388,7 +391,16 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   const R = await initPhysics()
   const world = createWorld()
   const scene = new THREE.Scene()
-  const car = new RemoteCar("p", "n", 0xffffff, scene, "./", world, R, TEST_REMOTE_OPTS)
+  const car = new RemoteCar(
+    "p",
+    "n",
+    0xffffff,
+    scene,
+    "./",
+    world,
+    R,
+    TEST_REMOTE_OPTS,
+  )
   const r = validateStatePacket(
     makePkt({ qx: 2, qy: 0, qz: 0, qw: 0, t: 9e12, x: 33 }),
   )

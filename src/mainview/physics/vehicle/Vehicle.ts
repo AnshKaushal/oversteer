@@ -84,14 +84,20 @@ export class Vehicle {
     const meanZ = (ws: readonly WheelDef[]) =>
       ws.reduce((a, w) => a + w.z, 0) / Math.max(1, ws.length)
     this.wheelbase = Math.abs(meanZ(rears) - meanZ(fronts))
-    this.trackWidth = Math.abs(Math.max(...fronts.map((f) => f.x)) - Math.min(...fronts.map((f) => f.x)))
+    this.trackWidth = Math.abs(
+      Math.max(...fronts.map((f) => f.x)) - Math.min(...fronts.map((f) => f.x)),
+    )
     this.noBrake = wheelDefs.map(() => 0)
     this.totalMass = P.mass.chassis + 2 * (P.mass.frontWheel + P.mass.rearWheel)
     body.setLinearDamping(P.chassis.linearDamping)
     body.setAngularDamping(P.chassis.angularDamping)
 
     const w = P.wheels
-    this.gearbox = new Gearbox(P.transmission, P.shiftLogic, P.engine.redlineRPM)
+    this.gearbox = new Gearbox(
+      P.transmission,
+      P.shiftLogic,
+      P.engine.redlineRPM,
+    )
     this.engine = new Engine(P.engine)
     this.launch = new Launch(P.launch, P.transmission.launchControlRPM)
     this.cruise = new Cruise(P.cruise, dash.maxKmh)
@@ -102,14 +108,34 @@ export class Vehicle {
     this.driveline = new Driveline(P.drivetrain)
     this.directionShift = new DirectionShift(P.autoDirection)
     this.aggression = new Aggression(P.shiftLogic)
-    this.shiftLogic = new ShiftLogic(P.shiftLogic, P.engine, P.transmission.autoUpshiftRPM, P.transmission.gearRatios)
-    this.traction = new TractionControl(P.assists.tractionControl, P.assists.traction)
-    this.stability = new StabilityControl(P.assists.stability, wheelDefs, this.wheelbase, w.frictionMu)
+    this.shiftLogic = new ShiftLogic(
+      P.shiftLogic,
+      P.engine,
+      P.transmission.autoUpshiftRPM,
+      P.transmission.gearRatios,
+    )
+    this.traction = new TractionControl(
+      P.assists.tractionControl,
+      P.assists.traction,
+    )
+    this.stability = new StabilityControl(
+      P.assists.stability,
+      wheelDefs,
+      this.wheelbase,
+      w.frictionMu,
+    )
     this.converter = new TorqueConverter(P.transmission.torqueConverter)
     this.forces = new BodyForces(world, body, P)
     this.slip = new SlipTracker(P.contact, P.kinematics)
 
-    this.suspension = new SuspensionSystem(world, body, R, [...wheelDefs], w.suspension, P.mass.chassis)
+    this.suspension = new SuspensionSystem(
+      world,
+      body,
+      R,
+      [...wheelDefs],
+      w.suspension,
+      P.mass.chassis,
+    )
     const wheelMass = (P.mass.frontWheel + P.mass.rearWheel) / 2
     this.wheelDynamics = new WheelDynamics(
       w.radius,
@@ -233,21 +259,35 @@ export class Vehicle {
   }
 
   private flareRpm(): number {
-    return this.safetyAidsOn ? this.P.engine.dynamics.launchFlareRPM : this.rawFlareRpm
+    return this.safetyAidsOn
+      ? this.P.engine.dynamics.launchFlareRPM
+      : this.rawFlareRpm
   }
 
   private stallT = 0
 
-  private checkStall(dt: number, gear: number, throttle: number, speedKmh: number, gearRatio: number) {
+  private checkStall(
+    dt: number,
+    gear: number,
+    throttle: number,
+    speedKmh: number,
+    gearRatio: number,
+  ) {
     const P = this.P
     const d = P.engine.dynamics
     const mass = P.mass.chassis + 2 * (P.mass.frontWheel + P.mass.rearWheel)
     const flare = this.flareRpm()
     const force =
-      (this.engine.fullPedalTorque(flare) * this.converter.multiplier(true, 0) * Math.abs(gearRatio) * P.drivetrain.efficiency) /
+      (this.engine.fullPedalTorque(flare) *
+        this.converter.multiplier(true, 0) *
+        Math.abs(gearRatio) *
+        P.drivetrain.efficiency) /
       P.wheels.radius
     const labouring =
-      gear !== 0 && throttle > 0 && speedKmh < P.transmission.torqueConverter.lockupSpeedKmh && force / mass < d.stallMinAccel
+      gear !== 0 &&
+      throttle > 0 &&
+      speedKmh < P.transmission.torqueConverter.lockupSpeedKmh &&
+      force / mass < d.stallMinAccel
     this.stallT = labouring ? this.stallT + dt : 0
     if (this.stallT >= d.stallDelay) {
       this.engine.stall()
@@ -307,16 +347,23 @@ export class Vehicle {
     }
     if (input.toggleModePressed) this.autoMode = !this.autoMode
     if (input.toggleLaunchPressed) this.launch.enabled = !this.launch.enabled
-    if (input.toggleTractionPressed) this.tractionControlOn = !this.tractionControlOn
+    if (input.toggleTractionPressed)
+      this.tractionControlOn = !this.tractionControlOn
     if (input.toggleSafetyPressed) this.toggleSafety()
     if (input.toggleIgnitionPressed) this.engine.tapIgnition()
     this.engine.holdCrank(!!input.crankHeld)
-    if (input.toggleHandbrakePressed) this.handbrakeLatched = !this.handbrakeLatched
-    else if (input.throttle > this.P.brakes.parkingReleaseThrottle) this.handbrakeLatched = false
+    if (input.toggleHandbrakePressed)
+      this.handbrakeLatched = !this.handbrakeLatched
+    else if (input.throttle > this.P.brakes.parkingReleaseThrottle)
+      this.handbrakeLatched = false
     if (this.handbrakeLatched) input = { ...input, handbrake: true }
-    if (input.toggleStabilityPressed) this.stabilityControlOn = !this.stabilityControlOn
+    if (input.toggleStabilityPressed)
+      this.stabilityControlOn = !this.stabilityControlOn
     if (input.toggleAbsPressed) this.abs.enabled = !this.abs.enabled
-    if (input.toggleParkPressed && Math.abs(this.forwardSpeed) * KMH_PER_MS < this.P.brakes.parkToggleMaxKmh) {
+    if (
+      input.toggleParkPressed &&
+      Math.abs(this.forwardSpeed) * KMH_PER_MS < this.P.brakes.parkToggleMaxKmh
+    ) {
       this.brakes.parking = !this.brakes.parking
     }
     g.tick(dt)
@@ -355,14 +402,33 @@ export class Vehicle {
       })
     }
     const standstill = Math.abs(k.fwdSpeed) < P.autoDirection.standstillSpeed
-    this.launch.arm(standstill && this.safetyAidsOn, g.gear, input.throttle, input.brake)
-    const cruised = this.cruise.inject(dt, input.throttle, input.brake, k.speedKmh, g.gear)
+    this.launch.arm(
+      standstill && this.safetyAidsOn,
+      g.gear,
+      input.throttle,
+      input.brake,
+    )
+    const cruised = this.cruise.inject(
+      dt,
+      input.throttle,
+      input.brake,
+      k.speedKmh,
+      g.gear,
+    )
     input = { ...input, throttle: cruised.throttle, brake: cruised.brake }
 
     const gearRatio = g.ratio(g.gear)
     const coupled = Math.max(
-      Math.abs(((k.fwdSpeed / P.wheels.radius) * gearRatio * SECONDS_PER_MINUTE) / TWO_PI),
-      g.gear !== 0 ? Math.abs((this.driveline.drivenOmega * gearRatio * SECONDS_PER_MINUTE) / TWO_PI) : 0,
+      Math.abs(
+        ((k.fwdSpeed / P.wheels.radius) * gearRatio * SECONDS_PER_MINUTE) /
+          TWO_PI,
+      ),
+      g.gear !== 0
+        ? Math.abs(
+            (this.driveline.drivenOmega * gearRatio * SECONDS_PER_MINUTE) /
+              TWO_PI,
+          )
+        : 0,
     )
     this.launch.step(dt, g.gear, input.throttle, coupled)
     this.engine.stepRpm({
@@ -381,12 +447,22 @@ export class Vehicle {
       launchWobble: this.launch.wobble(this.simTime),
       clutchDumping: this.launch.dumping,
       kickdownTimer: this.shiftLogic.kickdownTimer,
-      airborne: this.suspension.states.length > 0 && this.suspension.states.every((s) => !s.grounded),
+      airborne:
+        this.suspension.states.length > 0 &&
+        this.suspension.states.every((s) => !s.grounded),
     })
     this.checkStall(dt, g.gear, input.throttle, k.speedKmh, gearRatio)
 
-    const driven = this.aggression.step(dt, input.throttle, input.brake, this.driveline.prevThrottle)
-    const coef = this.shiftMode === "realistic" ? this.P.shiftLogic.realisticAggression : driven
+    const driven = this.aggression.step(
+      dt,
+      input.throttle,
+      input.brake,
+      this.driveline.prevThrottle,
+    )
+    const coef =
+      this.shiftMode === "realistic"
+        ? this.P.shiftLogic.realisticAggression
+        : driven
     g.tickChangeDelay(dt)
     const delta = this.shiftLogic.decide({
       dt,
@@ -419,7 +495,10 @@ export class Vehicle {
         launching: this.launch.launching,
         launchArmed: this.launch.armed,
         clutchDumping: this.launch.dumping,
-        slipRatioAvg: Math.max(this.slip.slipRatioAvg, Math.abs(Math.tan(k.beta)) * 5),
+        slipRatioAvg: Math.max(
+          this.slip.slipRatioAvg,
+          Math.abs(Math.tan(k.beta)) * 5,
+        ),
       })
       engineTorque *= cut
       this.engineCut = cut < 1
@@ -433,7 +512,12 @@ export class Vehicle {
       beta: k.beta,
       yawRate: k.angvel.y,
       launchActive: this.launch.armed || this.launch.launching,
-      downforceAccel: this.forces.downforce(k.linvel.x, k.linvel.z, this.forces.yawToAirflow(k)) / this.totalMass,
+      downforceAccel:
+        this.forces.downforce(
+          k.linvel.x,
+          k.linvel.z,
+          this.forces.yawToAirflow(k),
+        ) / this.totalMass,
     })
     if (this.stabilityControlOn) engineTorque *= this.stability.engineFactor
     engineTorque = Math.min(
@@ -465,7 +549,9 @@ export class Vehicle {
       drive,
       engineFriction: this.engine.frictionTorque(),
       engineOn: !this.engine.stalled,
-      stabilityBrake: this.stabilityControlOn ? this.stability.pressure : this.noBrake,
+      stabilityBrake: this.stabilityControlOn
+        ? this.stability.pressure
+        : this.noBrake,
       tractionBrake:
         this.tractionControlOn &&
         !input.handbrake &&
@@ -480,10 +566,19 @@ export class Vehicle {
 
     this.slip.end(dt, grounded, this.lateralVelocity(), k.speedKmh)
     const om = this.wheelDynamics.omegas()
-    const drivenSpeeds = om.filter((_, i) => this.driveline.isDriven(this.wheelDefs[i].front))
-    this.driveline.drivenOmega = drivenSpeeds.reduce((sum, w) => sum + w, 0) / drivenSpeeds.length
+    const drivenSpeeds = om.filter((_, i) =>
+      this.driveline.isDriven(this.wheelDefs[i].front),
+    )
+    this.driveline.drivenOmega =
+      drivenSpeeds.reduce((sum, w) => sum + w, 0) / drivenSpeeds.length
 
-    this.forces.apply(dt, k, input, this.groundedWheels, this.launch.armed || this.launch.launching)
+    this.forces.apply(
+      dt,
+      k,
+      input,
+      this.groundedWheels,
+      this.launch.armed || this.launch.launching,
+    )
 
     return buildTelemetry({
       k,
@@ -500,10 +595,16 @@ export class Vehicle {
       tractionControl: this.tractionControlOn,
       stabilityControl: this.stabilityControlOn,
       absOn: this.abs.enabled,
-      tractionActive: this.tractionControlOn && (this.engineCut || this.solver.tractionBraking),
+      tractionActive:
+        this.tractionControlOn &&
+        (this.engineCut || this.solver.tractionBraking),
       stabilityActive: this.stabilityControlOn && this.stability.intervening,
       absActive: this.abs.active,
-      steerFeedback: clamp(this.solver.steerTorque() / this.solver.steerTorqueScale(), -1, 1),
+      steerFeedback: clamp(
+        this.solver.steerTorque() / this.solver.steerTorqueScale(),
+        -1,
+        1,
+      ),
       engineOn: !this.engine.stalled,
       ignitionOn: this.engine.ignition,
       cranking: this.engine.cranking,
@@ -520,13 +621,26 @@ export class Vehicle {
   private manualShift(dir: 1 | -1) {
     const g = this.gearbox
     const prevRpm = this.engine.rpm
-    const prev = g.manualShift(dir, this.forwardSpeed, this.driveline.drivenOmega)
+    const prev = g.manualShift(
+      dir,
+      this.forwardSpeed,
+      this.driveline.drivenOmega,
+    )
     if (prev === null) return
-    if (this.launch.dumpTriggers(prev, g.gear, prevRpm, this.P.engine.idleRPM)) {
-      const dump = this.launch.startDump(prevRpm, this.P.engine.idleRPM, g.ratio(1))
+    if (
+      this.launch.dumpTriggers(prev, g.gear, prevRpm, this.P.engine.idleRPM)
+    ) {
+      const dump = this.launch.startDump(
+        prevRpm,
+        this.P.engine.idleRPM,
+        g.ratio(1),
+      )
       this.engine.rpm = dump.rpm
       for (let wi = 0; wi < this.wheelDefs.length; wi++) {
-        if (this.driveline.isDriven(this.wheelDefs[wi].front) && this.wheelDynamics.wheels[wi]) {
+        if (
+          this.driveline.isDriven(this.wheelDefs[wi].front) &&
+          this.wheelDynamics.wheels[wi]
+        ) {
           this.wheelDynamics.wheels[wi].omega = dump.wheelOmega
         }
       }

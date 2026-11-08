@@ -48,7 +48,10 @@ export class ShiftLogic {
 
   constructor(
     private readonly p: ShiftLogicSpec,
-    private readonly engine: Pick<Engine, "idleRPM" | "redlineRPM" | "torqueCurve">,
+    private readonly engine: Pick<
+      Engine,
+      "idleRPM" | "redlineRPM" | "torqueCurve"
+    >,
     private readonly autoUpshiftRpm: Transmission["autoUpshiftRPM"],
     gearRatios: readonly number[],
   ) {
@@ -77,7 +80,8 @@ export class ShiftLogic {
     const p = this.p
     const idle = this.engine.idleRPM
     const redline = this.engine.redlineRPM
-    this.sinceUpshift = i.gear > this.lastGear && this.lastGear > 0 ? 0 : this.sinceUpshift + i.dt
+    this.sinceUpshift =
+      i.gear > this.lastGear && this.lastGear > 0 ? 0 : this.sinceUpshift + i.dt
     this.lastGear = i.gear
     const highUp = this.upLimit(i.gear)
     const lowUp = Math.round(idle + (highUp - idle) * p.lowUpFraction)
@@ -85,7 +89,9 @@ export class ShiftLogic {
       Math.round(idle * p.lowDownIdleFactor),
       idle + p.lowDownIdleAdd,
     )
-    const highDown = Math.round(lowDown + (highUp - lowDown) * p.highDownFraction)
+    const highDown = Math.round(
+      lowDown + (highUp - lowDown) * p.highDownFraction,
+    )
     const upRpm = lerp(lowUp, highUp, i.aggressionCoef)
     const downRpm = Math.min(
       lerp(lowDown, highDown, i.aggressionCoef),
@@ -95,21 +101,31 @@ export class ShiftLogic {
     const slipping = i.slipRatioAvg > p.slipLimit
     const heavySlide = Math.abs(i.lateralVelocity) > p.slideLimit
     const antiStall =
-      i.gear > 1 && (i.rpm < idle * p.antiStallRpmFactor || i.speedKmh < p.antiStallKmh)
+      i.gear > 1 &&
+      (i.rpm < idle * p.antiStallRpmFactor || i.speedKmh < p.antiStallKmh)
 
     if (
-      !(i.autoMode && !i.shifting && (!i.changeDelayActive || antiStall) && i.gear >= 1)
+      !(
+        i.autoMode &&
+        !i.shifting &&
+        (!i.changeDelayActive || antiStall) &&
+        i.gear >= 1
+      )
     )
       return 0
 
     if (antiStall) return 1 - i.gear
 
-    const hold = slipping && !i.assistCutting
-      ? (p.slipShiftHoldMax ?? 1)
-      : i.gear === 1
-        ? (p.firstGearHold ?? 0.45)
-        : 0
-    this.overRevTime = i.rpm > upRpm ? this.overRevTime + i.dt : Math.max(0, this.overRevTime - i.dt)
+    const hold =
+      slipping && !i.assistCutting
+        ? (p.slipShiftHoldMax ?? 1)
+        : i.gear === 1
+          ? (p.firstGearHold ?? 0.45)
+          : 0
+    this.overRevTime =
+      i.rpm > upRpm
+        ? this.overRevTime + i.dt
+        : Math.max(0, this.overRevTime - i.dt)
 
     if (
       i.rpm > upRpm &&

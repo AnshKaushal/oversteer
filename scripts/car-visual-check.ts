@@ -50,7 +50,10 @@ const finalSize = finalBox.getSize(new THREE.Vector3())
 const center = finalBox.getCenter(new THREE.Vector3())
 console.log(`${def.id} (${file})`)
 console.log(
-  `  scaled by ${s.toFixed(4)}  bbox ${finalSize.toArray().map((n) => n.toFixed(3)).join(" x ")}  min y ${finalBox.min.y.toFixed(3)}`,
+  `  scaled by ${s.toFixed(4)}  bbox ${finalSize
+    .toArray()
+    .map((n) => n.toFixed(3))
+    .join(" x ")}  min y ${finalBox.min.y.toFixed(3)}`,
 )
 
 // --- pivots ----------------------------------------------------------------
@@ -67,11 +70,7 @@ model.traverse((o: any) => {
   if (!pivotMatches(o.name, def.pivots)) return
   const b = new THREE.Box3().setFromObject(o)
   const ps = b.getSize(new THREE.Vector3())
-  if (
-    ps.x < minPivot ||
-    ps.y < minPivot ||
-    ps.z < minPivot
-  ) {
+  if (ps.x < minPivot || ps.y < minPivot || ps.z < minPivot) {
     return
   }
   const c = b.getCenter(new THREE.Vector3())
@@ -98,9 +97,7 @@ console.log(
   }`,
 )
 for (const w of def.wheels) {
-  const near = found.find(
-    (f) => f.front === w.front && f.left === w.left,
-  )
+  const near = found.find((f) => f.front === w.front && f.left === w.left)
   if (!near) continue
   const dx = near.x - w.x
   const dz = near.z - w.z
@@ -112,10 +109,15 @@ for (const w of def.wheels) {
 
 // The nose must point at -Z in the car's local frame: that is the way the
 // game drives. The model is stored nose-at-+Z and yawed a half turn.
-const nose = new THREE.Vector3(0, 0, 1)
-  .applyAxisAngle(new THREE.Vector3(0, 1, 0), model.rotation.y)
+const nose = new THREE.Vector3(0, 0, 1).applyAxisAngle(
+  new THREE.Vector3(0, 1, 0),
+  model.rotation.y,
+)
 console.log(
-  `  nose (local +Z after the runtime yaw): ${nose.toArray().map((n) => n.toFixed(2)).join(", ")} — ${
+  `  nose (local +Z after the runtime yaw): ${nose
+    .toArray()
+    .map((n) => n.toFixed(2))
+    .join(", ")} — ${
     nose.z < 0 ? "faces the driving direction" : "FACES THE WRONG WAY"
   }`,
 )
