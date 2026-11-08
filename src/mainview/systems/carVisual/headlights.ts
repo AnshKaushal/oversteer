@@ -16,7 +16,7 @@ function makeBeams(
     const spot = new THREE.SpotLight(
       0xfff0cc,
       on ? 260 : 0,
-      80,
+      130,
       HEADLIGHT_CONE,
       0.8,
       1.0,
@@ -29,7 +29,7 @@ function makeBeams(
     spot.shadow.camera.far = 90
     spot.shadow.bias = -0.0003
     spot.shadow.normalBias = 0.015
-    spot.target.position.set(side * spacing * 0.9, 0, frontZ - 35)
+    spot.target.position.set(side * spacing * 0.9, 0, frontZ - 55)
     spot.visible = true
     spots.push(spot)
     objs.push(spot, spot.target)
