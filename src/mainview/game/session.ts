@@ -1,4 +1,5 @@
 import { conditions } from "../physics/core/Conditions"
+import { NPC_HEADLIGHT_CONE } from "../systems/headlightCutoff"
 import { WEATHER_WETNESS } from "../data/surfaces"
 import * as THREE from "three"
 import { CameraRig } from "./cameraRig"
@@ -178,6 +179,9 @@ export function startSession(ctx: SessionCtx): () => void {
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setSunSource(() => wm.sunDirection())
         flyby.setTimeOfDay(timeOfDayRef.current)
+        flyby.setPrecompile((o) =>
+          renderer!.compileAsync(o, camera, scene).then(() => undefined),
+        )
         await flyby.init(scene, baseUrl)
       }
 
@@ -406,7 +410,14 @@ export function startSession(ctx: SessionCtx): () => void {
 
       const npcSpotPool: THREE.SpotLight[] = []
       for (let sIdx = 0; sIdx < 4; sIdx++) {
-        const s = new THREE.SpotLight(0xfffaee, 0, 85, Math.PI / 3.0, 0.9, 1.2)
+        const s = new THREE.SpotLight(
+          0xfffaee,
+          0,
+          85,
+          NPC_HEADLIGHT_CONE,
+          0.9,
+          1.2,
+        )
         s.castShadow = false
         s.visible = true
         scene.add(s.target)

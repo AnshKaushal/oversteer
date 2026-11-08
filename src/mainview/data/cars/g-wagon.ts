@@ -473,6 +473,7 @@ export const gWagon: CarSpec = {
   },
   defaultTint: null,
   paintMatch: ["^body$"],
+  emissiveLampMap: true,
   paintTexture: {
     keepMap: true,
     neutralize: {

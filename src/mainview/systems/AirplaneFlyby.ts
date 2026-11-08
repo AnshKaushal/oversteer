@@ -98,6 +98,30 @@ export class AirplaneFlyby {
     this.onClearZones?.(views.flatMap((v) => v.layout.zones))
   }
 
+  private precompile: ((o: THREE.Object3D) => Promise<void>) | null = null
+
+  /** Lets new scenery compile its shaders off the render path before it appears. */
+  setPrecompile(fn: (o: THREE.Object3D) => Promise<void>) {
+    this.precompile = fn
+  }
+
+  private attach(group: THREE.Object3D) {
+    const scene = this.scene
+    if (!scene) return
+    if (!this.precompile) {
+      scene.add(group)
+      return
+    }
+    // Adding unseen materials makes the next frame compile them synchronously,
+    // which shows up as a hitch when the airport comes into view.
+    this.precompile(group).then(
+      () => {
+        if (this.scene === scene) scene.add(group)
+      },
+      () => scene.add(group),
+    )
+  }
+
   private retireAirport() {
     if (!this.airport) return
     this.airport.view.target = 0
@@ -513,7 +537,7 @@ export class AirplaneFlyby {
     if (atAirport && this.scene) {
       const landing = landingFor(sCross)
       const view = new AirportView(layoutAirport(landing))
-      this.scene.add(view.group)
+      this.attach(view.group)
       view.lit = this.lampsLit
       this.airport = { view, landing, takeoff: takeoffFor(sCross) }
       this.lastAirportMode = mode

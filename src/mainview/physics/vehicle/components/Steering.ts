@@ -25,7 +25,13 @@ export class Steering {
     return Math.sign(centre) * angle
   }
 
-  step(dt: number, steerInput: number, speedKmh: number, fwdSpeed: number) {
+  step(
+    dt: number,
+    steerInput: number,
+    speedKmh: number,
+    fwdSpeed: number,
+    beta = 0,
+  ) {
     const S = this.p
     const factor =
       1 /
@@ -37,8 +43,16 @@ export class Steering {
       (this.wheelbase * S.gripCapAccel) /
         Math.max(S.gripCapMinSpeedSq, fwdSpeed * fwdSpeed),
     )
-    const cap = Math.max(gripCap, S.minAngleAtSpeed)
-    const target = clamp(steerInput * S.maxAngle * factor, -cap, cap)
+    const base = Math.max(gripCap, S.minAngleAtSpeed)
+    const want = steerInput * S.maxAngle * factor
+    // When the car is sliding, steering into the slide (countersteer) needs
+    // roughly the body slip angle on top of the grip-limited angle, so the
+    // cap would otherwise stop the driver from catching or holding a drift.
+    const countersteer = want * beta < 0
+    const cap = countersteer
+      ? Math.min(S.maxAngle, base + Math.abs(beta))
+      : base
+    const target = clamp(want, -cap, cap)
     this.angle += clamp(
       target - this.angle,
       -S.ratePerSec * dt,

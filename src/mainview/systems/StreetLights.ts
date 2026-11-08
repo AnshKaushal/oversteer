@@ -17,6 +17,8 @@ const FULL_BY = 55
 const GONE_BY = 120
 
 const GLOW = 0xffd9a0
+const HEAD_LIT_FULL = 150
+const HEAD_LIT_GONE = 230
 
 export type RoadXFn = (s: number) => number
 
@@ -72,6 +74,16 @@ export class StreetLights {
         emissiveIntensity: 0,
         roughness: 0.4,
       })
+      // The glass is sub-pixel from afar and its glow flickers, so keep the
+      // lamp head unlit until it is close enough to read as a lamp.
+      this.headMat.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+  totalEmissiveRadiance *= 1.0 - smoothstep( ${HEAD_LIT_FULL.toFixed(1)}, ${HEAD_LIT_GONE.toFixed(1)}, length( vViewPosition ) );`,
+        )
+      }
+      this.headMat.customProgramCacheKey = () => "streetHeadNear"
       this.poles = new THREE.InstancedMesh(pole, poleMat, MAX_LAMPS)
       this.heads = new THREE.InstancedMesh(glass, this.headMat, MAX_LAMPS)
       for (const im of [this.poles, this.heads]) {

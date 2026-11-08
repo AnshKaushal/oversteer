@@ -2,10 +2,10 @@ import * as THREE from "three"
 import { WORLD_CONFIG } from "../../constants/world"
 import {
   SKY_DISK_DISTANCE,
-  fadeOut,
   HILL_PERIOD,
   hillResidue,
   HILL_MAX_RADIUS,
+  HILL_FADE_TO,
 } from "../world/constants"
 import { writeRibbon } from "../world/ribbon"
 import type { WorldManager } from "../WorldManager"
@@ -77,18 +77,15 @@ export function update(
     const r = hillResidue(i)
     const seg = r + HILL_PERIOD * Math.round((carSeg - r) / HILL_PERIOD)
     if (seg !== h.seg) this.placeHill(h, seg)
-    const f = fadeOut(
-      Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z),
-      800,
-      1050,
+    const dist = Math.hypot(
+      h.mesh.position.x - carPos.x,
+      h.mesh.position.z - carPos.z,
     )
+    // Fog hides a hill until it is in range; with fog off the hill material
+    // dissolves in by distance. Either way it keeps its full size.
     h.mesh.visible =
-      f > 0.01 &&
-      this.withinFog(
-        Math.hypot(h.mesh.position.x - carPos.x, h.mesh.position.z - carPos.z) -
-          h.radius,
-      )
-    const sc = Math.max(f, 0.01)
+      this.withinFog(dist - h.radius) && dist - h.radius < HILL_FADE_TO
+    const sc = 1
     if (h.mesh.scale.x !== sc) h.mesh.scale.setScalar(sc)
   }
   this.streetLights?.update(carS, carPos)

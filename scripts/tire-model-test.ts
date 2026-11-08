@@ -24,6 +24,7 @@ const P = {
   loadExpLat: 0.85,
   rollingResist: 0.012,
   rollingV0: 0.5,
+  slideLoss: 0.15,
   camberThrust: 0.12,
   long: { B: 10.0, C: 1.65, D: 1.0, E: 0.97 },
   lat: { B: 9.0, C: 1.45, D: 1.0, E: 0.97 },
@@ -162,6 +163,11 @@ function contact(over: Record<string, any> = {}) {
     "full slide retains substantial grip",
     vals[4] > 0.3 * peak,
     `slide=${vals[4].toFixed(0)} peak=${peak}`,
+  )
+  check(
+    "full slide loses grip vs peak (sliding friction < peak friction)",
+    vals[5] < 0.97 * peak && vals[5] > 0.7 * peak,
+    `slide=${vals[5].toFixed(0)} peak=${peak}`,
   )
 }
 

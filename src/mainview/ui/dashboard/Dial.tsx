@@ -19,6 +19,7 @@ import {
   sector,
 } from "./geometry"
 import { buildScale } from "./scale"
+import { NeedleGhosts, blurNeedle } from "./needleBlur"
 import {
   ParkIcon,
   ICON_SIZE,
@@ -171,6 +172,13 @@ export function Dial({
         transform={`rotate(${sign * START} ${cx} ${S})`}
         style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.7))" }}
       >
+        <NeedleGhosts
+          render={(props, i) => (
+            <g key={i} {...props}>
+              <polygon points={needle} fill="#e30613" />
+            </g>
+          )}
+        />
         <polygon
           points={needle}
           fill="#e30613"
@@ -276,6 +284,7 @@ export function paintDial(
   frac: number,
   color: string,
   opacity: number,
+  dt = 1 / 60,
 ) {
   const cx = side === "left" ? 0 : S
   const sign = side === "left" ? -1 : 1
@@ -284,6 +293,7 @@ export function paintDial(
     "transform",
     `rotate(${sign * a} ${cx} ${S})`,
   )
+  blurNeedle(refs.needle.current, sign * a, cx, S, dt)
   const p = refs.progress.current
   if (p) {
     p.setAttribute("d", arc(side, R_PROG, START, a))

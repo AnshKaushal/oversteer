@@ -2,6 +2,8 @@ import * as THREE from "three"
 import { applyBrakeHeat, lampPartsWithin } from "../carLights"
 import { AVENTADOR_HEADLIGHT, BRAKE_LAMP_THRESHOLD } from "../carVisual/shared"
 import type { CarVisual } from "../CarVisual"
+import { HEADLIGHT_CONE } from "../headlightCutoff"
+import { setLampChannels } from "./lampChannels"
 
 function makeBeams(
   spacing: number,
@@ -15,8 +17,8 @@ function makeBeams(
     const spot = new THREE.SpotLight(
       0xfff0cc,
       on ? 260 : 0,
-      160,
-      Math.PI / 4.2,
+      130,
+      HEADLIGHT_CONE,
       0.8,
       1.0,
     )
@@ -28,7 +30,7 @@ function makeBeams(
     spot.shadow.camera.far = 90
     spot.shadow.bias = -0.0003
     spot.shadow.normalBias = 0.015
-    spot.target.position.set(side * spacing * 0.9, 0, frontZ - 70)
+    spot.target.position.set(side * spacing * 0.9, 0, frontZ - 55)
     spot.visible = true
     spots.push(spot)
     objs.push(spot, spot.target)
@@ -134,6 +136,7 @@ export function setupHeadlights(
         const meshName = (o.name || "").toLowerCase()
 
         const isGWagonHeadlight =
+          !std.userData.lampChannels &&
           meshName.includes("carbody") &&
           matName === "body" &&
           !!std.emissiveMap
@@ -366,6 +369,9 @@ export function applyLamps(this: CarVisual) {
   for (const l of this.brakeLights) {
     applyBrakeHeat(l, this.brakeLevel, this.headlightsOn, p)
   }
+  for (const ch of this.lampChannels) {
+    setLampChannels(ch, lit, p, this.headlightDim, this.brakeLevel)
+  }
 }
 
 export function hasHeadlights(this: CarVisual): boolean {
@@ -373,10 +379,18 @@ export function hasHeadlights(this: CarVisual): boolean {
 }
 
 export function setBrake(this: CarVisual, level: number) {
-  if (this.brakeLights.length === 0) return
+  if (this.brakeLights.length === 0 && this.lampChannels.length === 0) return
   const want = level > BRAKE_LAMP_THRESHOLD ? 1 : 0
   if (want === this.brakeLevel) return
   this.brakeLevel = want
+  for (const ch of this.lampChannels)
+    setLampChannels(
+      ch,
+      this.headlightsOn && this.power > 0.02,
+      this.power,
+      this.headlightDim,
+      want,
+    )
   for (const l of this.brakeLights)
     applyBrakeHeat(l, want, this.headlightsOn, this.power)
 }

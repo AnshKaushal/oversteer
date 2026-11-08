@@ -19,6 +19,7 @@ export interface TireParams {
   loadExpLat: number
   rollingResist: number
   rollingV0: number
+  slideLoss: number
   camberThrust: number
   trail: number
   long: PacejkaShape
@@ -108,6 +109,7 @@ export function tireParamsFrom(w: Wheels): TireParams {
     loadExpLat: w.pacejka.lateral.loadSensitivity,
     rollingResist: w.rollingResist,
     rollingV0: w.tire.rollingV0,
+    slideLoss: w.tire.slideLoss,
     camberThrust: w.alignment.camberThrust,
     trail: w.steering.pneumaticTrail,
     aligning: shape(w.pacejka.aligning),
@@ -115,6 +117,12 @@ export function tireParamsFrom(w: Wheels): TireParams {
     lat: shape(w.pacejka.lateral),
   }
 }
+
+/** Normalised lateral slip (1 = peak) at which sliding friction has fully fallen. */
+const SLIDE_SPAN = 4
+
+/** Floor on rolling speed (m/s) when turning slip ratio into slip speed. */
+const SLIP_SPEED_FLOOR = 0.5
 
 function peakSlip(s: PacejkaShape): number {
   return Math.tan(Math.PI / (2 * s.C)) / s.B
@@ -208,6 +216,33 @@ export class TireModel {
           ky) /
         k
     }
+    // Past the peak the patch is sliding, and a sliding tire's force opposes
+    // its sliding velocity. The peak-normalised slip mix above overweights the
+    // longitudinal share (a spinning, sideways rear would keep little lateral
+    // grip), so blend the direction toward the physical slip-velocity vector
+    // as the slide develops. Magnitude is unchanged.
+    const mag = Math.hypot(fx, fy)
+    const svx = sx * Math.max(Math.abs(vx), SLIP_SPEED_FLOOR)
+    const sMag = Math.hypot(svx, vy)
+    if (mag > 1e-6 && sMag > 1e-6) {
+      const w = Math.min(1, Math.max(0, (k - 1) / SLIDE_SPAN))
+      const ux = (fx / mag) * (1 - w) + (svx / sMag) * w
+      const uy = (fy / mag) * (1 - w) - (vy / sMag) * w
+      const um = Math.hypot(ux, uy)
+      if (um > 1e-6) {
+        fx = (mag * ux) / um
+        fy = (mag * uy) / um
+      }
+    }
+    // Rubber friction falls with sliding speed: once the patch slides
+    // sideways it keeps losing lateral grip instead of plateauing, so a rear
+    // that breaks away stays loose until it is unloaded or slowed (what makes
+    // a drift sustainable). Longitudinal traction is left alone so launches,
+    // braking and top speed are unaffected.
+    const slide =
+      1 -
+      P.slideLoss * Math.min(1, Math.max(0, (Math.abs(ky) - 1) / SLIDE_SPAN))
+    fy *= slide
     const rollingForce =
       -P.rollingResist *
       (c.rollingScale ?? 1) *
@@ -215,7 +250,7 @@ export class TireModel {
       Math.tanh(vx / P.rollingV0)
     fx += rollingForce
 
-    const m = Math.hypot(fx / Dx, fy / Dy)
+    const m = Math.hypot(fx / Dx, fy / (Dy * slide))
     if (m > 1) {
       fx /= m
       fy /= m
