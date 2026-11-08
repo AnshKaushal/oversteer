@@ -70,7 +70,10 @@ export function dressHill(
           Math.floor(this.rand(seed + k * 29) * rockVars.length) %
             rockVars.length
         ]
-      sc = 1.2 + this.rand(seed + k * 31) * 1.0
+      // small / medium / big rocks, mostly small and medium
+      const sz = this.rand(seed + k * 59)
+      const u = this.rand(seed + k * 31)
+      sc = sz < 0.5 ? 0.7 + u * 0.5 : sz < 0.85 ? 1.4 + u * 0.8 : 2.8 + u * 1.4
       sink = 0.1
     } else if (grassVars.length > 0) {
       pv =
@@ -89,11 +92,22 @@ export function dressHill(
     )
     m.castShadow = pv.im.castShadow
     m.receiveShadow = pv.category !== "cloud"
-    q.setFromUnitVectors(yAxis, s.nrm)
+    const upright = pv.category === "tree" || pv.category === "rock"
+    if (upright) q.identity()
+    else q.setFromUnitVectors(yAxis, s.nrm)
     qy.setFromAxisAngle(yAxis, this.rand(seed + k * 43) * Math.PI * 2)
     q.premultiply(qy)
     m.quaternion.copy(q)
-    m.position.copy(s.pos).addScaledVector(s.nrm, -sink)
+    m.position.copy(s.pos)
+    if (pv.category === "rock") {
+      // lodge it in: bury 35-60% of its height, measured from its base
+      const g = pv.im.geometry as THREE.BufferGeometry
+      if (!g.boundingBox) g.computeBoundingBox()
+      const bb = g.boundingBox!
+      const buried = (0.35 + this.rand(seed + k * 61) * 0.25) * (bb.max.y - bb.min.y)
+      m.position.y -= bb.min.y * sc + buried * sc
+    } else if (upright) m.position.y -= sink
+    else m.position.addScaledVector(s.nrm, -sink)
     m.scale.setScalar(sc)
     m.userData.collidable = pv.category === "tree" || pv.category === "rock"
     if (pv.category === "tree" || pv.category === "grass") {

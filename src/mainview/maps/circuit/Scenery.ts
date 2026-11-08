@@ -189,18 +189,17 @@ export function buildHills(
       const n = radius > 90 ? 10 : 20
       const spots = sampleSurface(mesh.geometry, seed, n)
       const up = new THREE.Vector3(0, 1, 0)
-      const q = new THREE.Quaternion()
       const qy = new THREE.Quaternion()
       spots.forEach((s, k) => {
         if (s.nrm.y < 0.55 || rng() < 0.4) return
         const pv = kit.trees[Math.floor(rng() * kit.trees.length)]
         const m = new THREE.Mesh(pv.geometry, pv.material)
         m.castShadow = true
-        q.setFromUnitVectors(up, s.nrm)
+        // trees stand straight up, they don't lean with the slope
         qy.setFromAxisAngle(up, rng() * Math.PI * 2)
-        q.premultiply(qy)
-        m.quaternion.copy(q)
-        m.position.copy(s.pos).addScaledVector(s.nrm, -0.15)
+        m.quaternion.copy(qy)
+        m.position.copy(s.pos)
+        m.position.y -= 0.15
         m.scale.setScalar(1.6 + rng() * 1.2)
         m.userData.vegRank = rng()
         m.userData.k = k

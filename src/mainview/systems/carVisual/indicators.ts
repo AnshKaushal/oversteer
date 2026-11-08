@@ -316,10 +316,13 @@ export function planIndicators(
         0,
         0,
         new THREE.MeshStandardMaterial({
-          color: z.idle ?? 0x1c1004,
-          emissive: AMBER,
-          emissiveIntensity: 0,
-          roughness: 0.5,
+          // glow zones copy the model's brakelight material so the colours match
+          color: z.glow
+            ? new THREE.Color().setRGB(0.8, 0.8, 0.8, THREE.LinearSRGBColorSpace)
+            : (z.idle ?? 0x1c1004),
+          emissive: z.glow ?? AMBER,
+          emissiveIntensity: z.glow ? 4.373 : 0,
+          roughness: z.glow ? 0.804 : 0.5,
           transparent: true,
           polygonOffset: true,
           polygonOffsetFactor: -4,
@@ -339,6 +342,14 @@ export function planIndicators(
           return true
         },
       )
+    }
+    if (z.glow) {
+      for (const side of ["l", "r"] as const) {
+        const mat = amberEnds[z.end][side]?.material as
+          | THREE.MeshStandardMaterial
+          | undefined
+        if (mat) mat.userData.glow = z.glow
+      }
     }
     zoned.add(z.end)
   }
@@ -484,8 +495,15 @@ export function updateIndicators(this: CarVisual, dt: number) {
   for (const o of this.indicatorOverlays) {
     const active = sideOn(o.left)
     o.mesh.visible = o.amber || active
-    ;(o.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity =
-      on && active ? 5 * this.power : 0
+    const mat = o.mesh.material as THREE.MeshStandardMaterial
+    const flash = on && active
+    const glow = mat.userData.glow as number | undefined
+    if (glow !== undefined) {
+      // indicator running: amber or dark, never the red tail glow
+      mat.emissive.set(active ? AMBER : glow)
+      mat.emissiveIntensity = (active ? (flash ? 5 : 0) : 4.373) * this.power
+      mat.color.setScalar(active && !flash ? 0.03 : 0.8)
+    } else mat.emissiveIntensity = flash ? 5 * this.power : 0
   }
   for (const l of this.indicatorLamps) {
     const active =

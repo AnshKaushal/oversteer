@@ -4,6 +4,8 @@ export interface IndicatorZone {
   dx?: [number, number]
   y?: [number, number]
   idle?: number
+  /** Emissive colour while not flashing (e.g. a red tail lamp). */
+  glow?: number
 }
 
 const AMBER_LENS = 0x6a3300
@@ -23,7 +25,13 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "front", mesh: "^Object_23$", dx: [0.23, 0.35], y: [0.27, 0.325] },
     { end: "front", mesh: "^Object_23$", dx: [0.42, 0.5], y: [0.39, 0.45] },
   ],
-  "audi_r8.glb": [{ end: "front", mesh: "headlightGlass", dx: [0.3, 0.45] }],
+  // R8 rear: the thin lines are the indicator and glow red like the brake boxes
+  "audi_r8.glb": [
+    { end: "front", mesh: "headlightGlass", dx: [0, 0.3] },
+    { end: "rear", mesh: "rearlight", glow: 0xff0000 },
+  ],
+
+
   "lamborghini_aventador.glb": [
     { end: "front", mesh: "^glasses_glass0(17|18|20|24)" },
   ],

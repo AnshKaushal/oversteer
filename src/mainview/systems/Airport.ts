@@ -623,6 +623,10 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
   return geo
 }
 
+const FLOOD_SPOTS = 2
+const FLOOD_FULL_BY = 60
+const FLOOD_GONE_BY = 130
+
 export class AirportView {
   readonly group = new THREE.Group()
   alpha = 0
@@ -637,6 +641,8 @@ export class AirportView {
   private beaconIndex: number
   private clock = 0
   lit = false
+  private floodSpots: THREE.SpotLight[] = []
+  private readonly tmp = new THREE.Vector3()
   private shares: THREE.Texture[] = []
   private share(key: string, make: () => THREE.Texture) {
     const t = sharedTexture(key, make)
@@ -732,6 +738,19 @@ export class AirportView {
     st.group.rotation.y = Math.atan2(-uz, ux)
     this.group.add(st.group)
 
+    for (let i = 0; i < FLOOD_SPOTS; i++) {
+      const sp = new THREE.SpotLight(0xffe2b4, 0, 90, 0.8, 0.8, 1.1)
+      sp.castShadow = true
+      sp.shadow.mapSize.set(1024, 1024)
+      sp.shadow.radius = 3
+      sp.shadow.camera.near = 1
+      sp.shadow.camera.far = 70
+      sp.shadow.bias = -0.0005
+      sp.shadow.normalBias = 0.03
+      st.group.add(sp, sp.target)
+      this.floodSpots.push(sp)
+    }
+
     const glow = this.share("glow", makeLampGlow)
 
     const small = buildLamps(layout, st.lamps)
@@ -772,7 +791,45 @@ export class AirportView {
     }
   }
 
-  step(dt: number): boolean {
+  /** Point the real floodlights at the towers nearest the car. */
+  private stepFloods(car: THREE.Vector3 | null) {
+    const st = this.structures
+    const on = this.lit && this.alpha > 0.001 && !!car
+    const spots = this.floodSpots
+    if (!on) {
+      for (const s of spots) {
+        s.intensity = 0
+        s.shadow.autoUpdate = false
+      }
+      return
+    }
+    st.group.updateMatrixWorld()
+    const tmp = this.tmp
+    const ranked = st.floods
+      .map((f, i) => {
+        tmp.set(f.head[0], f.head[1], f.head[2])
+        st.group.localToWorld(tmp)
+        return { i, d: Math.hypot(tmp.x - car!.x, tmp.z - car!.z) }
+      })
+      .sort((a, b) => a.d - b.d)
+    spots.forEach((s, k) => {
+      const c = ranked[k]
+      if (!c || c.d > FLOOD_GONE_BY) {
+        s.intensity = 0
+        s.shadow.autoUpdate = false
+        return
+      }
+      const f = st.floods[c.i]
+      s.position.set(f.head[0], f.head[1], f.head[2])
+      s.target.position.set(f.aim[0], f.aim[1], f.aim[2])
+      const fade =
+        1 - Math.min(1, Math.max(0, (c.d - FLOOD_FULL_BY) / (FLOOD_GONE_BY - FLOOD_FULL_BY)))
+      s.intensity = 450 * fade * this.alpha
+      s.shadow.autoUpdate = true
+    })
+  }
+
+  step(dt: number, car: THREE.Vector3 | null = null): boolean {
     const rate = dt / 1.5
     if (this.alpha < this.target)
       this.alpha = Math.min(this.target, this.alpha + rate)
@@ -783,6 +840,7 @@ export class AirportView {
     this.structures.fade(this.alpha)
     this.structures.setLit(this.lit, this.alpha)
     this.stepLamps(dt)
+    this.stepFloods(car)
     return this.target === 0 && this.alpha === 0
   }
 
@@ -810,6 +868,7 @@ export class AirportView {
     this.structures.dispose()
     for (const g of this.geoms) g.dispose()
     for (const m of this.mats) m.dispose()
+    for (const sp of this.floodSpots) sp.dispose()
     this.lamps.dispose()
     this.bigLamps.dispose()
     for (const t of this.maps) t.dispose()
