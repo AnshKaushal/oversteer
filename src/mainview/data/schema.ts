@@ -277,6 +277,12 @@ export interface BodyStabilitySpec {
   powerOnThrottle: number
   liftBoost: number
   countersteerRange: number
+  /**
+   * Extra slip-correction authority per speedRef of speed above speedRef, so
+   * a slide at motorway speed is pulled straight instead of settling into a
+   * steady drift. Defaults to DEFAULT_HIGH_SPEED_GAIN when omitted.
+   */
+  highSpeedGain?: number
 }
 
 export interface Assists {
