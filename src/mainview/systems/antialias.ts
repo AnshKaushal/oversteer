@@ -22,6 +22,8 @@ export class AntiAlias {
   private w = 0
   private h = 0
   private v = new THREE.Vector2()
+  /** Diagnostic: first WebGL error seen and the stage that raised it. */
+  firstGlError = ""
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -57,6 +59,17 @@ export class AntiAlias {
     if (mode === "fxaa") c.addPass(new FXAAPass())
     else if (mode === "smaa") c.addPass(new SMAAPass())
     this.composer = c
+    // Diagnostic: tag the first GL error with the pass that raised it.
+    const gl = this.renderer.getContext()
+    for (const pass of c.passes) {
+      const orig = pass.render.bind(pass)
+      pass.render = (...args: Parameters<typeof pass.render>) => {
+        orig(...args)
+        const err = gl.getError()
+        if (err && !this.firstGlError)
+          this.firstGlError = `${pass.constructor.name} -> ${err}`
+      }
+    }
     this.w = this.h = 0
   }
 
@@ -71,6 +84,10 @@ export class AntiAlias {
     if (this.blurPass) {
       this.blurPass.strength = (blur / 100) * 1.5
       this.blurPass.maskRoot = keepSharp
+    }
+    if (!this.firstGlError) {
+      const pre = this.renderer.getContext().getError()
+      if (pre) this.firstGlError = `before-frame -> ${pre}`
     }
     if (!this.composer) {
       this.renderer.render(this.scene, this.camera)

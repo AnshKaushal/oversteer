@@ -102,24 +102,37 @@ export class MotionBlurPass extends Pass {
         if (!o.layers.isEnabled(MASK_LAYER)) o.layers.enable(MASK_LAYER);
       });
     this.savedLayers.mask = this.camera.layers.mask;
-    this.camera.layers.set(MASK_LAYER);
     const prevOverride = this.scene.overrideMaterial;
     const prevBg = this.scene.background;
     const prevFog = this.scene.fog;
     const prevClear = r.getClearColor(new THREE.Color());
     const prevAlpha = r.getClearAlpha();
-    this.scene.overrideMaterial = this.maskMat;
-    this.scene.background = null;
-    this.scene.fog = null;
-    r.setClearColor(0x000000, 1);
-    r.setRenderTarget(this.maskTarget);
-    r.clear();
-    if (root) r.render(this.scene, this.camera);
-    r.setClearColor(prevClear, prevAlpha);
-    this.scene.overrideMaterial = prevOverride;
-    this.scene.background = prevBg;
-    this.scene.fog = prevFog;
-    this.camera.layers.mask = this.savedLayers.mask;
+    const sm = r.shadowMap;
+    const prevShadowAuto = sm.autoUpdate;
+    const prevShadowNeeds = sm.needsUpdate;
+    try {
+      this.camera.layers.set(MASK_LAYER);
+      this.scene.overrideMaterial = this.maskMat;
+      this.scene.background = null;
+      this.scene.fog = null;
+      // The mask is a flat silhouette: it must not re-run the shadow pass, which
+      // would rebuild the shadow maps from this one layer and leave them wrong
+      // (or consume a pending shadow update) for the real scene.
+      sm.autoUpdate = false;
+      sm.needsUpdate = false;
+      r.setClearColor(0x000000, 1);
+      r.setRenderTarget(this.maskTarget);
+      r.clear();
+      if (root) r.render(this.scene, this.camera);
+    } finally {
+      sm.autoUpdate = prevShadowAuto;
+      sm.needsUpdate = prevShadowNeeds;
+      r.setClearColor(prevClear, prevAlpha);
+      this.scene.overrideMaterial = prevOverride;
+      this.scene.background = prevBg;
+      this.scene.fog = prevFog;
+      this.camera.layers.mask = this.savedLayers.mask;
+    }
   }
 
   dispose() {

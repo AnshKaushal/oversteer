@@ -225,7 +225,7 @@ export const bugattiChironPurSport: CarSpec = {
         sideSlipGain: 6500,
         yawDamp: 1600,
         maxTorque: 7000,
-        deadzone: 0.02,
+        deadzone: 0.005,
         deadzoneSteering: 0.06,
         steeringThreshold: 0.05,
         minSpeed: 2.5,

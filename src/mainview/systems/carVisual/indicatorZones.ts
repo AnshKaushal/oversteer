@@ -31,8 +31,10 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "rear", mesh: "rearlight", glow: 0xff0000 },
   ],
 
-
+  // Aventador rear: only the two upper strips (glass013 right, glass016 left)
+  // are the indicators; the lower hex lamps (glass015, glass021) stay tail lamps.
   "lamborghini_aventador.glb": [
     { end: "front", mesh: "^glasses_glass0(17|18|20|24)" },
+    { end: "rear", mesh: "^glasses_glass0(13|16)", glow: 0xff0000 },
   ],
 }

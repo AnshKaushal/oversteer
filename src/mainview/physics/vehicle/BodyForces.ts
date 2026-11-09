@@ -12,8 +12,8 @@ import type { Kinematics } from "./types"
 const DEFAULT_HIGH_SPEED_GAIN = 2
 const HIGH_SPEED_START = 0.7
 const HIGH_SPEED_SPAN = 1.5
-const SLIDE_CUT_START = 0.2
-const SLIDE_CUT_RANGE = 0.3
+/** Cut begins at this share of the tire's peak slip angle, full a peak later. */
+const SLIDE_CUT_START_SHARE = 0
 const SLIDE_CUT_MAX = 0.85
 const SLIDE_CUT_MIN_SPEED = 5
 const SLIDE_CUT_RISE = 4
@@ -27,6 +27,7 @@ export class BodyForces {
   private readonly chassis: CarPhysicsConfig["chassis"]
   private readonly stability: CarPhysicsConfig["assists"]["bodyStability"]
   private slideCut = 0
+  private readonly peakSlipAngle: number
 
   constructor(
     private readonly world: RAPIER.World,
@@ -39,6 +40,8 @@ export class BodyForces {
     this.chassis = P.chassis
     this.stability = P.assists.bodyStability
     this.impact = new Impact(P.chassis.crash)
+    const lat = P.wheels.pacejka.lateral
+    this.peakSlipAngle = Math.atan(Math.tan(Math.PI / (2 * lat.C)) / lat.B)
   }
 
   /**
@@ -63,7 +66,12 @@ export class BodyForces {
       groundedWheels >= b.minGrounded
     const target = active
       ? SLIDE_CUT_MAX *
-        clamp((Math.abs(k.beta) - SLIDE_CUT_START) / SLIDE_CUT_RANGE, 0, 1)
+        clamp(
+          (Math.abs(k.beta) - this.peakSlipAngle * SLIDE_CUT_START_SHARE) /
+            (this.peakSlipAngle * (1 - SLIDE_CUT_START_SHARE)),
+          0,
+          1,
+        )
       : 0
     const rate = target > this.slideCut ? SLIDE_CUT_RISE : SLIDE_CUT_FALL
     this.slideCut += clamp(target - this.slideCut, -rate * dt, rate * dt)

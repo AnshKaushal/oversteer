@@ -224,7 +224,7 @@ export const mitsubishiLancerEvo6: CarSpec = {
         sideSlipGain: 6000,
         yawDamp: 1500,
         maxTorque: 6200,
-        deadzone: 0.02,
+        deadzone: 0.005,
         deadzoneSteering: 0.06,
         steeringThreshold: 0.05,
         minSpeed: 2.5,

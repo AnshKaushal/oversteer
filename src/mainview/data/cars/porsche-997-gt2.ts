@@ -232,7 +232,7 @@ export const porsche997Gt2: CarSpec = {
         sideSlipGain: 6000,
         yawDamp: 1500,
         maxTorque: 6000,
-        deadzone: 0.02,
+        deadzone: 0.005,
         deadzoneSteering: 0.06,
         steeringThreshold: 0.05,
         minSpeed: 2.5,

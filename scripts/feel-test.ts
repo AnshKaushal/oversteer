@@ -196,10 +196,10 @@ for (const auto of [true, false]) {
 {
   const raw = makeRig(RAPIER, def)
   check(
-    "a new car starts with traction control, stability control and ABS off",
+    "a new car starts with traction and stability control off, ABS as the car specifies",
     !raw.car.tractionControlOn &&
       !raw.car.stabilityControlOn &&
-      !raw.car.abs.enabled,
+      raw.car.abs.enabled === P.assists.absEnabled,
   )
   const r = fresh()
   const press = (k: string) =>
@@ -307,10 +307,16 @@ const stalledOf = (r: Rig) =>
     `rpm ${ig.car.rpm.toFixed(0)}`,
   )
   press("toggleIgnitionPressed")
+  run(ig, {}, 0.5)
+  check(
+    "tapping the ignition key only switches the ignition on, the engine stays off",
+    stalledOf(ig),
+  )
+  run(ig, { crankHeld: true }, 4)
   run(ig, {}, 2)
   const back = !stalledOf(ig)
   check(
-    "the ignition key restarts a switched-off engine and it idles",
+    "holding the starter restarts a switched-off engine and it idles",
     back && Math.abs(ig.car.rpm - E.idleRPM) < 0.15 * E.idleRPM,
     `rpm ${ig.car.rpm.toFixed(0)}`,
   )
