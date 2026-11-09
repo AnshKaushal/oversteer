@@ -34,6 +34,9 @@ import { WheelSolver } from "./WheelSolver"
 
 export type { CarTelemetry, Gear } from "./types"
 
+// Tall gears lock the clutch: no free-revving above the wheels' coupled rpm.
+const SLIP_MIN_RATIO_FRACTION = 0.5
+
 export class Vehicle {
   readonly wheelbase: number
   readonly trackWidth: number
@@ -272,14 +275,15 @@ export class Vehicle {
     throttle: number,
     speedKmh: number,
     gearRatio: number,
+    canSlip: boolean,
   ) {
     const P = this.P
     const d = P.engine.dynamics
     const mass = P.mass.chassis + 2 * (P.mass.frontWheel + P.mass.rearWheel)
-    const flare = this.flareRpm()
+    const flare = canSlip ? this.flareRpm() : this.engine.rpm
     const force =
       (this.engine.fullPedalTorque(flare) *
-        this.converter.multiplier(true, 0) *
+        (canSlip ? this.converter.multiplier(true, 0) : 1) *
         Math.abs(gearRatio) *
         P.drivetrain.efficiency) /
       P.wheels.radius
@@ -431,6 +435,9 @@ export class Vehicle {
           )
         : 0,
     )
+    const canSlip =
+      g.gear < 0 ||
+      Math.abs(gearRatio) >= SLIP_MIN_RATIO_FRACTION * g.ratio(1)
     this.launch.step(dt, g.gear, input.throttle, coupled)
     this.engine.stepRpm({
       dt,
@@ -448,11 +455,12 @@ export class Vehicle {
       launchWobble: this.launch.wobble(this.simTime),
       clutchDumping: this.launch.dumping,
       kickdownTimer: this.shiftLogic.kickdownTimer,
+      canSlip,
       airborne:
         this.suspension.states.length > 0 &&
         this.suspension.states.every((s) => !s.grounded),
     })
-    this.checkStall(dt, g.gear, input.throttle, k.speedKmh, gearRatio)
+    this.checkStall(dt, g.gear, input.throttle, k.speedKmh, gearRatio, canSlip)
 
     const driven = this.aggression.step(
       dt,
@@ -532,7 +540,10 @@ export class Vehicle {
       gear: g.gear,
       gearRatio,
       engineTorque,
-      converterMultiplier: this.converter.multiplier(g.gear !== 0, k.speedKmh),
+      converterMultiplier: this.converter.multiplier(
+        g.gear !== 0 && canSlip,
+        k.speedKmh,
+      ),
       throttle: input.throttle,
       speedKmh: k.speedKmh,
       launchArmed: this.launch.armed,

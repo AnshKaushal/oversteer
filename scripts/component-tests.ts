@@ -90,6 +90,7 @@ const near = (a: number, b: number, tol = 1e-6) =>
     clutchDumping: false,
     kickdownTimer: 0,
     airborne: false,
+    canSlip: true,
     shifting: false,
     flareRpm: 0,
   })
@@ -115,6 +116,7 @@ const near = (a: number, b: number, tol = 1e-6) =>
       clutchDumping: false,
       kickdownTimer: 0,
       airborne: false,
+      canSlip: true,
       shifting: false,
       flareRpm: 0,
     })
@@ -792,6 +794,7 @@ const near = (a: number, b: number, tol = 1e-6) =>
     clutchDumping: false,
     kickdownTimer: 0,
     airborne: false,
+    canSlip: true,
     slipSpeed: 0,
     flareRpm: 0,
   }
@@ -835,6 +838,7 @@ const near = (a: number, b: number, tol = 1e-6) =>
       clutchDumping: false,
       kickdownTimer: 0,
       airborne: false,
+      canSlip: true,
       slipSpeed: 0,
       flareRpm: 0,
     }

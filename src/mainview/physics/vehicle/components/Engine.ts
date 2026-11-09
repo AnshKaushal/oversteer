@@ -24,6 +24,7 @@ export interface RpmInput {
   clutchDumping: boolean
   kickdownTimer: number
   airborne: boolean
+  canSlip: boolean
 }
 
 export class Engine {
@@ -284,7 +285,7 @@ export class Engine {
     const w = this.rpm * rad
     const wIn = c.coupledRpm * rad
     const floor = p.idleRPM * p.dynamics.idleFloorFraction
-    if (w <= wIn) {
+    if (w <= wIn || !c.canSlip) {
       this.lock(c, floor)
       return
     }
