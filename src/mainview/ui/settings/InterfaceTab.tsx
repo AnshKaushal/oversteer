@@ -2,7 +2,7 @@ import { Check, Gauge, Activity } from "lucide-react"
 import type { TabProps } from "./types"
 
 export function InterfaceTab({ settings, onUpdateSettings }: TabProps) {
-  const handleSelectDashStyle = (style: "modern" | "classic") =>
+  const handleSelectDashStyle = (style: "modern" | "classic" | "single") =>
     onUpdateSettings({ ...settings, dashStyle: style })
   return (
     <>
@@ -52,12 +52,12 @@ export function InterfaceTab({ settings, onUpdateSettings }: TabProps) {
             Dashboard Cluster Style
           </div>
           <p className="text-[11px] text-gray-400 mt-0.5">
-            Pick the instrument cluster look — twin half-dials or the classic
+            Pick the instrument cluster look — twin half-dials, a single round dial, or the classic
             circular gauges
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {[
             {
               id: "modern" as const,
@@ -68,6 +68,11 @@ export function InterfaceTab({ settings, onUpdateSettings }: TabProps) {
               id: "classic" as const,
               name: "Classic Cluster",
               desc: "Circular chrome gauges with red needles",
+            },
+            {
+              id: "single" as const,
+              name: "Single Dial",
+              desc: "One round dial, speed and gear in the hub",
             },
           ].map((opt) => {
             const active = (settings.dashStyle ?? "modern") === opt.id

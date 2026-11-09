@@ -123,70 +123,6 @@ export function startSession(ctx: SessionCtx): () => void {
         failIfMajorPerformanceCaveat: false,
       })
       renderer.info.autoReset = false
-      // Diagnostic: surface shader compile failures on screen (models vanish
-      // when a material's program fails to build).
-      const showDiag = (msg: string) => {
-        console.error(msg)
-        let el = document.getElementById("shader-error-overlay")
-        if (!el) {
-          el = document.createElement("pre")
-          el.id = "shader-error-overlay"
-          el.style.cssText =
-            "position:fixed;left:8px;top:8px;right:8px;max-height:45vh;overflow:auto;z-index:99999;margin:0;padding:8px;background:rgba(120,0,0,.9);color:#fff;font:11px/1.3 monospace;white-space:pre-wrap;pointer-events:none"
-          document.body.appendChild(el)
-        }
-        el.textContent = msg.slice(0, 4000)
-      }
-      renderer.debug.onShaderError = (gl, program, vs, fs) => {
-        const log = gl.getProgramInfoLog(program) ?? ""
-        const fsLog = gl.getShaderInfoLog(fs) ?? ""
-        const vsLog = gl.getShaderInfoLog(vs) ?? ""
-        showDiag(`SHADER ERROR\n${log}\n${fsLog}\n${vsLog}`.trim())
-      }
-      // Diagnostic: when a frame draws almost nothing, dump renderer state.
-      const dumpState = (title: string) => {
-        const r = renderer!
-        const gl = r.getContext()
-        let meshes = 0
-        let visibleMeshes = 0
-        scene.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) {
-            meshes++
-            let v = true
-            for (let p: THREE.Object3D | null = o; p; p = p.parent)
-              if (!p.visible) v = false
-            if (v) visibleMeshes++
-          }
-        })
-        const lines = [
-          title,
-          `calls=${r.info.render.calls} tris=${r.info.render.triangles} programs=${r.info.programs?.length}`,
-          `glError=${gl.getError()} firstGlError=${aa?.firstGlError || "none"} contextLost=${gl.isContextLost()}`,
-          `camera.layers=${camera.layers.mask} override=${scene.overrideMaterial?.type ?? "none"} fog=${scene.fog ? "on" : "off"} bg=${scene.background ? "set" : "none"}`,
-          `meshes=${meshes} visibleMeshes=${visibleMeshes} shadows=${r.shadowMap.enabled}`,
-          `paused=${pausedRef.current} aa=${settingsRef.current.antiAliasing} blur=${settingsRef.current.motionBlur}`,
-          `target=${r.getRenderTarget() ? "offscreen" : "screen"} cam=${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}`,
-        ]
-        showDiag(lines.join("\n"))
-      }
-      let emptyFrames = 0
-      const checkEmptyFrame = () => {
-        const r = renderer!
-        if (!startedRef.current || r.info.render.calls >= 8) {
-          emptyFrames = 0
-          return
-        }
-        if (++emptyFrames === 5) dumpState("EMPTY FRAME")
-      }
-      const onDiagKey = (e: KeyboardEvent) => {
-        if (e.code === "F8") dumpState("STATE DUMP (F8)")
-      }
-      window.addEventListener("keydown", onDiagKey)
-      showDiag("Diagnostics build loaded. Press F8 if the world goes blank.")
-      setTimeout(
-        () => document.getElementById("shader-error-overlay")?.remove(),
-        5000,
-      )
       renderer.shadowMap.enabled = settingsRef.current.shadows
       renderer.shadowMap.type = THREE.PCFShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -243,7 +179,21 @@ export function startSession(ctx: SessionCtx): () => void {
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setSunSource(() => wm.sunDirection())
         flyby.setTimeOfDay(timeOfDayRef.current)
+        // Upload textures now (while loading) instead of on the first frame
+        // the airport is drawn, and compile its shaders before it is added.
+        const upload = (o: THREE.Object3D) =>
+          o.traverse((c) => {
+            const m = (c as THREE.Mesh).material as
+              | THREE.MeshStandardMaterial
+              | undefined
+            if (m?.map) renderer!.initTexture(m.map)
+          })
+        flyby.setPrecompile((o) => {
+          upload(o)
+          return renderer!.compileAsync(o, camera, scene).then(() => undefined)
+        })
         await flyby.init(scene, baseUrl)
+        for (const t of flyby.warmTextures) renderer.initTexture(t)
       }
 
       const net = multiplayerRef.current
@@ -685,7 +635,7 @@ export function startSession(ctx: SessionCtx): () => void {
             if (inp.indicatorLeftPressed) vis.toggleIndicator("left")
             if (inp.indicatorRightPressed) vis.toggleIndicator("right")
             if (inp.hazardPressed) vis.toggleIndicator("hazard")
-            vis.updateIndicators(dt)
+            if (!pausedRef.current) vis.updateIndicators(dt)
           }
         }
         const doReset = inp.resetPressed
@@ -714,7 +664,6 @@ export function startSession(ctx: SessionCtx): () => void {
         if (pausedRef.current) {
           stepper.acc = 0
           setSpeedLines(0, 0)
-          smoke.update(dt)
           pausedTick = (pausedTick + 1) % 3
           if (pausedTick !== 0) return
           ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
@@ -722,7 +671,6 @@ export function startSession(ctx: SessionCtx): () => void {
             settingsRef.current.motionBlur ?? 0,
             playerVisualRef.current?.group ?? null,
           )
-          checkEmptyFrame()
           return
         }
 
@@ -1300,7 +1248,6 @@ export function startSession(ctx: SessionCtx): () => void {
           settingsRef.current.motionBlur ?? 0,
           playerVisualRef.current?.group ?? null,
         )
-        checkEmptyFrame()
         const renderT1 = performance.now()
         spike.ph("render")
         hud.frame(

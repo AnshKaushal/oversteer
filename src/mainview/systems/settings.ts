@@ -123,7 +123,7 @@ export interface AppSettings {
   shadows: boolean
   shadowQuality: number
   timeOfDay?: TimeOfDayMode
-  dashStyle?: "modern" | "classic"
+  dashStyle?: "modern" | "classic" | "single"
   fog?: FogLevel
   perfOverlay?: boolean
   streetLights?: boolean

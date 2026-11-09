@@ -9,7 +9,7 @@ export function LiveDashboard({
   dashStyle,
 }: {
   initial: CarTelemetry
-  dashStyle: "modern" | "classic"
+  dashStyle: "modern" | "classic" | "single"
 }) {
   const t = useStore(teleStore)
   return <Dashboard tele={t ?? initial} dashStyle={dashStyle} />

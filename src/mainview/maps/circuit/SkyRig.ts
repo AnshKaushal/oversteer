@@ -44,7 +44,7 @@ export class SkyRig {
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
     sun.shadow.bias = -0.0002
-    sun.shadow.normalBias = 0.015
+    sun.shadow.normalBias = 0.03
     sun.shadow.camera.left = -70
     sun.shadow.camera.right = 70
     sun.shadow.camera.top = 70
@@ -242,8 +242,8 @@ export class SkyRig {
 
   setShadowQuality(pct: number) {
     const q = Math.min(100, Math.max(25, pct)) / 100
-    const size = Math.max(1024, Math.round((2048 * q) / 256) * 256)
-    const half = 50 + 20 * q
+    const size = Math.max(1024, Math.round((4096 * q) / 256) * 256)
+    const half = 40 + 20 * q
     this.shadowTexel = (2 * half) / size
     const sun = this.sun
     const cam = sun.shadow.camera
@@ -253,7 +253,7 @@ export class SkyRig {
       sun.shadow.mapSize.set(size, size)
       sun.shadow.needsUpdate = true
     }
-    sun.shadow.radius = 2.5 + (1 - q) * 2
+    sun.shadow.radius = 1.5 + (1 - q) * 2
     cam.left = cam.bottom = -half
     cam.right = cam.top = half
     cam.updateProjectionMatrix()

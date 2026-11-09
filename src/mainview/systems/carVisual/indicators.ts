@@ -5,7 +5,7 @@ import { INDICATOR_ZONES } from "./indicatorZones"
 export type IndicatorMode = "off" | "left" | "right" | "hazard"
 
 const AMBER = 0xff9a14
-const PERIOD_S = 0.7
+const PERIOD_S = 0.75
 
 interface Spot {
   x: number

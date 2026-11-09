@@ -43,6 +43,7 @@ import { SpeedLines } from "./ui/SpeedLines"
 import { MultiplayerManager } from "./systems/net/MultiplayerManager"
 import { MultiplayerLobby, MultiplayerHudBadge } from "./ui/MultiplayerLobby"
 import { NetDiagPanel } from "./ui/NetDiagPanel"
+import { setPausedFlag } from "./app/pauseState"
 import { netDiagEnabled } from "./systems/net/NetDiagnostics"
 import type { PeerPlayer } from "./systems/net/types"
 import { CARS } from "./data/cars"
@@ -106,6 +107,10 @@ export default function App() {
   }
   const startedRef = useRef(false)
   const pausedRef = useRef(false)
+  useEffect(() => {
+    setPausedFlag(paused)
+    return () => setPausedFlag(false)
+  }, [paused])
   const errorRef = useRef(false)
   useEffect(() => {
     errorRef.current = !!error

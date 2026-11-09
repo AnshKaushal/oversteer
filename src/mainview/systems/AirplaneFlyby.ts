@@ -98,6 +98,31 @@ export class AirplaneFlyby {
     this.onClearZones?.(views.flatMap((v) => v.layout.zones))
   }
 
+  /** Shared textures built at init, for the caller to upload to the GPU. */
+  warmTextures: THREE.Texture[] = []
+
+  private precompile: ((o: THREE.Object3D) => Promise<void>) | null = null
+
+  /** Lets new scenery compile its shaders off the render path before it appears. */
+  setPrecompile(fn: (o: THREE.Object3D) => Promise<void>) {
+    this.precompile = fn
+  }
+
+  private attach(view: AirportView) {
+    const scene = this.scene
+    if (!scene) return
+    if (!this.precompile) {
+      scene.add(view.group)
+      return
+    }
+    // Compile the new materials in parallel, then add: adding unseen
+    // materials otherwise stalls the next frame on synchronous compiles.
+    const add = () => {
+      if (this.scene === scene && !this.disposed) scene.add(view.group)
+    }
+    this.precompile(view.group).then(add, add)
+  }
+
   private retireAirport() {
     if (!this.airport) return
     this.airport.view.target = 0
@@ -193,8 +218,7 @@ export class AirplaneFlyby {
       }
     }
 
-    warmAirportTextures()
-    warmStructureTextures()
+    this.warmTextures = [...warmAirportTextures(), ...warmStructureTextures()]
 
     if (this.disposed) return false
     if (this.aircraft.length === 0) return false
@@ -513,7 +537,7 @@ export class AirplaneFlyby {
     if (atAirport && this.scene) {
       const landing = landingFor(sCross)
       const view = new AirportView(layoutAirport(landing))
-      this.scene.add(view.group)
+      this.attach(view)
       view.lit = this.lampsLit
       this.airport = { view, landing, takeoff: takeoffFor(sCross) }
       this.lastAirportMode = mode
@@ -562,7 +586,7 @@ export class AirplaneFlyby {
   private readonly carPos = new THREE.Vector3()
 
   private tickAirports(dt: number) {
-    this.airport?.view.step(dt, this.carPos)
+    this.airport?.view.step(dt)
     let changed = false
     this.retiring = this.retiring.filter((v) => {
       if (!v.step(dt)) return true

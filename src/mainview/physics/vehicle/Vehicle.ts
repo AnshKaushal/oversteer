@@ -490,6 +490,15 @@ export class Vehicle {
       slipRatioAvg: this.slip.slipRatioAvg,
       lateralVelocity: this.lateralVelocity(),
       predictedRpm: (gear) => g.predictedRpm(gear, this.driveline.drivenOmega),
+      groundRpm: (gear) =>
+        gear > 0
+          ? Math.abs(
+              ((k.fwdSpeed / P.wheels.radius) *
+                g.ratio(gear) *
+                SECONDS_PER_MINUTE) /
+                TWO_PI,
+            )
+          : 0,
     })
     if (delta !== 0 && g.autoShift(delta, this.driveline.drivenOmega)) {
       this.engine.settleAfterShift(g.coupledRpm(this.driveline.drivenOmega))

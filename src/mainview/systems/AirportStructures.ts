@@ -52,9 +52,15 @@ function makeTowerGlow(): THREE.Texture {
   ])
 }
 
-export function warmStructureTextures() {
-  releaseTexture(sharedTexture("chainLink", makeChainLinkTexture))
-  releaseTexture(sharedTexture("towerGlow", makeTowerGlow))
+export function warmStructureTextures(): THREE.Texture[] {
+  return [
+    ["chainLink", makeChainLinkTexture],
+    ["towerGlow", makeTowerGlow],
+  ].map(([k, make]) => {
+    const t = sharedTexture(k as string, make as () => THREE.Texture)
+    releaseTexture(t)
+    return t
+  })
 }
 
 export class AirportStructures {

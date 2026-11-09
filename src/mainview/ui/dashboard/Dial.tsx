@@ -159,13 +159,6 @@ export function Dial({
       {}
       {scale}
       {}
-      <path
-        ref={refs.progress}
-        d={arc(side, R_PROG, START, START)}
-        fill="none"
-        strokeWidth="3"
-      />
-
       {}
       <g
         ref={refs.needle}

@@ -36,6 +36,8 @@ export interface ShiftInput {
   slipRatioAvg: number
   lateralVelocity: number
   predictedRpm: (gear: number) => number
+  /** Engine rpm in `gear` at the car's real ground speed (ignores wheelspin). */
+  groundRpm?: (gear: number) => number
 }
 
 export class ShiftLogic {
@@ -100,6 +102,10 @@ export class ShiftLogic {
 
     const slipping = i.slipRatioAvg > p.slipLimit
     const heavySlide = Math.abs(i.lateralVelocity) > p.slideLimit
+    // On the limiter with the car actually moving (no wheelspin) or sliding:
+    // waiting for the hold timers only keeps the engine pinned in a low gear.
+    // During wheelspin the limiter says nothing about speed, so keep the delays.
+    const pinned = i.limiterCut && (!slipping || heavySlide)
     const antiStall =
       i.gear > 1 &&
       (i.rpm < idle * p.antiStallRpmFactor || i.speedKmh < p.antiStallKmh)
@@ -108,13 +114,16 @@ export class ShiftLogic {
       !(
         i.autoMode &&
         !i.shifting &&
-        (!i.changeDelayActive || antiStall) &&
+        // Pinned on the limiter, waiting out the post-shift delay only wastes
+        // power, so allow the next upshift straight away.
+        (!i.changeDelayActive || antiStall || pinned) &&
         i.gear >= 1
       )
     )
       return 0
 
     if (antiStall) return 1 - i.gear
+
 
     const hold =
       slipping && !i.assistCutting
@@ -133,9 +142,23 @@ export class ShiftLogic {
       !i.launchArmed &&
       i.speedKmh > p.upshiftMinKmh
     ) {
-      if (this.overRevTime < hold) return 0
+      // Bouncing off the limiter keeps dropping rpm under the threshold, so
+      // the hold timer never fills and the box stays in gear. Skip the hold.
       const forced = i.rpm >= highUp || i.limiterCut
-      return (!slipping || forced) && !heavySlide ? 1 : 0
+      if (this.overRevTime < hold && !pinned && !forced) return 0
+      // While the wheels spin, rpm says nothing about speed. Don't upshift into
+      // a gear the real ground speed can't carry: it would drop straight back
+      // down and the box would hunt between gears.
+      if (
+        slipping &&
+        !heavySlide &&
+        i.groundRpm &&
+        i.groundRpm(i.gear + 1) < downRpm + p.downPreferredLow
+      )
+        return 0
+      // A drift slide normally delays upshifts, but not while pinned on the
+      // limiter: that would hold the car in a low gear indefinitely.
+      return (!slipping || forced) && (!heavySlide || pinned) ? 1 : 0
     }
 
     if (

@@ -378,13 +378,38 @@ export function runwayNumber(bearing: number): number {
   return Math.round(bearing / 10) % 36 || 36
 }
 
-export function warmAirportTextures() {
-  releaseTexture(sharedTexture("glow", makeLampGlow))
-  releaseTexture(sharedTexture("connector", makeConnectorTexture))
-  releaseTexture(sharedTexture("runway" + 36, () => makeRunwayTexture(360)))
+/** Build the shared textures up front; returns them so they can be uploaded. */
+export function warmAirportTextures(): THREE.Texture[] {
+  const keys: [string, () => THREE.Texture][] = [
+    ["glow", makeLampGlow],
+    ["connector", makeConnectorTexture],
+    ["runway", makeRunwayTexture],
+  ]
+  return keys.map(([k, make]) => {
+    const t = sharedTexture(k, make)
+    releaseTexture(t)
+    return t
+  })
 }
 
-function makeRunwayTexture(bearing: number): THREE.CanvasTexture {
+/** Runway number painted on its own so the big base texture is shared. */
+function makeNumberTexture(text: string): THREE.CanvasTexture {
+  const c = document.createElement("canvas")
+  c.width = 256
+  c.height = 256
+  const g = c.getContext("2d")!
+  g.fillStyle = "#ececec"
+  g.textAlign = "center"
+  g.textBaseline = "middle"
+  g.font = "bold 192px Arial"
+  g.fillText(text.padStart(2, "0"), 128, 128)
+  const t = new THREE.CanvasTexture(c)
+  t.anisotropy = 4
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+function makeRunwayTexture(): THREE.CanvasTexture {
   const W = 4096
   const H = 256
   const c = document.createElement("canvas")
@@ -447,23 +472,6 @@ function makeRunwayTexture(bearing: number): THREE.CanvasTexture {
       for (const sgn of [-1, 1]) bar(xm, len, sgn > 0 ? off : -off - w, w)
     }
   }
-
-  const num = runwayNumber(bearing)
-  const opp = ((num + 17) % 36) + 1
-  g.fillStyle = "#ececec"
-  g.textAlign = "center"
-  g.textBaseline = "middle"
-  const draw = (text: string, xm: number, rot: number) => {
-    g.save()
-    g.translate(xm * mx, (RUNWAY_WIDTH / 2) * my)
-    g.scale(mx, my)
-    g.rotate(rot)
-    g.font = "bold 12px Arial"
-    g.fillText(text.padStart(2, "0"), 0, 0)
-    g.restore()
-  }
-  draw(String(num), 62, Math.PI / 2)
-  draw(String(opp), RUNWAY_LENGTH - 62, -Math.PI / 2)
 
   const t = new THREE.CanvasTexture(c)
   t.anisotropy = 8
@@ -623,9 +631,6 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
   return geo
 }
 
-const FLOOD_SPOTS = 2
-const FLOOD_FULL_BY = 60
-const FLOOD_GONE_BY = 130
 
 export class AirportView {
   readonly group = new THREE.Group()
@@ -641,8 +646,6 @@ export class AirportView {
   private beaconIndex: number
   private clock = 0
   lit = false
-  private floodSpots: THREE.SpotLight[] = []
-  private readonly tmp = new THREE.Vector3()
   private shares: THREE.Texture[] = []
   private share(key: string, make: () => THREE.Texture) {
     const t = sharedTexture(key, make)
@@ -711,15 +714,41 @@ export class AirportView {
     lay(
       RUNWAY_WIDTH,
       RUNWAY_LENGTH,
-      this.share("runway" + runwayNumber(layout.bearing), () =>
-        makeRunwayTexture(layout.bearing),
-      ),
+      this.share("runway", makeRunwayTexture),
       layout.cx,
       layout.cz,
       layout.ux,
       layout.uz,
       0.028,
     )
+    {
+      const runway = this.group.children[this.group.children.length - 1]
+      const num = runwayNumber(layout.bearing)
+      const opp = ((num + 17) % 36) + 1
+      const decal = (n: number, xm: number, rot: number) => {
+        const geo = new THREE.PlaneGeometry(12, 12)
+        const mat = new THREE.MeshStandardMaterial({
+          map: this.share("rwnum" + n, () => makeNumberTexture(String(n))),
+          roughness: 1,
+          metalness: 0,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -3,
+          polygonOffsetUnits: -3,
+        })
+        const m = new THREE.Mesh(geo, mat)
+        m.position.set(xm - RUNWAY_LENGTH / 2, 0, 0.002)
+        m.rotation.z = rot
+        m.frustumCulled = false
+        runway.add(m)
+        this.mats.push(mat)
+        this.geoms.push(geo)
+      }
+      decal(num, 62, -Math.PI / 2)
+      decal(opp, RUNWAY_LENGTH - 62, Math.PI / 2)
+    }
 
     const { ux, uz } = layout
     const nx = -uz
@@ -737,19 +766,6 @@ export class AirportView {
     st.group.position.set(layout.cx, 0, layout.cz)
     st.group.rotation.y = Math.atan2(-uz, ux)
     this.group.add(st.group)
-
-    for (let i = 0; i < FLOOD_SPOTS; i++) {
-      const sp = new THREE.SpotLight(0xffe2b4, 0, 90, 0.8, 0.8, 1.1)
-      sp.castShadow = true
-      sp.shadow.mapSize.set(1024, 1024)
-      sp.shadow.radius = 3
-      sp.shadow.camera.near = 1
-      sp.shadow.camera.far = 70
-      sp.shadow.bias = -0.0005
-      sp.shadow.normalBias = 0.03
-      st.group.add(sp, sp.target)
-      this.floodSpots.push(sp)
-    }
 
     const glow = this.share("glow", makeLampGlow)
 
@@ -791,45 +807,7 @@ export class AirportView {
     }
   }
 
-  /** Point the real floodlights at the towers nearest the car. */
-  private stepFloods(car: THREE.Vector3 | null) {
-    const st = this.structures
-    const on = this.lit && this.alpha > 0.001 && !!car
-    const spots = this.floodSpots
-    if (!on) {
-      for (const s of spots) {
-        s.intensity = 0
-        s.shadow.autoUpdate = false
-      }
-      return
-    }
-    st.group.updateMatrixWorld()
-    const tmp = this.tmp
-    const ranked = st.floods
-      .map((f, i) => {
-        tmp.set(f.head[0], f.head[1], f.head[2])
-        st.group.localToWorld(tmp)
-        return { i, d: Math.hypot(tmp.x - car!.x, tmp.z - car!.z) }
-      })
-      .sort((a, b) => a.d - b.d)
-    spots.forEach((s, k) => {
-      const c = ranked[k]
-      if (!c || c.d > FLOOD_GONE_BY) {
-        s.intensity = 0
-        s.shadow.autoUpdate = false
-        return
-      }
-      const f = st.floods[c.i]
-      s.position.set(f.head[0], f.head[1], f.head[2])
-      s.target.position.set(f.aim[0], f.aim[1], f.aim[2])
-      const fade =
-        1 - Math.min(1, Math.max(0, (c.d - FLOOD_FULL_BY) / (FLOOD_GONE_BY - FLOOD_FULL_BY)))
-      s.intensity = 450 * fade * this.alpha
-      s.shadow.autoUpdate = true
-    })
-  }
-
-  step(dt: number, car: THREE.Vector3 | null = null): boolean {
+  step(dt: number): boolean {
     const rate = dt / 1.5
     if (this.alpha < this.target)
       this.alpha = Math.min(this.target, this.alpha + rate)
@@ -840,7 +818,6 @@ export class AirportView {
     this.structures.fade(this.alpha)
     this.structures.setLit(this.lit, this.alpha)
     this.stepLamps(dt)
-    this.stepFloods(car)
     return this.target === 0 && this.alpha === 0
   }
 
@@ -868,7 +845,6 @@ export class AirportView {
     this.structures.dispose()
     for (const g of this.geoms) g.dispose()
     for (const m of this.mats) m.dispose()
-    for (const sp of this.floodSpots) sp.dispose()
     this.lamps.dispose()
     this.bigLamps.dispose()
     for (const t of this.maps) t.dispose()

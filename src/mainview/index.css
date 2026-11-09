@@ -90,6 +90,10 @@
   filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.45));
 }
 
+[data-paused] .cluster-drift-indicator.is-active {
+  animation-play-state: paused;
+}
+
 @keyframes cluster-drift-flash {
   0%,
   49% {

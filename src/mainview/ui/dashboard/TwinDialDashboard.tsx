@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { isPaused } from "../../app/pauseState"
 import type { CarTelemetry } from "../../physics/vehicle/Vehicle"
 import {
   RED_FROM_RPM,
@@ -49,6 +50,10 @@ export function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
+      if (isPaused()) {
+        last = now
+        return
+      }
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
       const t = teleRef.current as CarTelemetry
@@ -164,19 +169,6 @@ export function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
       className="pointer-events-none absolute inset-0 select-none"
       style={{ fontFamily: SANS }}
     >
-      {!tele.launching && tele.launchArmed && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 rounded-xl border-4 border-red-500 bg-[#14090b] px-8 py-2">
-          <div className="text-center text-xl font-bold tracking-[0.2em] text-red-500">
-            {!tele.launching && "Launch control activated!"}
-          </div>
-          {!tele.launching && (
-            <div className="mt-0.5 text-center text-[11px] tracking-[0.18em] text-red-200/80">
-              Let go of S to take off
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between">
         <div className="w-[clamp(190px,25vw,340px)]">
           <Dial
