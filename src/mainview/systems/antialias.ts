@@ -77,13 +77,17 @@ export class AntiAlias {
   render(
     mode: AAMode,
     blur = 0,
-    keepSharp: THREE.Object3D | null = null,
+    keepSharp: THREE.Object3D | readonly THREE.Object3D[] | null = null,
   ) {
     const on = blur > 0
     if (mode !== this.mode || on !== this.blurOn) this.build(mode, on)
     if (this.blurPass) {
       this.blurPass.strength = (blur / 100) * 1.5
-      this.blurPass.maskRoot = keepSharp
+      this.blurPass.maskRoots = !keepSharp
+        ? []
+        : "isObject3D" in keepSharp
+          ? [keepSharp]
+          : [...keepSharp]
     }
     if (!this.firstGlError) {
       const pre = this.renderer.getContext().getError()

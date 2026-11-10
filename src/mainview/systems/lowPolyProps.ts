@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { HILL_FADE_FROM, HILL_FADE_TO } from "./world/constants"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 
 export const USE_CUSTOM_PROPS = true
@@ -144,11 +145,27 @@ export function makeCloudGeometries(): THREE.BufferGeometry[] {
 }
 
 export function propMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 1,
     flatShading: true,
   })
+  // Same screen-door dissolve as the hills so props never outlive them.
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      `void main() {
+  {
+    float d = length( vViewPosition );
+    float keep = 1.0 - smoothstep( ${HILL_FADE_FROM.toFixed(1)}, ${HILL_FADE_TO.toFixed(1)}, d );
+    vec2 p = floor( mod( gl_FragCoord.xy, 4.0 ) );
+    float bayer = mod( p.x * 4.0 + p.y * 7.0 + mod( p.y, 2.0 ) * p.x * 3.0, 16.0 ) / 16.0 + 0.03;
+    if ( keep < bayer ) discard;
+  }`,
+    )
+  }
+  mat.customProgramCacheKey = () => "propDissolve"
+  return mat
 }
 
 export function cloudMaterial(): THREE.MeshLambertMaterial {

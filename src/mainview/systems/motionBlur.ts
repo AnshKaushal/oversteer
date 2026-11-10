@@ -16,8 +16,9 @@ export class MotionBlurPass extends Pass {
   private vp = new THREE.Matrix4();
   private hasPrev = false;
   strength = 0;
-  /** Object whose pixels must stay sharp (the player's car). */
-  maskRoot: THREE.Object3D | null = null;
+  /** Objects whose pixels must stay sharp (the player's car, nearby cars). */
+  maskRoots: THREE.Object3D[] = [];
+  private masked = new Set<THREE.Object3D>();
   private maskTarget = new THREE.WebGLRenderTarget(1, 1);
   private maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   private savedLayers = new THREE.Layers();
@@ -96,11 +97,16 @@ export class MotionBlurPass extends Pass {
   private renderMask(r: THREE.WebGLRenderer, w: number, h: number) {
     if (this.maskTarget.width !== w || this.maskTarget.height !== h)
       this.maskTarget.setSize(w, h);
-    const root = this.maskRoot;
-    if (root)
+    const roots = this.maskRoots;
+    const next = new Set(roots);
+    for (const old of this.masked)
+      if (!next.has(old))
+        old.traverse((o) => o.layers.disable(MASK_LAYER));
+    for (const root of roots)
       root.traverse((o) => {
         if (!o.layers.isEnabled(MASK_LAYER)) o.layers.enable(MASK_LAYER);
       });
+    this.masked = next;
     this.savedLayers.mask = this.camera.layers.mask;
     const prevOverride = this.scene.overrideMaterial;
     const prevBg = this.scene.background;
@@ -123,7 +129,7 @@ export class MotionBlurPass extends Pass {
       r.setClearColor(0x000000, 1);
       r.setRenderTarget(this.maskTarget);
       r.clear();
-      if (root) r.render(this.scene, this.camera);
+      if (roots.length > 0) r.render(this.scene, this.camera);
     } finally {
       sm.autoUpdate = prevShadowAuto;
       sm.needsUpdate = prevShadowNeeds;

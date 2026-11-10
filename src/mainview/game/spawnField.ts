@@ -156,6 +156,7 @@ export async function spawnField(env: SpawnEnv) {
     } catch (e) {
       console.warn("rival model failed", e)
     }
+    vis.setBeamsEnabled(false)
     vis.setHeadlights(isLowLight(timeOfDayRef.current))
     scene.add(vis.group)
     rivals.push({

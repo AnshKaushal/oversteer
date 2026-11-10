@@ -111,6 +111,14 @@ export class CarVisual {
   headlightGroup: THREE.Group | null = null
   headlightMeshes: THREE.Object3D[] = []
   headlightSpots: THREE.SpotLight[] = []
+  beamsEnabled = true
+
+  /** Gate the real spot lights (shared budget); emissive lamps stay on. */
+  setBeamsEnabled(on: boolean) {
+    if (on === this.beamsEnabled) return
+    this.beamsEnabled = on
+    for (const spot of this.headlightSpots) spot.visible = on
+  }
   headlightMats: {
     mat: THREE.MeshStandardMaterial
     origIntensity: number

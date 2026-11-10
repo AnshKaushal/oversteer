@@ -17,7 +17,7 @@ import {
   roadArcLength,
   roadGapM,
 } from "../maps/highway/road"
-import { LIGHTNING_TINT, RIB_DIV } from "./world/constants"
+import { HILL_FADE_TO, LIGHTNING_TINT, RIB_DIV } from "./world/constants"
 import { groundSurfaceAt } from "./world/ribbon"
 import {
   RoadSeg,
@@ -290,8 +290,9 @@ export class WorldManager {
   hillRay = new THREE.Raycaster()
   get segRange() {
     const fog = this.sceneRef?.fog
-    if (!(fog instanceof THREE.Fog)) return 18
-    return Math.min(100, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
+    const cap = Math.ceil(HILL_FADE_TO / this.segLen) + 2
+    if (!(fog instanceof THREE.Fog)) return Math.min(18, cap)
+    return Math.min(cap, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
   }
   readonly ROAD_RIB = RIB_DIV
   loader = new GLTFLoader()

@@ -762,6 +762,7 @@ export class RemoteCar {
           smokeSystem.spawn(
             this.smokePosBuf[(Math.random() * this.smokePosBuf.length) | 0],
             this.smokeLevel,
+            b.linvel(),
           )
         }
       }

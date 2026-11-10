@@ -355,8 +355,8 @@ export function applyLamps(this: CarVisual) {
   const lit = this.headlightsOn && this.power > 0.02
   const p = this.power
   for (const spot of this.headlightSpots) {
-    spot.visible = true
-    spot.intensity = lit ? 75 * p : 0
+    spot.visible = this.beamsEnabled
+    spot.intensity = lit ? 75 * p * (this.isPlayerCar ? 1 : 0.55) : 0
   }
   for (const h of this.headlightMats) {
     h.mat.emissiveIntensity = lit

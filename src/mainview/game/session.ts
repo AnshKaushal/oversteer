@@ -33,6 +33,17 @@ import {
   TIME_OF_DAY_PRESETS,
   isLowLight,
 } from "../constants/timeOfDay"
+
+const MAX_RIVAL_BEAMS = 2
+
+const SMOKE_LIGHT: Partial<Record<string, number>> = {
+  day: 1,
+  sunrise: 0.8,
+  evening: 0.6,
+  rainy: 0.55,
+  stormy: 0.4,
+  night: 0.2,
+}
 import { CarVisual } from "../systems/CarVisual"
 import { electricalPower } from "../systems/carLights"
 import { AirplaneFlyby } from "../systems/AirplaneFlyby"
@@ -184,8 +195,7 @@ export function startSession(ctx: SessionCtx): () => void {
         const upload = (o: THREE.Object3D) =>
           o.traverse((c) => {
             const m = (c as THREE.Mesh).material as
-              | THREE.MeshStandardMaterial
-              | undefined
+              THREE.MeshStandardMaterial | undefined
             if (m?.map) renderer!.initTexture(m.map)
           })
         flyby.setPrecompile((o) => {
@@ -478,13 +488,49 @@ export function startSession(ctx: SessionCtx): () => void {
       const _bPos = new THREE.Vector3()
       const _bRot = new THREE.Quaternion()
       const _bComp: number[] = []
-      const syncVisual = (vis: CarVisual, c: Vehicle, dtv: number) => {
+      // Cars close to the camera stay out of the motion blur: smeared
+      // neighbours look broken. Capped so the mask pass stays cheap.
+      const SHARP_RANGE2 = 55 * 55
+      const MAX_SHARP = 5
+      const sharp: THREE.Object3D[] = []
+      const sharpCand: { d: number; g: THREE.Object3D }[] = []
+      const sharpRoots = (): THREE.Object3D[] => {
+        sharp.length = 0
+        const pv = playerVisualRef.current?.group
+        if (pv) sharp.push(pv)
+        sharpCand.length = 0
+        const bp0 = body.translation()
+        const consider = (c: Vehicle, v: CarVisual) => {
+          if (!v.group.visible) return
+          const p = c.body.translation()
+          const dx = p.x - bp0.x
+          const dz = p.z - bp0.z
+          const d = dx * dx + dz * dz
+          if (d < SHARP_RANGE2) sharpCand.push({ d, g: v.group })
+        }
+        for (const r of rivals) consider(r.car, r.visual)
+        for (const t of trafficCars) consider(t.car, t.visual)
+        sharpCand.sort((a, b) => a.d - b.d)
+        for (let i = 0; i < sharpCand.length && i < MAX_SHARP; i++)
+          sharp.push(sharpCand[i].g)
+        return sharp
+      }
+      const NO_SPIN: readonly number[] = []
+      // True while the player is pinned on the grid before green.
+      let gridLocked = false
+      const syncVisual = (
+        vis: CarVisual,
+        c: Vehicle,
+        dtv: number,
+        still = false,
+      ) => {
         const h = poseOf(c)
+        const omegas = still ? NO_SPIN : c.getWheelOmegas()
         if (!h.ready) {
           vis.syncFromBody(
             c.body,
             c.steerAngle,
-            c.getWheelOmegas(),
+            omegas,
             dtv,
             c.getWheelCompressions(),
           )
@@ -494,7 +540,7 @@ export function startSession(ctx: SessionCtx): () => void {
           h.blendPos(renderAlpha, _bPos),
           h.blendRot(renderAlpha, _bRot),
           c.steerAngle,
-          c.getWheelOmegas(),
+          omegas,
           dtv,
           h.blendCompressions(renderAlpha, _bComp),
         )
@@ -541,7 +587,7 @@ export function startSession(ctx: SessionCtx): () => void {
           aa.render(
             settingsRef.current.antiAliasing ?? "fxaa",
             settingsRef.current.motionBlur ?? 0,
-            playerVisualRef.current?.group ?? null,
+            sharpRoots(),
           )
         } catch (e) {
           console.warn("warm-up render failed", e)
@@ -669,7 +715,7 @@ export function startSession(ctx: SessionCtx): () => void {
           ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
             settingsRef.current.antiAliasing ?? "fxaa",
             settingsRef.current.motionBlur ?? 0,
-            playerVisualRef.current?.group ?? null,
+            sharpRoots(),
           )
           return
         }
@@ -779,6 +825,7 @@ export function startSession(ctx: SessionCtx): () => void {
               playerFinished && !raceFinished && playerDoneT > 4
             const preGreen = raceActive && !racing && !playerFinished
             car.autoShiftEnabled = !preGreen
+            gridLocked = preGreen
             const playerInp = rig.freeCamActive
               ? {
                   throttle: 0,
@@ -887,7 +934,7 @@ export function startSession(ctx: SessionCtx): () => void {
             body.setLinvel({ x: lv.x, y: Math.max(lv.y, 0), z: lv.z }, true)
           }
         }
-        syncVisual(visual, car, dt)
+        syncVisual(visual, car, dt, gridLocked)
         playerIgnOn = t?.ignitionOn ?? true
         visual.setPower(
           electricalPower(
@@ -998,6 +1045,12 @@ export function startSession(ctx: SessionCtx): () => void {
                 return { i, d: dx * dx + dz * dz }
               })
               .sort((a, b) => a.d - b.d)
+            // Every visible spot light is paid for by every lit pixel, so
+            // only the few nearest rivals get real beams; the rest keep
+            // their emissive lamps. The count stays fixed, so no recompiles.
+            ranked.forEach(({ i }, rank) => {
+              rivals[i].visual.setBeamsEnabled(rank < MAX_RIVAL_BEAMS)
+            })
             for (const { i, d } of ranked) {
               rivals[i].visual.setCastShadow(
                 d < shadowRange2(settingsRef.current),
@@ -1171,12 +1224,14 @@ export function startSession(ctx: SessionCtx): () => void {
           wm.setPropShadows(true)
 
         if (startedRef.current) {
-          const intensity = Math.max(
-            car.slipRatioAvg,
-            car.drifting ? 0.55 : 0,
-            car.launching ? 0.7 : 0,
-          )
-          const slipping = intensity > 0.28
+          const intensity = gridLocked
+            ? 0
+            : Math.max(
+                car.slipRatioAvg,
+                car.drifting ? 0.55 : 0,
+                car.launching ? 0.7 : 0,
+              )
+          const slipping = intensity > 0.28 && !gridLocked
           {
             const braking = car.lastWheelLong.some((f) => f < -9000)
             const sk = Math.min(1, intensity)
@@ -1212,6 +1267,7 @@ export function startSession(ctx: SessionCtx): () => void {
                 smoke.spawn(
                   smokeSpots[(Math.random() * smokeSpots.length) | 0],
                   Math.min(1, smokeStrength),
+                  body.linvel(),
                 )
               }
             }
@@ -1219,6 +1275,7 @@ export function startSession(ctx: SessionCtx): () => void {
         } else {
           smokeHeat = 0
         }
+        smoke.setLight(SMOKE_LIGHT[timeOfDayRef.current] ?? 1)
         smoke.update(dt)
 
         const nowS = now / 1000
@@ -1246,7 +1303,7 @@ export function startSession(ctx: SessionCtx): () => void {
         ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
           settingsRef.current.antiAliasing ?? "fxaa",
           settingsRef.current.motionBlur ?? 0,
-          playerVisualRef.current?.group ?? null,
+          sharpRoots(),
         )
         const renderT1 = performance.now()
         spike.ph("render")
