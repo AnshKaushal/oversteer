@@ -1,4 +1,5 @@
 import { onNativeMouseDelta, setNativeCursorLock } from "../systems/updater"
+import { getFocus } from "../systems/garageFocus"
 import type { InputManager } from "../systems/InputManager"
 import type { CameraRig } from "./cameraRig"
 import type { SessionCtx } from "./sessionCtx"
@@ -120,13 +121,19 @@ export function createPointerLock(opts: {
       e0.lastMovementY += e.movementY || 0
     }
     if (!startedRef.current) {
-      if (!rig.orbiting) return
+      const focus = getFocus()
+      if (!rig.orbiting || (focus && focus !== "dyno")) return
       const dx = e.clientX - lastPX
       const dy = e.clientY - lastPY
       lastPX = e.clientX
       lastPY = e.clientY
-      rig.garageYaw -= dx * 0.0052
-      rig.garagePitch += dy * 0.0032
+      if (focus === "dyno") {
+        rig.dynoYaw -= dx * 0.0052
+        rig.dynoPitch += dy * 0.0032
+      } else {
+        rig.garageYaw -= dx * 0.0052
+        rig.garagePitch += dy * 0.0032
+      }
       rig.lastOrbit = performance.now() / 1000
     }
   }
@@ -161,7 +168,9 @@ export function createPointerLock(opts: {
   dom.addEventListener("pointercancel", onPointerUp)
   const onWheel = (e: WheelEvent) => {
     if (startedRef.current || !rig.garage) return
-    rig.garageDist *= Math.exp(e.deltaY * 0.001)
+    const focus = getFocus()
+    if (focus === "dyno") rig.dynoZoom *= Math.exp(e.deltaY * 0.001)
+    else if (!focus) rig.garageDist *= Math.exp(e.deltaY * 0.001)
   }
   dom.addEventListener("wheel", onWheel, { passive: true })
   document.addEventListener("pointerlockchange", onLockChange)

@@ -382,6 +382,15 @@ export class CarVisual {
     this.syncFromPose(t, r, steerAngle, wheelOmegas, dt, compressions)
   }
 
+  /** Spin the wheels in place (the garage dyno), one speed per wheel. */
+  spinWheels(omegas: readonly number[], dt: number) {
+    if (!this.hiDetail) return
+    for (let i = 0; i < this.wheels.length; i++) {
+      this.spinAngles[i] -= (omegas[i] ?? 0) * dt
+      this.wheels[i].mesh.rotation.x = this.spinAngles[i]
+    }
+  }
+
   syncFromPose(
     pos: { x: number; y: number; z: number },
     rot: { x: number; y: number; z: number; w: number },

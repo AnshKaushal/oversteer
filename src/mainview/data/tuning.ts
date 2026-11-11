@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react"
 import type { CarSpec } from "./schema"
 
 export interface Tuning {
@@ -51,7 +52,22 @@ export function saveTuning(carId: string, t: Tuning) {
     all[carId] = t
     localStorage.setItem(KEY, JSON.stringify(all))
   } catch {}
+  subs.forEach((f) => f())
 }
+
+const subs = new Set<() => void>()
+const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f))
+const snaps = new Map<string, { key: string; t: Tuning }>()
+function snapshot(carId: string): Tuning {
+  const t = loadTuning(carId)
+  const key = JSON.stringify(t)
+  let c = snaps.get(carId)
+  if (!c || c.key !== key) snaps.set(carId, (c = { key, t }))
+  return c.t
+}
+/** The saved tuning for a car; every board using it updates together. */
+export const useTuning = (carId: string) =>
+  useSyncExternalStore(subscribe, () => snapshot(carId))
 
 export function applyTuning(car: CarSpec, tuning: Tuning): CarSpec {
   const t = clampTuning(tuning)

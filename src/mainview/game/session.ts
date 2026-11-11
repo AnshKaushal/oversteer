@@ -66,7 +66,10 @@ import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD } from "../data/world"
 import { getCar } from "../data/cars"
 import { Garage } from "../systems/Garage"
-import { placeBoard } from "../systems/garageBoard"
+import { placeSurface } from "../systems/garageBoard"
+import { SURFACES } from "../systems/garageSurfaces"
+import { getFocus } from "../systems/garageFocus"
+import { dyno } from "../systems/dyno"
 
 import {
   grassTargetFor,
@@ -132,6 +135,7 @@ export function startSession(ctx: SessionCtx): () => void {
       if (disposed) return
       renderer = new THREE.WebGLRenderer({
         antialias: false,
+        alpha: true,
         powerPreference: "high-performance",
         failIfMajorPerformanceCaveat: false,
       })
@@ -140,6 +144,8 @@ export function startSession(ctx: SessionCtx): () => void {
       renderer.shadowMap.type = THREE.PCFShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
       renderer.toneMappingExposure = 1.0
+      renderer.setClearColor(0x87ceeb, 1)
+      renderer.domElement.style.pointerEvents = "auto"
       mount.appendChild(renderer.domElement)
       rendererRef.current = renderer
 
@@ -962,7 +968,11 @@ export function startSession(ctx: SessionCtx): () => void {
           }
         }
         syncVisual(visual, car, dt, gridLocked)
-        if (garage && !startedRef.current) garage.holdCar(visual)
+        if (garage && !startedRef.current) {
+          dyno.tick(dt)
+          garage.updateDyno(visual, dyno.visual(), dt)
+          garage.holdCar(visual)
+        }
         playerIgnOn = t?.ignitionOn ?? true
         visual.setPower(
           electricalPower(
@@ -1316,14 +1326,24 @@ export function startSession(ctx: SessionCtx): () => void {
         rig.update({ dt, nowS, carPos, quat, car, raceActive, headsUp })
 
         if (garage && !startedRef.current) {
-          const bn = garage.boardCorners(boardPts)
-          placeBoard(
-            boardPts,
-            bn,
-            camera,
-            renderer!.domElement.clientWidth,
-            renderer!.domElement.clientHeight,
-          )
+          const focused = getFocus()
+          for (const sf of SURFACES) {
+            const bn = garage.surfaceCorners(sf.id, boardPts)
+            const shown = placeSurface(
+              sf.id,
+              boardPts,
+              bn,
+              camera,
+              renderer!.domElement.clientWidth,
+              renderer!.domElement.clientHeight,
+              !focused,
+            )
+            const hole = garage.holes.get(sf.id)
+            if (hole) hole.visible = shown
+          }
+          // Focused screens sit behind the canvas; let clicks fall through.
+          renderer!.domElement.style.pointerEvents =
+            focused && focused !== "dyno" ? "none" : "auto"
         }
 
         flyby?.update(

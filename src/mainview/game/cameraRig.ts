@@ -2,6 +2,7 @@ import * as THREE from "three"
 import type { InputManager } from "../systems/InputManager"
 import type { SessionCtx } from "./sessionCtx"
 import { GARAGE_CAM, type Garage } from "../systems/Garage"
+import { getFocus } from "../systems/garageFocus"
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const _orbQ = new THREE.Quaternion()
@@ -10,6 +11,14 @@ const _des = new THREE.Vector3()
 const _tmpA = new THREE.Vector3()
 const _dir = new THREE.Vector3()
 const _UP = new THREE.Vector3(0, 1, 0)
+const _fc: THREE.Vector3[] = []
+const _fCenter = new THREE.Vector3()
+const _fLook = new THREE.Vector3()
+const _dOff = new THREE.Vector3()
+
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+const _clamped = new THREE.Vector3()
 
 export interface CameraRigDeps {
   camera: THREE.PerspectiveCamera
@@ -52,7 +61,20 @@ export class CameraRig {
   garageYaw = 0
   garagePitch = 0.2
   garageDist = GARAGE_CAM.defaultDist
+  // Free look around the car while on the dyno (offsets from its preset view).
+  dynoYaw = 0
+  dynoPitch = 0
+  dynoZoom = 1
   private garageSnap = true
+  private garageLook = new THREE.Vector3()
+  private lastFocus: string | null = null
+  // Arc travel between two garage views, swept around the car.
+  private trans: {
+    t: number
+    dur: number
+    p0: THREE.Vector3
+    look0: THREE.Vector3
+  } | null = null
   readonly camPos: THREE.Vector3
   readonly freeCamPos: THREE.Vector3
   readonly freeCamCamPos: THREE.Vector3
@@ -76,13 +98,7 @@ export class CameraRig {
 
   update(f: CameraFrame) {
     const { camera, input, wm, playerDef, e0 } = this.d
-    const {
-      startedRef,
-      showIntroRef,
-      showLobbyRef,
-      loadingRef,
-      setSpeedLines,
-    } = this.d.ctx
+    const { startedRef, setSpeedLines } = this.d.ctx
     const { dt, nowS, carPos, quat, car, raceActive, headsUp } = f
     if (!startedRef.current) {
       e0.lastMovementX = 0
@@ -90,7 +106,54 @@ export class CameraRig {
       const g = this.garage
       const tp = g ? g.carPos : carPos
       const sr = 7.4
-      if (g) {
+      const focus = g ? getFocus() : null
+      if (g && focus !== this.lastFocus) {
+        if (focus === "dyno" || this.lastFocus === "dyno") {
+          this.dynoYaw = 0
+          this.dynoPitch = 0
+          this.dynoZoom = 1
+        }
+        this.lastFocus = focus
+        if (!this.garageSnap) {
+          // Sweep from wherever the camera is now.
+          this.trans = {
+            t: 0,
+            dur: 1.3,
+            p0: this.camPos.clone(),
+            look0: this.garageLook.clone(),
+          }
+        }
+      }
+      if (g && focus && g.surfaceView(focus, this.showDesired, _fLook)) {
+        // Dyno: a preset rear-quarter view you can orbit and zoom.
+        if (input.lookX !== 0 || input.lookY !== 0) {
+          this.dynoYaw -= input.lookX * 2.2 * dt
+          this.dynoPitch += input.lookY * 1.0 * dt
+        }
+        this.dynoPitch = clamp(this.dynoPitch, -0.4, 1.0)
+        this.dynoZoom = clamp(this.dynoZoom, 0.45, 1.5)
+        _dOff.copy(this.showDesired).sub(_fLook)
+        const r = _dOff.length()
+        const az = Math.atan2(_dOff.x, _dOff.z) + this.dynoYaw
+        const el = clamp(Math.asin(_dOff.y / r) + this.dynoPitch, -0.1, 1.25)
+        const rr = clamp(r * this.dynoZoom, 2.6, 7.5)
+        this.showDesired.set(
+          _fLook.x + Math.sin(az) * Math.cos(el) * rr,
+          Math.max(g.carPos.y + 0.35, _fLook.y + Math.sin(el) * rr),
+          _fLook.z + Math.cos(az) * Math.cos(el) * rr,
+        )
+      } else if (g && focus) {
+        // Frame the chosen screen head-on, just far enough to fill the view.
+        const n = g.surfaceCorners(focus, _fc)
+        _fCenter.copy(_fc[0]).add(_fc[2]).multiplyScalar(0.5)
+        const w = _fc[0].distanceTo(_fc[1])
+        const h = _fc[0].distanceTo(_fc[3])
+        const tanV = Math.tan(THREE.MathUtils.degToRad(58 / 2))
+        const dist =
+          Math.max(h / 2 / tanV, w / 2 / (tanV * camera.aspect)) * 1.08
+        this.showDesired.copy(_fCenter).addScaledVector(n, dist)
+        _fLook.copy(_fCenter)
+      } else if (g) {
         if (input.lookX !== 0 || input.lookY !== 0) {
           this.garageYaw -= input.lookX * 2.2 * dt
           this.garagePitch += input.lookY * 1.0 * dt
@@ -113,6 +176,8 @@ export class CameraRig {
           tp.y + 0.7 + Math.sin(this.garagePitch) * this.garageDist,
           tp.z + Math.cos(az) * hDist,
         )
+        _fLook.copy(tp)
+        _fLook.y += 0.55 + playerDef.physics.dimensions.height * 0.12
       } else {
         const orbitA = nowS * 0.28
         this.showDesired.set(
@@ -123,29 +188,49 @@ export class CameraRig {
       }
       if (g && this.garageSnap) {
         this.camPos.copy(this.showDesired)
+        this.garageLook.copy(_fLook)
         this.garageSnap = false
+      } else if (g && this.trans) {
+        // Fly straight to the new view with an eased glide, kept inside the
+        // room and out of the car, so it simply lands on the pressed hotspot.
+        const tr = this.trans
+        const c = g.carPos
+        tr.dur = 1.3
+        tr.t = Math.min(1, tr.t + dt / tr.dur)
+        const e = easeInOut(tr.t)
+        this.camPos.lerpVectors(tr.p0, this.showDesired, e)
+        const mid = Math.min(1, Math.sin(Math.PI * e) * 3)
+        _clamped.copy(this.camPos)
+        g.clampInside(_clamped, 1.2)
+        // Skirt round the car rather than through it.
+        const dx = _clamped.x - c.x
+        const dz = _clamped.z - c.z
+        const hd = Math.hypot(dx, dz)
+        if (hd < 3.6 && _clamped.y < c.y + 2.4) {
+          const k = 3.6 / Math.max(hd, 0.001)
+          _clamped.x = c.x + dx * k
+          _clamped.z = c.z + dz * k
+          g.clampInside(_clamped, 1.2)
+        }
+        this.camPos.lerp(_clamped, mid)
+        this.garageLook.lerpVectors(
+          tr.look0,
+          _fLook,
+          easeInOut(Math.min(1, tr.t * 1.1)),
+        )
+        if (tr.t >= 1) this.trans = null
       } else {
-        this.camPos.lerp(this.showDesired, 1 - Math.exp(-dt * (g ? 12 : 2.5)))
+        // Orbit dragging follows the pointer tightly; focus views settle.
+        const k = 1 - Math.exp(-dt * (g ? (focus ? 6 : 12) : 2.5))
+        this.camPos.lerp(this.showDesired, k)
+        if (g) this.garageLook.lerp(_fLook, k)
       }
       camera.position.copy(this.camPos)
-      this.camLook.copy(tp)
-      this.camLook.y += 0.55 + playerDef.physics.dimensions.height * 0.12
-      if (
-        window.innerWidth >= 768 &&
-        !showIntroRef.current &&
-        !showLobbyRef.current &&
-        !loadingRef.current
-      ) {
-        const dx = tp.x - this.camPos.x
-        const dz = tp.z - this.camPos.z
-        const plan = Math.hypot(dx, dz) || sr
-        const hfovHalf = Math.atan(
-          Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect,
-        )
-        const shift =
-          ((2 * 200) / window.innerWidth) * plan * Math.tan(hfovHalf)
-        this.camLook.x += (-dz / plan) * shift
-        this.camLook.z += (dx / plan) * shift
+      if (g) {
+        this.camLook.copy(this.garageLook)
+      } else {
+        this.camLook.copy(tp)
+        this.camLook.y += 0.55 + playerDef.physics.dimensions.height * 0.12
       }
       camera.lookAt(this.camLook)
       if (Math.abs(camera.fov - 58) > 0.05) {

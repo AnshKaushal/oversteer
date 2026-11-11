@@ -1,20 +1,39 @@
-import type * as THREE from "three"
+import { getFocus } from "./garageFocus"
+import * as THREE from "three"
+import { SURFACES, type SurfaceId } from "./garageSurfaces"
 
-// A DOM panel that is pinned onto the garage's wall board. The session
-// projects the board's corners every frame and we warp the panel onto them.
-let el: HTMLElement | null = null
-
-export const BOARD_W = 600
-export const BOARD_H = 364
-
-export function setBoardElement(e: HTMLElement | null) {
-  el = e
+// DOM screens pinned onto the garage's walls. Every frame the session projects
+// each screen's corners and warps its element onto them (a homography), so the
+// UI really sits in the room and follows the camera.
+interface Entry {
+  el: HTMLElement | null
+  pill: HTMLElement | null
+}
+const entries = new Map<SurfaceId, Entry>()
+const entry = (id: SurfaceId) => {
+  let e = entries.get(id)
+  if (!e) entries.set(id, (e = { el: null, pill: null }))
+  return e
 }
 
+export function setBoardElement(id: SurfaceId, e: HTMLElement | null) {
+  entry(id).el = e
+}
+export const getBoardElement = (id: SurfaceId) => entries.get(id)?.el ?? null
+export function setPillElement(id: SurfaceId, e: HTMLElement | null) {
+  entry(id).pill = e
+}
+
+export interface PillPos {
+  id: SurfaceId
+  x: number
+  y: number
+}
+/** Latest on-screen hotspot positions (px), used for gamepad navigation. */
+export const pillPositions = new Map<SurfaceId, PillPos>()
+
 /** Solve the 3x3 homography taking the panel rect to the screen quad. */
-function homography(q: number[]): number[] | null {
-  const W = BOARD_W
-  const H = BOARD_H
+function homography(W: number, H: number, q: number[]): number[] | null {
   const src = [0, 0, W, 0, W, H, 0, H]
   const A: number[][] = []
   for (let i = 0; i < 4; i++) {
@@ -41,33 +60,86 @@ function homography(q: number[]): number[] | null {
 }
 
 const _v: THREE.Vector3[] = []
+const MARGIN = 64
+const _c3 = new THREE.Vector3()
 
 /**
- * Place the panel over the board. `corners` are world-space TL, TR, BR, BL;
- * `normal` points out of the board's front face.
+ * Place one screen over its wall surface. `corners` are world-space TL, TR, BR,
+ * BL; `normal` points out of the front face. Also positions its hotspot pill
+ * (clamped to the screen edge when the surface is off-view).
  */
-export function placeBoard(
+export function placeSurface(
+  id: SurfaceId,
   corners: THREE.Vector3[],
   normal: THREE.Vector3,
   camera: THREE.PerspectiveCamera,
   width: number,
   height: number,
-) {
-  if (!el) return
+  showPill: boolean,
+): boolean {
+  const e = entries.get(id)
+  if (!e) return false
+  const def = SURFACES.find((s) => s.id === id)!
+  const [W, H] = def.px
   camera.updateMatrixWorld()
   const toCam = camera.position.clone().sub(corners[0])
   let ok = toCam.dot(normal) > 0
   const q: number[] = []
-  for (let i = 0; i < 4 && ok; i++) {
+  let cx = 0
+  let cy = 0
+  let behind = false
+  for (let i = 0; i < 4; i++) {
     const v = (_v[i] ??= corners[0].clone()).copy(corners[i]).project(camera)
-    if (v.z > 1 || v.z < -1) ok = false
-    q.push((v.x * 0.5 + 0.5) * width, (-v.y * 0.5 + 0.5) * height)
+    if (v.z > 1 || v.z < -1) {
+      ok = false
+      behind = true
+    }
+    const px = (v.x * 0.5 + 0.5) * width
+    const py = (-v.y * 0.5 + 0.5) * height
+    q.push(px, py)
+    cx += px / 4
+    cy += py / 4
   }
-  const h = ok ? homography(q) : null
-  if (!h) {
-    el.style.visibility = "hidden"
-    return
+  // While a screen is focused it is the only one shown, so nothing can draw
+  // over it (the DOM has no depth buffer).
+  const focus = getFocus()
+  if (focus && focus !== id) ok = false
+  const h = ok ? homography(W, H, q) : null
+  if (e.el && !def.hud) {
+    if (!h) {
+      e.el.style.visibility = "hidden"
+    } else {
+      e.el.style.transform = `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`
+      e.el.style.visibility = "visible"
+      // Nearer screens draw over farther ones (the DOM has no depth buffer).
+      const d = camera.position.distanceTo(
+        _c3.copy(corners[0]).lerp(corners[2], 0.5),
+      )
+      e.el.style.zIndex = String(
+        focus === id ? 1950 : Math.max(1, 1900 - Math.round(d * 40)),
+      )
+    }
   }
-  el.style.transform = `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`
-  el.style.visibility = "visible"
+  // Hotspot: project the centre; if behind the camera, mirror it so the pill
+  // points the way to turn.
+  const c = _v[4] ?? (_v[4] = corners[0].clone())
+  c.copy(corners[0]).add(corners[2]).multiplyScalar(0.5).project(camera)
+  let px = (c.x * 0.5 + 0.5) * width
+  let py = (-c.y * 0.5 + 0.5) * height
+  if (c.z > 1 || behind) {
+    px = width - px
+    py = height - py
+  }
+  if (!Number.isFinite(px) || !Number.isFinite(py)) {
+    px = width / 2
+    py = height / 2
+  }
+  px = Math.max(MARGIN, Math.min(width - MARGIN, px))
+  py = Math.max(MARGIN, Math.min(height - MARGIN, py))
+  pillPositions.set(id, { id, x: px, y: py })
+  if (e.pill) {
+    e.pill.style.transform = `translate3d(${px}px,${py}px,0) translate(-50%,-50%)`
+    e.pill.style.visibility = showPill ? "visible" : "hidden"
+  }
+  return !!h && !def.hud
 }

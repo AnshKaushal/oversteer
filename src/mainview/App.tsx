@@ -25,7 +25,7 @@ import {
   type TrafficLevel,
 } from "./systems/RaceTypes"
 import { EASE, Screen, usePresence, Wipe } from "./ui/anim"
-import { RaceHud, RaceLiveBoard, RaceMenu, RaceResults } from "./ui/RaceOverlay"
+import { RaceHud, RaceLiveBoard, RaceResults } from "./ui/RaceOverlay"
 import { LapHud, type LapSnapshot } from "./ui/LapHud"
 import { MapPicker } from "./ui/MapPicker"
 import { RainEffect } from "./systems/RainEffect"
@@ -54,7 +54,7 @@ import { PauseScreen } from "./ui/screens/PauseScreen"
 import { LoadingScreen } from "./ui/screens/LoadingScreen"
 import { ErrorScreen } from "./ui/screens/ErrorScreen"
 import { IntroScreen } from "./ui/screens/IntroScreen"
-import { GarageBoard } from "./ui/GarageBoard"
+import { GarageScene } from "./ui/garage/GarageScene"
 import {
   initialTele,
   applyFog,
@@ -606,7 +606,16 @@ export default function App() {
     <div
       className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""} ${hideUi && freeCam ? "[&>*:not([data-game-mount])]:!hidden" : ""}`}
     >
-      <div ref={mountRef} data-game-mount className="absolute inset-0" />
+      {/* In-world garage screens live under the (partly transparent) canvas. */}
+      <div
+        id="garage-boards"
+        className="pointer-events-none absolute inset-0 isolate z-0 overflow-hidden"
+      />
+      <div
+        ref={mountRef}
+        data-game-mount
+        className="pointer-events-none absolute inset-0"
+      />
       {}
       <SpeedLines ref={speedLinesRef} />
       {showNetDiag && <NetDiagPanel />}
@@ -681,19 +690,15 @@ export default function App() {
         </Screen>
       )}
       {menuVisible && (
-        <GarageBoard
-          paint={paintFor(carId) ?? null}
-          onPaint={(color) => setPaintFor(carId, color)}
-        />
-      )}
-      {menuVisible && (
-        <RaceMenu
+        <GarageScene
           open={menuOn}
           rivals={rivals}
           distanceKm={distanceKm}
           onRivals={setRivals}
           onDistance={setDistanceKm}
           lapMode={mapId === "circuit"}
+          paint={paintFor(carId) ?? null}
+          onPaint={(color) => setPaintFor(carId, color)}
           cars={CARS}
           carId={carId}
           onPrevCar={() => stepCar(-1)}
