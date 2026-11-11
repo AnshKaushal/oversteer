@@ -1,6 +1,7 @@
 import * as THREE from "three"
 import type { InputManager } from "../systems/InputManager"
 import type { SessionCtx } from "./sessionCtx"
+import { GARAGE_CAM, type Garage } from "../systems/Garage"
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const _orbQ = new THREE.Quaternion()
@@ -47,6 +48,11 @@ export class CameraRig {
   freeCamActive = false
   chaseFar = false
   camMode = 0
+  garage: Garage | null = null
+  garageYaw = 0
+  garagePitch = 0.2
+  garageDist = GARAGE_CAM.defaultDist
+  private garageSnap = true
   readonly camPos: THREE.Vector3
   readonly freeCamPos: THREE.Vector3
   readonly freeCamCamPos: THREE.Vector3
@@ -81,16 +87,48 @@ export class CameraRig {
     if (!startedRef.current) {
       e0.lastMovementX = 0
       e0.lastMovementY = 0
-      const orbitA = nowS * 0.28
+      const g = this.garage
+      const tp = g ? g.carPos : carPos
       const sr = 7.4
-      this.showDesired.set(
-        carPos.x + Math.sin(orbitA) * sr,
-        carPos.y + 2.1,
-        carPos.z + Math.cos(orbitA) * sr,
-      )
-      this.camPos.lerp(this.showDesired, 1 - Math.exp(-dt * 2.5))
+      if (g) {
+        if (input.lookX !== 0 || input.lookY !== 0) {
+          this.garageYaw -= input.lookX * 2.2 * dt
+          this.garagePitch += input.lookY * 1.0 * dt
+        }
+        this.garagePitch = clamp(
+          this.garagePitch,
+          GARAGE_CAM.minPitch,
+          GARAGE_CAM.maxPitch,
+        )
+        this.garageDist = clamp(
+          this.garageDist,
+          GARAGE_CAM.minDist,
+          GARAGE_CAM.maxDist,
+        )
+        // Start at the car's front three-quarter, then follow the user.
+        const az = g.carYaw + Math.PI + 0.6 + this.garageYaw
+        const hDist = Math.cos(this.garagePitch) * this.garageDist
+        this.showDesired.set(
+          tp.x + Math.sin(az) * hDist,
+          tp.y + 0.7 + Math.sin(this.garagePitch) * this.garageDist,
+          tp.z + Math.cos(az) * hDist,
+        )
+      } else {
+        const orbitA = nowS * 0.28
+        this.showDesired.set(
+          tp.x + Math.sin(orbitA) * sr,
+          tp.y + 2.1,
+          tp.z + Math.cos(orbitA) * sr,
+        )
+      }
+      if (g && this.garageSnap) {
+        this.camPos.copy(this.showDesired)
+        this.garageSnap = false
+      } else {
+        this.camPos.lerp(this.showDesired, 1 - Math.exp(-dt * (g ? 12 : 2.5)))
+      }
       camera.position.copy(this.camPos)
-      this.camLook.copy(carPos)
+      this.camLook.copy(tp)
       this.camLook.y += 0.55 + playerDef.physics.dimensions.height * 0.12
       if (
         window.innerWidth >= 768 &&
@@ -98,8 +136,8 @@ export class CameraRig {
         !showLobbyRef.current &&
         !loadingRef.current
       ) {
-        const dx = carPos.x - this.camPos.x
-        const dz = carPos.z - this.camPos.z
+        const dx = tp.x - this.camPos.x
+        const dz = tp.z - this.camPos.z
         const plan = Math.hypot(dx, dz) || sr
         const hfovHalf = Math.atan(
           Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect,

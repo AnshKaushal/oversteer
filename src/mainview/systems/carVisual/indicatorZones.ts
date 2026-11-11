@@ -3,6 +3,10 @@ export interface IndicatorZone {
   mesh?: string
   dx?: [number, number]
   y?: [number, number]
+  /** Only connected pieces of the mesh with at least this many vertices. */
+  minVerts?: number
+  /** Only connected pieces whose centre sits in this |x| fraction of body width. */
+  cdx?: [number, number]
   idle?: number
   /** Emissive colour while not flashing (e.g. a red tail lamp). */
   glow?: number
@@ -36,5 +40,24 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
   "lamborghini_aventador.glb": [
     { end: "front", mesh: "^glasses_glass0(17|18|20|24)" },
     { end: "rear", mesh: "^glasses_glass0(13|16)", glow: 0xff0000 },
+  ],
+
+  // M3 rear: the black bars above the red lamps are the indicators
+  // M3 front: the outer headlight's DRL outline (not the inner lamps/pills)
+  "bmw_m3.glb": [
+    {
+      end: "front",
+      mesh: "^Plane002_Material019_0$",
+      minVerts: 10,
+      cdx: [0.33, 0.5],
+      glow: 0xffffff,
+    },
+    {
+      end: "rear",
+      mesh: "^Plane002_Material016_0$",
+      dx: [0.14, 0.36],
+      y: [0.58, 0.7],
+      idle: 0x000000,
+    },
   ],
 }

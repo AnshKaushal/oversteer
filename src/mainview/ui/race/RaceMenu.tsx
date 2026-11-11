@@ -8,7 +8,6 @@ import {
   type TrafficLevel,
 } from "../../systems/RaceTypes"
 import type { CarDefinition } from "../../data/schema"
-import { PaintPicker } from "../PaintPicker"
 import { TuningPanel } from "../TuningPanel"
 import { EASE, Screen } from "../anim"
 import {
@@ -36,8 +35,6 @@ export function RaceMenu({
   carId,
   onPrevCar,
   onNextCar,
-  paint,
-  onPaint,
   pool,
   onTogglePool,
   traffic,
@@ -49,6 +46,7 @@ export function RaceMenu({
   onStartRace,
   onOpenMultiplayer,
   onOpenSettings,
+  onBack,
   timeOfDay,
   onTimeOfDay,
 }: {
@@ -62,8 +60,6 @@ export function RaceMenu({
   carId: string
   onPrevCar: () => void
   onNextCar: () => void
-  paint: number | null
-  onPaint: (color: number | null) => void
   pool: string[]
   onTogglePool: (id: string) => void
   traffic: TrafficLevel
@@ -75,6 +71,7 @@ export function RaceMenu({
   onStartRace: () => void
   onOpenMultiplayer?: () => void
   onOpenSettings?: () => void
+  onBack?: () => void
   timeOfDay?: TimeOfDayMode
   onTimeOfDay?: (tod: TimeOfDayMode) => void
 }) {
@@ -119,6 +116,17 @@ export function RaceMenu({
     >
       {}
       <div className="relative min-h-[30vh] flex-1">
+        {onBack && (
+          <button
+            data-fade
+            onClick={onBack}
+            title="Back to main screen"
+            className="pointer-events-auto absolute top-4 left-16 z-10 flex items-center gap-1.5 border border-[#51a7d5] bg-[#0b0e14]/85 px-3 py-2 text-xs font-semibold text-[#6ec2f0] backdrop-blur transition hover:bg-[#51a7d5]/25 hover:text-white active:scale-95"
+          >
+            <ChevronLeft size={15} />
+            Back
+          </button>
+        )}
         {onOpenSettings && (
           <button
             data-fade
@@ -177,15 +185,6 @@ export function RaceMenu({
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="mt-4 text-left">
-            <div className="text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
-              PAINT
-            </div>
-            <div className="mt-2">
-              <PaintPicker value={paint} showStock onPick={(c) => onPaint(c)} />
-            </div>
           </div>
 
           {cars.find((c) => c.id === carId) && (

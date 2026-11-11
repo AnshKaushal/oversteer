@@ -83,6 +83,35 @@ function yellowSampler(
   }
 }
 
+/** Connected pieces of a mesh: per-vertex piece id plus each piece's size and centre x. */
+function pieces(mesh: THREE.Mesh, inv: THREE.Matrix4) {
+  const pos = mesh.geometry.getAttribute("position")
+  const idx = mesh.geometry.getIndex()
+  const par = Array.from({ length: pos.count }, (_, i) => i)
+  const find = (i: number): number => {
+    while (par[i] !== i) i = par[i] = par[par[i]]
+    return i
+  }
+  const n = idx ? idx.count : pos.count
+  const at = (i: number) => (idx ? idx.getX(i) : i)
+  for (let t = 0; t + 2 < n; t += 3) {
+    par[find(at(t))] = find(at(t + 1))
+    par[find(at(t + 1))] = find(at(t + 2))
+  }
+  const m = new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld)
+  const v = new THREE.Vector3()
+  const info = new Map<number, { n: number; x: number }>()
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(m)
+    const r = find(i)
+    const e = info.get(r) ?? { n: 0, x: 0 }
+    e.n++
+    e.x += v.x
+    info.set(r, e)
+  }
+  return { find, info }
+}
+
 function overlayFor(
   mesh: THREE.Mesh,
   inv: THREE.Matrix4,
@@ -308,6 +337,7 @@ export function planIndicators(
     for (const m of meshes) {
       const mats = Array.isArray(m.material) ? m.material : [m.material]
       if (re && !re.test(m.name) && !mats.some((x) => re.test(x.name))) continue
+      const pc = z.minVerts || z.cdx ? pieces(m, inv) : null
       overlayFor(
         m,
         inv,
@@ -318,7 +348,12 @@ export function planIndicators(
         new THREE.MeshStandardMaterial({
           // glow zones copy the model's brakelight material so the colours match
           color: z.glow
-            ? new THREE.Color().setRGB(0.8, 0.8, 0.8, THREE.LinearSRGBColorSpace)
+            ? new THREE.Color().setRGB(
+                0.8,
+                0.8,
+                0.8,
+                THREE.LinearSRGBColorSpace,
+              )
             : (z.idle ?? 0x1c1004),
           emissive: z.glow ?? AMBER,
           emissiveIntensity: z.glow ? 4.373 : 0,
@@ -330,7 +365,15 @@ export function planIndicators(
         }),
         amberEnds[z.end],
         grp,
-        (_ids, v) => {
+        (ids, v) => {
+          if (pc) {
+            const e = pc.info.get(pc.find(ids[0]))
+            if (!e || (z.minVerts && e.n < z.minVerts)) return false
+            if (z.cdx) {
+              const f = Math.abs((e.x / e.n - body.min.x) / size.x - 0.5)
+              if (f < z.cdx[0] || f > z.cdx[1]) return false
+            }
+          }
           const x = (v[0].x + v[1].x + v[2].x) / 3
           const y = (v[0].y + v[1].y + v[2].y) / 3
           const zc = (v[0].z + v[1].z + v[2].z) / 3
@@ -346,8 +389,7 @@ export function planIndicators(
     if (z.glow) {
       for (const side of ["l", "r"] as const) {
         const mat = amberEnds[z.end][side]?.material as
-          | THREE.MeshStandardMaterial
-          | undefined
+          THREE.MeshStandardMaterial | undefined
         if (mat) mat.userData.glow = z.glow
       }
     }

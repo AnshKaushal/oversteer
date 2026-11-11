@@ -22,6 +22,13 @@ export async function setNativeCursorLock(locked: boolean): Promise<boolean> {
   }
 }
 
+export async function quitApp(): Promise<void> {
+  try {
+    if (await getBridge().request.quitApp()) return
+  } catch {}
+  window.close()
+}
+
 let bridge: ReturnType<typeof Electroview.defineRPC<OverSteerRPC>> | null = null
 
 function getBridge() {

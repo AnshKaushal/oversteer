@@ -5,6 +5,7 @@ import {
   GlobalShortcut,
   Screen,
   Updater,
+  Utils,
 } from "electrobun/main"
 import os from "os"
 import { appendFileSync, writeFileSync } from "fs"
@@ -410,6 +411,18 @@ function createWindow(winUrl: string, windowed = isWindowed) {
           } catch {
             return false
           }
+        },
+        quitApp: () => {
+          releaseCursor()
+          setTimeout(() => {
+            try {
+              if (Utils.quit()) return
+            } catch (e) {
+              console.warn("[quit] Utils.quit failed:", e)
+            }
+            process.exit(0)
+          }, 50)
+          return true
         },
         setCursorLock: (p?: any) => {
           if (!p?.locked) {

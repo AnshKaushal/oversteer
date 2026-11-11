@@ -31,6 +31,7 @@ export type OverSteerRPC = ElectrobunRPCSchema & {
       checkForUpdates: { params: undefined; response: UpdateResult }
       setLanRelay: { params: { on: boolean }; response: boolean }
       setCursorLock: { params: { locked: boolean }; response: boolean }
+      quitApp: { params: undefined; response: boolean }
       getDisplays: { params: undefined; response: DisplayInfo[] }
       moveToDisplay: { params: { id: number }; response: boolean }
     }

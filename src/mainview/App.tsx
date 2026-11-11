@@ -54,6 +54,7 @@ import { PauseScreen } from "./ui/screens/PauseScreen"
 import { LoadingScreen } from "./ui/screens/LoadingScreen"
 import { ErrorScreen } from "./ui/screens/ErrorScreen"
 import { IntroScreen } from "./ui/screens/IntroScreen"
+import { GarageBoard } from "./ui/GarageBoard"
 import {
   initialTele,
   applyFog,
@@ -278,12 +279,6 @@ export default function App() {
   useEffect(() => onLoadProgress(setLoadPct), [])
   const loadingRef = useRef(true)
   loadingRef.current = loading
-  useEffect(() => {
-    if (!showIntro) return
-    const dismiss = () => setShowIntro(false)
-    window.addEventListener("keydown", dismiss)
-    return () => window.removeEventListener("keydown", dismiss)
-  }, [showIntro])
   const [netPeers, setNetPeers] = useState<PeerPlayer[]>([])
   const [netConnected, setNetConnected] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
@@ -686,6 +681,12 @@ export default function App() {
         </Screen>
       )}
       {menuVisible && (
+        <GarageBoard
+          paint={paintFor(carId) ?? null}
+          onPaint={(color) => setPaintFor(carId, color)}
+        />
+      )}
+      {menuVisible && (
         <RaceMenu
           open={menuOn}
           rivals={rivals}
@@ -697,8 +698,6 @@ export default function App() {
           carId={carId}
           onPrevCar={() => stepCar(-1)}
           onNextCar={() => stepCar(1)}
-          paint={paintFor(carId) ?? null}
-          onPaint={(color) => setPaintFor(carId, color)}
           pool={pool}
           onTogglePool={togglePool}
           traffic={trafficLevel}
@@ -719,6 +718,7 @@ export default function App() {
           onStartRace={startRace}
           onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
           onOpenSettings={() => setShowSettings(true)}
+          onBack={() => setShowIntro(true)}
           timeOfDay={timeOfDay}
           onTimeOfDay={applyTimeOfDay}
         />
@@ -820,7 +820,11 @@ export default function App() {
       {loadingVisible && <LoadingScreen open={loading} loadPct={loadPct} />}
       {error && <ErrorScreen error={error} />}
       {introVisible && (
-        <IntroScreen open={introOn} onEnter={() => setShowIntro(false)} />
+        <IntroScreen
+          open={introOn}
+          onEnter={() => setShowIntro(false)}
+          onOptions={() => setShowSettings(true)}
+        />
       )}
       <Wipe
         token={wipe?.token ?? 0}

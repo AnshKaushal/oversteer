@@ -65,6 +65,8 @@ import type {} from "../systems/net/types"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD } from "../data/world"
 import { getCar } from "../data/cars"
+import { Garage } from "../systems/Garage"
+import { placeBoard } from "../systems/garageBoard"
 
 import {
   grassTargetFor,
@@ -346,6 +348,29 @@ export function startSession(ctx: SessionCtx): () => void {
         return
       }
       scene.add(visual.group)
+      let garage: Garage | null = null
+      if (!startedRef.current) {
+        try {
+          garage = await Garage.load(baseUrl)
+          if (disposed) {
+            garage.dispose()
+            try {
+              world.free()
+            } catch {}
+            return
+          }
+          const gq = body.rotation()
+          const gf = new THREE.Vector3(0, 0, -1).applyQuaternion(
+            new THREE.Quaternion(gq.x, gq.y, gq.z, gq.w),
+          )
+          garage.place(playerX, playerZ, gf, (x, z) => wm.terrainHeightAt(x, z))
+          scene.add(garage.group)
+          rain.setShelter(garage.shelters)
+        } catch (e) {
+          console.warn("garage failed to load, using orbit camera", e)
+          garage = null
+        }
+      }
       {
         let showToken = 0
         garageApiRef.current = {
@@ -552,12 +577,14 @@ export function startSession(ctx: SessionCtx): () => void {
       const _fw = new THREE.Vector3()
 
       let lightningWasOn = false
+      const boardPts: THREE.Vector3[] = []
       let padAbsApplied = false
       const e0 = { lastMovementX: 0, lastMovementY: 0 }
       const rig = new CameraRig(
         { camera, input, wm, playerDef, e0, ctx },
         startX,
       )
+      rig.garage = garage
       const lock = createPointerLock({
         ctx,
         dom: renderer!.domElement,
@@ -935,6 +962,7 @@ export function startSession(ctx: SessionCtx): () => void {
           }
         }
         syncVisual(visual, car, dt, gridLocked)
+        if (garage && !startedRef.current) garage.holdCar(visual)
         playerIgnOn = t?.ignitionOn ?? true
         visual.setPower(
           electricalPower(
@@ -1287,6 +1315,17 @@ export function startSession(ctx: SessionCtx): () => void {
         rig.smoothFwd.lerp(fwd, 1 - Math.exp(-dt * 10)).normalize()
         rig.update({ dt, nowS, carPos, quat, car, raceActive, headsUp })
 
+        if (garage && !startedRef.current) {
+          const bn = garage.boardCorners(boardPts)
+          placeBoard(
+            boardPts,
+            bn,
+            camera,
+            renderer!.domElement.clientWidth,
+            renderer!.domElement.clientHeight,
+          )
+        }
+
         flyby?.update(
           dt,
           -bp.z,
@@ -1341,6 +1380,7 @@ export function startSession(ctx: SessionCtx): () => void {
       raf = requestAnimationFrame(loop)
       ;(mount as any)._cleanup = () => {
         garageApiRef.current = null
+        garage?.dispose()
         window.removeEventListener("resize", onResize)
         hud.dispose()
         lock.dispose()

@@ -29,6 +29,7 @@ export class RainEffect {
   private readonly lastCam = new THREE.Vector3()
   private readonly camVel = new THREE.Vector3()
   private haveLastCam = false
+  private shelter: ((x: number, y: number, z: number) => boolean) | null = null
 
   constructor(scene: THREE.Scene) {
     this.geo.setAttribute(
@@ -40,6 +41,11 @@ export class RainEffect {
     this.lines.renderOrder = 10
     this.lines.visible = false
     scene.add(this.lines)
+  }
+
+  /** Drops for which this returns true are hidden (they are under a roof). */
+  setShelter(fn: ((x: number, y: number, z: number) => boolean) | null) {
+    this.shelter = fn
   }
 
   setReflectionPass(on: boolean) {
@@ -88,6 +94,7 @@ export class RainEffect {
     const tx = (-rx / rl) * len
     const ty = (-ry / rl) * len
     const tz = (-rz / rl) * len
+    const shelter = this.shelter
     for (let i = 0; i < MAX_DROPS; i++) {
       const o = i * 6
       let x = p[o] + wind
@@ -101,9 +108,15 @@ export class RainEffect {
       p[o] = x
       p[o + 1] = y
       p[o + 2] = z
-      p[o + 3] = x + tx
-      p[o + 4] = y + ty
-      p[o + 5] = z + tz
+      if (shelter && shelter(x, y, z)) {
+        p[o + 3] = x
+        p[o + 4] = y
+        p[o + 5] = z
+      } else {
+        p[o + 3] = x + tx
+        p[o + 4] = y + ty
+        p[o + 5] = z + tz
+      }
     }
     this.geo.attributes.position.needsUpdate = true
     return this.lightning ? this.flash(dt) : 0

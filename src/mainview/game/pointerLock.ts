@@ -125,8 +125,8 @@ export function createPointerLock(opts: {
       const dy = e.clientY - lastPY
       lastPX = e.clientX
       lastPY = e.clientY
-      rig.camYaw -= dx * 0.0052
-      rig.camPitch = Math.max(-0.5, Math.min(0.5, rig.camPitch + dy * 0.0032))
+      rig.garageYaw -= dx * 0.0052
+      rig.garagePitch += dy * 0.0032
       rig.lastOrbit = performance.now() / 1000
     }
   }
@@ -159,6 +159,11 @@ export function createPointerLock(opts: {
   dom.addEventListener("pointermove", onPointerMove)
   dom.addEventListener("pointerup", onPointerUp)
   dom.addEventListener("pointercancel", onPointerUp)
+  const onWheel = (e: WheelEvent) => {
+    if (startedRef.current || !rig.garage) return
+    rig.garageDist *= Math.exp(e.deltaY * 0.001)
+  }
+  dom.addEventListener("wheel", onWheel, { passive: true })
   document.addEventListener("pointerlockchange", onLockChange)
 
   const lockGuard = window.setInterval(() => {
@@ -212,6 +217,7 @@ export function createPointerLock(opts: {
     dom.removeEventListener("pointermove", onPointerMove)
     dom.removeEventListener("pointerup", onPointerUp)
     dom.removeEventListener("pointercancel", onPointerUp)
+    dom.removeEventListener("wheel", onWheel)
     document.removeEventListener("pointermove", onForceHide)
     document.removeEventListener("pointerdown", onGesture)
     document.removeEventListener("keydown", onGesture)
