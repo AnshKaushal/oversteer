@@ -123,6 +123,7 @@ export class GamepadInput {
   }
 
   private lastRumble = 0
+  private lastGearRumble = 0
 
   rumble(strong: number, weak: number) {
     const pad = this.active() as (Gamepad & { vibrationActuator?: any }) | null
@@ -137,6 +138,23 @@ export class GamepadInput {
         duration: 90,
         strongMagnitude: Math.max(0, Math.min(1, strong)),
         weakMagnitude: Math.max(0, Math.min(1, weak)),
+      })
+    } catch {}
+  }
+
+  rumbleGear() {
+    const pad = this.active() as (Gamepad & { vibrationActuator?: any }) | null
+    const act = pad?.vibrationActuator
+    if (!act?.playEffect) return
+    const now = performance.now()
+    if (now - this.lastGearRumble < 50) return
+    this.lastGearRumble = now
+    try {
+      act.playEffect("dual-rumble", {
+        startDelay: 0,
+        duration: 110,
+        strongMagnitude: 1.0,
+        weakMagnitude: 1.0,
       })
     } catch {}
   }

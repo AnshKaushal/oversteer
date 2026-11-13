@@ -33,6 +33,7 @@ export interface CameraRigDeps {
     | "showLobbyRef"
     | "loadingRef"
     | "setSpeedLines"
+    | "settingsRef"
   >
 }
 
@@ -98,7 +99,8 @@ export class CameraRig {
 
   update(f: CameraFrame) {
     const { camera, input, wm, playerDef, e0 } = this.d
-    const { startedRef, setSpeedLines } = this.d.ctx
+    const { startedRef, setSpeedLines, settingsRef } = this.d.ctx
+    const camSpeed = settingsRef?.current?.cameraSpeed ?? 1
     const { dt, nowS, carPos, quat, car, raceActive, headsUp } = f
     if (!startedRef.current) {
       e0.lastMovementX = 0
@@ -252,10 +254,10 @@ export class CameraRig {
             )
           }
           if (input.lookX !== 0 || input.lookY !== 0) {
-            this.freeCamYaw += input.lookX * 1.3 * dt
+            this.freeCamYaw += input.lookX * 1.3 * dt * camSpeed
             this.freeCamPitch = Math.max(
               -1.45,
-              Math.min(1.45, this.freeCamPitch - input.lookY * 0.6 * dt),
+              Math.min(1.45, this.freeCamPitch - input.lookY * 0.6 * dt * camSpeed),
             )
           }
         } else {
@@ -268,10 +270,10 @@ export class CameraRig {
             this.lastOrbit = nowS
           }
           if (input.lookX !== 0 || input.lookY !== 0) {
-            this.camYaw -= input.lookX * 2.6 * dt
+            this.camYaw -= input.lookX * 2.6 * dt * camSpeed
             this.camPitch = Math.max(
               -0.5,
-              Math.min(0.5, this.camPitch + input.lookY * 1.2 * dt),
+              Math.min(0.5, this.camPitch + input.lookY * 1.2 * dt * camSpeed),
             )
             this.lastOrbit = nowS
             this.recentering = false
@@ -306,7 +308,7 @@ export class CameraRig {
         const fwd = new THREE.Vector3(sinY * cosP, sinP, -cosY * cosP)
         const right = new THREE.Vector3(cosY, 0, sinY)
         const sprint = input.isDown("ShiftLeft") || input.isDown("ShiftRight")
-        const speed = (sprint ? 12 : 3) * dt
+        const speed = (sprint ? 12 : 3) * dt * camSpeed
         if (input.isDown("KeyW")) this.freeCamPos.addScaledVector(fwd, speed)
         if (input.isDown("KeyS")) this.freeCamPos.addScaledVector(fwd, -speed)
         if (input.isDown("KeyA")) this.freeCamPos.addScaledVector(right, -speed)

@@ -353,7 +353,7 @@ export const dyno = {
       dyno.beginManual()
     if (state.phase === "idle" || state.phase === "done") {
       // Roller coasts to a stop; engine ticks over.
-      omega *= Math.exp(-dtReal * 1.6)
+      omega *= Math.exp(-dtReal * 3.5)
       const idle = car.physics.engine.idleRPM
       state.rpm += (idle - state.rpm) * Math.min(1, dtReal * 4)
       state.speedKmh = omega * car.physics.wheels.radius * 3.6
@@ -378,9 +378,28 @@ export const dyno = {
       if (shiftT > 0) shiftT -= STEP
       const shifting = shiftT > 0
       const nm = eng.torque(throttle, state.gear, shifting)
-      const brakeTq = phase === "manual" ? effBrake() * inertia * 5 : 0
+      const brakeTq = phase === "manual" ? effBrake() * inertia * 25 : 0
       const wheelTq = nm * ratio * eff
-      const load = 12 + omega * 0.04 + brakeTq
+      const v = omega * p.wheels.radius
+      // Aero drag torque at the wheels.
+      const aero = p.aero
+      let aeroDragF = 0
+      if (aero && v > (aero.minSpeed ?? 0)) {
+        aeroDragF =
+          0.5 *
+          aero.airDensity *
+          aero.dragCoefficient *
+          aero.frontalArea *
+          v *
+          v
+      }
+      const aeroTorque = aeroDragF * p.wheels.radius
+      // Rolling resistance torque at the wheels.
+      const rollingResist = p.wheels.rollingResist ?? 0.015
+      const rollingV0 = p.wheels.tire.rollingV0 ?? 5
+      const rollingTorque =
+        rollingResist * p.wheels.radius * Math.tanh(v / Math.max(0.1, rollingV0))
+      const load = 12 + omega * 0.04 + brakeTq + aeroTorque + rollingTorque
       const I = inertia + p.engine.engineInertia * ratio * ratio
       omega = Math.max(0, omega + ((wheelTq - load) / I) * STEP)
       eng.stepRpm({
@@ -447,7 +466,7 @@ export const dyno = {
           publishManual()
         }
       } else if (phase === "cooldown") {
-        omega *= Math.exp(-STEP * 1.2)
+        omega *= Math.exp(-STEP * 3.0)
         if (rpm < p.engine.idleRPM * 1.3 || omega < 0.5) {
           state.phase = "done"
           break

@@ -8,6 +8,7 @@ import {
 import gsap from "gsap"
 import { EASE, Screen } from "../anim"
 import { quitApp } from "../../systems/updater"
+import { useMenuGamepadNav } from "../useMenuGamepadNav"
 
 const BTN =
   "min-w-[130px] px-6 py-3.5 text-[15px] font-semibold text-white transition-colors"
@@ -16,13 +17,17 @@ export function IntroScreen({
   open,
   onEnter,
   onOptions,
+  gamepadNav = true,
 }: {
   open: boolean
   onEnter: () => void
   onOptions: () => void
+  gamepadNav?: boolean
 }) {
   const [credits, setCredits] = useState(false)
   const [confirmQuit, setConfirmQuit] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useMenuGamepadNav(open && gamepadNav, rootRef)
   return (
     <Screen
       open={open}
@@ -45,7 +50,8 @@ export function IntroScreen({
         },
       ]}
     >
-      <div className="flex h-full w-full flex-col items-center justify-center gap-8 md:gap-12">
+      <div ref={rootRef} className="absolute inset-0">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-8 md:gap-12">
         <h1
           data-intro-title
           className="w-full text-center font-bold leading-[0.85] tracking-tight text-white"
@@ -114,6 +120,7 @@ export function IntroScreen({
           Close
         </button>
       </Dialog>
+      </div>
     </Screen>
   )
 }

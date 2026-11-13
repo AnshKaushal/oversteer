@@ -6,6 +6,7 @@ import { WorldTab } from "./settings/WorldTab"
 import { InterfaceTab } from "./settings/InterfaceTab"
 import { UpdatesTab } from "./settings/UpdatesTab"
 import { useSettingsAnimation } from "./settings/useSettingsAnimation"
+import { useMenuGamepadNav } from "./useMenuGamepadNav"
 
 export interface SettingsModalProps {
   open: boolean
@@ -24,6 +25,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { mounted, overlayRef, modalRef } = useSettingsAnimation(open, onClose)
   const [tab, setTab] = useState<TabId>("graphics")
+  useMenuGamepadNav(open, modalRef, onClose)
 
   if (!mounted) return null
 

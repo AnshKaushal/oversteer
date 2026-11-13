@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Gamepad navigation highlight for menu buttons. */
+[data-pad-focus] {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
 /* Scrollable panels (race tower, results, paddock roster): keep scrolling,
    never show a scrollbar — Windows draws chunky always-visible bars. */
 .no-scrollbar {

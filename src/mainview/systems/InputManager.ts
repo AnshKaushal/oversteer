@@ -92,6 +92,10 @@ export class InputManager {
     this.pad.rumble(strong, weak)
   }
 
+  rumbleGear() {
+    this.pad.rumbleGear()
+  }
+
   attach() {
     window.addEventListener("keydown", this.onKeyDown)
     window.addEventListener("keyup", this.onKeyUp)

@@ -1,5 +1,7 @@
 import { type RaceSnapshot } from "../../systems/RaceTypes"
 import { EASE, Screen } from "../anim"
+import { useRef } from "react"
+import { useMenuGamepadNav } from "../useMenuGamepadNav"
 import { formatTime, placeLabel } from "./raceFormat"
 
 export function RaceResults({
@@ -15,6 +17,8 @@ export function RaceResults({
   onMenu: () => void
   readyNotice?: string | null
 }) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  useMenuGamepadNav(open, rootRef, onMenu)
   const player = race.standings.find((s) => s.isPlayer)
   const winner = race.standings[0]
   const winnerTime = winner?.finishTime ?? null
@@ -61,7 +65,7 @@ export function RaceResults({
         { selector: "[data-res-note]", from: { autoAlpha: 0 } },
       ]}
     >
-      <div className="flex min-h-full flex-col p-5 md:p-8">
+      <div ref={rootRef} className="flex min-h-full flex-col p-5 md:p-8">
         {}
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div data-res-head>

@@ -134,6 +134,7 @@ export interface AppSettings {
   qualityPreset?: "low" | "medium" | "high" | "ultra"
   autoQuality?: boolean
   rumble?: boolean
+  cameraSpeed?: number
   motionBlur?: number
   antiAliasing?: "off" | "fxaa" | "smaa" | "msaa"
 }
@@ -154,6 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoQuality: false,
   antiAliasing: "fxaa",
   rumble: true,
+  cameraSpeed: 1,
   motionBlur: 0,
 }
 

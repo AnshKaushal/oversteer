@@ -165,7 +165,7 @@ export function startSession(ctx: SessionCtx): () => void {
       const world = createWorld()
 
       const map = createMap(
-        mapIdRef.current,
+        startedRef.current ? mapIdRef.current : "highway",
         circuitOptionsFor(circuitOptsRef.current),
       )
       const lin = map.linear as LinearRoad
@@ -502,6 +502,8 @@ export function startSession(ctx: SessionCtx): () => void {
       let substepTick = 0
       const hud = createPerfHud(scene, ctx)
       let prevImpactGrip = 1
+      let prevGear: number | null = null
+      let gearRumbleUntil = 0
       let jolt = 0
       const poses = new WeakMap<object, PoseHistory>()
       const poseOf = (c: Vehicle) => {
@@ -882,6 +884,18 @@ export function startSession(ctx: SessionCtx): () => void {
               lockAv = body.angvel()
             }
             t = car.update(FIXED_DT, playerInp)
+            if (t) {
+              if (
+                prevGear !== null &&
+                t.gear !== prevGear &&
+                Math.abs(t.speedKmh) > 1 &&
+                settingsRef.current.rumble !== false
+              ) {
+                gearRumbleUntil = performance.now() + 120
+                input.rumbleGear()
+              }
+              prevGear = t.gear
+            }
             if (raceActive) {
               for (let ri = 0; ri < rivals.length; ri++) {
                 const rival = rivals[ri]
@@ -1186,7 +1200,7 @@ export function startSession(ctx: SessionCtx): () => void {
             const dx = rp.x - bp.x
             const dz = rp.z - bp.z
             const d = dx * dx + dz * dz
-            if (d < 36100) {
+            if (d < 22500) {
               nearCandidates.push({ body: r.car.body, d })
             }
           }
@@ -1207,8 +1221,9 @@ export function startSession(ctx: SessionCtx): () => void {
             const cand = nearCandidates[sIdx]
             if (cand) {
               const dist = Math.sqrt(cand.d)
-              const scale = dist > 180 ? 0 : dist < 90 ? 1 : (180 - dist) / 90
-              const targetIntensity = 54 * scale
+              const scale =
+                dist > 150 ? 0 : dist < 75 ? 1 : Math.pow((150 - dist) / 75, 2)
+              const targetIntensity = 40 * scale
               if (targetIntensity > 0.05) {
                 const bpos = cand.body.translation()
                 const bquat = cand.body.rotation()
@@ -1387,8 +1402,10 @@ export function startSession(ctx: SessionCtx): () => void {
           )
           prevImpactGrip = ig
           if (settingsRef.current.rumble !== false) {
-            const slip = Math.min(1, Math.abs(t.slipRatio))
-            input.rumble(jolt, Math.max(slip * 0.6, t.drift ? 0.35 : 0))
+            if (performance.now() >= gearRumbleUntil) {
+              const slip = Math.min(1, Math.abs(t.slipRatio))
+              input.rumble(jolt, Math.max(slip * 0.6, t.drift ? 0.35 : 0))
+            }
           }
         }
 

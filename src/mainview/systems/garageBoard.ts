@@ -23,6 +23,8 @@ export const getBoardElement = (id: SurfaceId) => entries.get(id)?.el ?? null
 export function setPillElement(id: SurfaceId, e: HTMLElement | null) {
   entry(id).pill = e
 }
+export const getPillElement = (id: SurfaceId) =>
+  entries.get(id)?.pill ?? null
 
 export interface PillPos {
   id: SurfaceId

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { SURFACES, type SurfaceId } from "../../systems/garageSurfaces"
-import { getBoardElement, pillPositions } from "../../systems/garageBoard"
+import { getBoardElement, getPillElement, pillPositions } from "../../systems/garageBoard"
 import { getFocus, getHot, setFocus, setHot } from "../../systems/garageFocus"
 import { dyno } from "../../systems/dyno"
 
@@ -80,7 +80,14 @@ function navigateOrbit(dir: Dir) {
     window.innerWidth / 2,
     window.innerHeight / 2,
   )
-  if (next) setHot(next.key as SurfaceId)
+  if (next) {
+    // clear pad-focus from all pills
+    for (const s of SURFACES) {
+      getPillElement(s.id)?.removeAttribute(PAD_ATTR)
+    }
+    setHot(next.key as SurfaceId)
+    getPillElement(next.key as SurfaceId)?.setAttribute(PAD_ATTR, "")
+  }
 }
 
 function navigateBoard(id: SurfaceId, dir: Dir) {
@@ -135,6 +142,7 @@ function navigateBoard(id: SurfaceId, dir: Dir) {
   const el = next.key as HTMLElement
   el.setAttribute(PAD_ATTR, "")
   el.focus({ preventScroll: true })
+  el.scrollIntoView({ block: "nearest" })
 }
 
 function activate() {
@@ -157,6 +165,8 @@ function back() {
     clearPadFocus()
     ;(document.activeElement as HTMLElement | null)?.blur?.()
     setFocus(null)
+    const h = getHot()
+    if (h) getPillElement(h)?.setAttribute(PAD_ATTR, "")
   }
 }
 

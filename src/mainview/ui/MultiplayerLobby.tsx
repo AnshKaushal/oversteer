@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react"
+import { useMenuGamepadNav } from "./useMenuGamepadNav"
 import { colorHex } from "../systems/carTint"
 import {
   MULTIPLAYER_AI_COUNTS,
@@ -88,6 +89,8 @@ export function MultiplayerLobby({
     useState<(typeof MULTIPLAYER_AI_COUNTS)[number]>(0)
   const [copied, setCopied] = useState(false)
   const gridRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useMenuGamepadNav(open, rootRef, onBack)
   useStaggerIn(
     gridRef,
     "[data-lobby-in], [data-lobby-row]",
@@ -150,7 +153,7 @@ export function MultiplayerLobby({
         },
       ]}
     >
-      <div className="flex min-h-full flex-col p-5 md:p-8">
+      <div ref={rootRef} className="flex min-h-full flex-col p-5 md:p-8">
         {}
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div data-lobby-head>

@@ -77,6 +77,7 @@ export interface GarageSceneProps {
   onOpenMultiplayer: () => void
   onOpenSettings: () => void
   onBack: () => void
+  gamepadNav?: boolean
 }
 
 /** One in-world screen: registered so the session can warp it onto the wall. */
@@ -367,7 +368,7 @@ export function GarageScene(p: GarageSceneProps) {
     (d: 1 | -1) => (d < 0 ? onPrevCar() : onNextCar()),
     [onPrevCar, onNextCar],
   )
-  useGarageNav(p.open, stepCar)
+  useGarageNav(p.open && (p.gamepadNav ?? true), stepCar)
 
   useEffect(
     () => () => {

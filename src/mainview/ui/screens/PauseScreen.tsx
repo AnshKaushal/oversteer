@@ -1,5 +1,7 @@
 import { Play, RotateCcw, LogOut, Settings } from "lucide-react"
 import { EASE, Screen } from "../anim"
+import { useRef } from "react"
+import { useMenuGamepadNav } from "../useMenuGamepadNav"
 import { getCar } from "../../data/cars"
 import {
   TRAFFIC_OPTIONS,
@@ -19,6 +21,7 @@ export interface PauseScreenProps {
   restart: () => void
   quitToMenu: () => void
   setShowSettings: (v: boolean) => void
+  gamepadNav?: boolean
 }
 
 export function PauseScreen({
@@ -32,7 +35,10 @@ export function PauseScreen({
   restart,
   quitToMenu,
   setShowSettings,
+  gamepadNav = true,
 }: PauseScreenProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  useMenuGamepadNav(open && gamepadNav, rootRef, resumeGame)
   return (
     <Screen
       open={open}
@@ -51,7 +57,7 @@ export function PauseScreen({
         },
       ]}
     >
-      <div className="flex min-h-full flex-col p-5 md:p-8">
+      <div ref={rootRef} className="flex min-h-full flex-col p-5 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div data-pause-head>
             <div

@@ -724,6 +724,7 @@ export default function App() {
           onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
           onOpenSettings={() => setShowSettings(true)}
           onBack={() => setShowIntro(true)}
+          gamepadNav={!showSettings && !showMultiplayerLobby}
           timeOfDay={timeOfDay}
           onTimeOfDay={applyTimeOfDay}
         />
@@ -811,6 +812,7 @@ export default function App() {
       {pauseVisible && (
         <PauseScreen
           open={pauseOn}
+          gamepadNav={!showSettings}
           carId={carId}
           race={race}
           netConnected={netConnected}
@@ -827,6 +829,7 @@ export default function App() {
       {introVisible && (
         <IntroScreen
           open={introOn}
+          gamepadNav={!showSettings}
           onEnter={() => setShowIntro(false)}
           onOptions={() => setShowSettings(true)}
         />
