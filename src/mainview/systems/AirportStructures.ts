@@ -1,4 +1,3 @@
-import { fadeWithFog } from "./fogFade"
 import * as THREE from "three"
 import { sharedTexture, releaseTexture } from "./Airport"
 import { makeGlowTexture } from "./GlowTexture"
@@ -6,8 +5,6 @@ import { makeGlowTexture } from "./GlowTexture"
 export const FENCE_PAST_ENDS = 40
 export const FENCE_OFFSET = 60
 
-const TOWER_Z = FENCE_OFFSET - 6
-const TOWER_HEIGHT = 18
 
 export interface LocalLamp {
   x: number
@@ -89,7 +86,6 @@ export class AirportStructures {
 
   constructor(input: StructureInput) {
     const { half } = input
-    const glow = this.share("towerGlow", makeTowerGlow)
 
     const std = (
       color: number,
@@ -258,57 +254,6 @@ export class AirportStructures {
     }
 
     const towerMat = std(0x8d9297, { metalness: 0.6, roughness: 0.6 })
-    const headMat = std(0x2a2d31)
-    const poolGeo = new THREE.PlaneGeometry(64, 64)
-    this.geoms.push(poolGeo)
-    for (const x of [-250, 0, 250]) {
-      for (const sgn of [-1, 1]) {
-        const z = sgn * TOWER_Z
-        cyl(0.2, 0.36, TOWER_HEIGHT, 8, towerMat, x, TOWER_HEIGHT / 2, z)
-        box(4.2, 0.18, 1.2, towerMat, x, TOWER_HEIGHT - 0.2, z)
-        const head = box(
-          4,
-          0.7,
-          0.5,
-          headMat,
-          x,
-          TOWER_HEIGHT + 0.3,
-          z - sgn * 0.4,
-        )
-        head.castShadow = false
-        this.floods.push({
-          head: [x, TOWER_HEIGHT + 0.3, z - sgn * 0.9],
-          aim: [x, 0, z - sgn * 16],
-        })
-        for (const dx of [-1.4, 0, 1.4]) {
-          this.towerLamps.push({
-            x: x + dx,
-            y: TOWER_HEIGHT + 0.3,
-            z: z - sgn * 0.9,
-            color: [1, 0.9, 0.7],
-          })
-        }
-        const poolMat = new THREE.MeshBasicMaterial({
-          map: glow,
-          color: 0xffe2b4,
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          toneMapped: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -4,
-          polygonOffsetUnits: -4,
-        })
-        fadeWithFog(poolMat)
-        this.pools.push(poolMat)
-        const pool = new THREE.Mesh(poolGeo, poolMat)
-        pool.rotation.x = -Math.PI / 2
-        pool.position.set(x, 0.032, z - sgn * 16)
-        pool.frustumCulled = false
-        this.group.add(pool)
-      }
-    }
 
     const ax = input.towerA
     const az = input.towerB

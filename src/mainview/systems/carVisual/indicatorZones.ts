@@ -10,6 +10,8 @@ export interface IndicatorZone {
   idle?: number
   /** Emissive colour while not flashing (e.g. a red tail lamp). */
   glow?: number
+  /** The zone is the tail lamp itself: dim at rest, bright while braking. */
+  brake?: boolean
 }
 
 const AMBER_LENS = 0x6a3300
@@ -21,6 +23,12 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
   ],
   "mitsubishi_lancer_evolution_6.glb": [
     { end: "front", mesh: "^Object_5$", idle: AMBER_LENS },
+  ],
+  // DB12 rear: the whole tail-lamp strip (the "Tail_Lamp" material made by
+  // scripts/prepare-aston-martin-db12.ts) is the indicator: dim red at rest,
+  // bright when braking, amber when flashing
+  "aston_martin_db12.glb": [
+    { end: "rear", mesh: "^Tail_Lamp$", glow: 0xff0000, brake: true },
   ],
   "nissan_350z.glb": [
     { end: "front", mesh: "^Object_6$", dx: [0.3, 0.42], y: [0.15, 0.42] },

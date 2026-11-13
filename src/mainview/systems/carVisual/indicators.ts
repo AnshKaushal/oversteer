@@ -6,6 +6,9 @@ export type IndicatorMode = "off" | "left" | "right" | "hazard"
 
 const AMBER = 0xff9a14
 const PERIOD_S = 0.75
+// tail lamp that doubles as the indicator: running-light and off levels
+const TAIL_RUNNING = 1.2
+const TAIL_OFF = 0.15
 
 interface Spot {
   x: number
@@ -390,7 +393,10 @@ export function planIndicators(
       for (const side of ["l", "r"] as const) {
         const mat = amberEnds[z.end][side]?.material as
           THREE.MeshStandardMaterial | undefined
-        if (mat) mat.userData.glow = z.glow
+        if (mat) {
+          mat.userData.glow = z.glow
+          if (z.brake) mat.userData.brakeLamp = true
+        }
       }
     }
     zoned.add(z.end)
@@ -543,8 +549,17 @@ export function updateIndicators(this: CarVisual, dt: number) {
     if (glow !== undefined) {
       // indicator running: amber or dark, never the red tail glow
       mat.emissive.set(active ? AMBER : glow)
-      mat.emissiveIntensity = (active ? (flash ? 5 : 0) : 4.373) * this.power
-      mat.color.setScalar(active && !flash ? 0.03 : 0.8)
+      const braking = this.brakeLevel > 0
+      const rest = mat.userData.brakeLamp
+        ? braking
+          ? 4.373
+          : this.headlightsOn
+            ? TAIL_RUNNING
+            : TAIL_OFF
+        : 4.373
+      mat.emissiveIntensity = (active ? (flash ? 5 : 0) : rest) * this.power
+      if (mat.userData.brakeLamp && !active) mat.color.setRGB(0.25, 0.01, 0.01)
+      else mat.color.setScalar(active && !flash ? 0.03 : 0.8)
     } else mat.emissiveIntensity = flash ? 5 * this.power : 0
   }
   for (const l of this.indicatorLamps) {

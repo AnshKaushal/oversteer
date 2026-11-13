@@ -63,6 +63,10 @@
     "mercedes-sl65-amg": [
       "burnout spins rears (TC off on handbrake)",
       "donut is entered"
+    ],
+    "aston-martin-db12": [
+      "donuts possible (sustained rotation)",
+      "donut is entered"
     ]
   },
   "suspension-test.ts": {
