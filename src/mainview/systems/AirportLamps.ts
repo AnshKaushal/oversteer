@@ -26,6 +26,9 @@ export class LampSet {
   private readonly halo: THREE.Points
   private readonly haloMat: THREE.PointsMaterial
   private readonly haloColors: THREE.BufferAttribute
+  private readonly pool: THREE.InstancedMesh | null
+  private readonly poolMat: THREE.MeshBasicMaterial | null
+  private readonly poolIdx: number[] = []
 
   constructor(o: LampSetOptions) {
     const n = (this.count = o.pos.length / 3)
@@ -108,8 +111,13 @@ export class LampSet {
       im.frustumCulled = false
       this.group.add(im)
     }
+    // Lift the halo off the ground so the sprite isn't sliced in half by the
+    // terrain depth test (the hard edge under flat in-pavement lamps).
+    const hpos = pos.slice()
+    for (let i = 0; i < n; i++)
+      hpos[i * 3 + 1] = Math.max(hpos[i * 3 + 1], o.radius(i) * 0.7 + 0.05)
     const hg = new THREE.BufferGeometry()
-    hg.setAttribute("position", new THREE.BufferAttribute(pos.slice(), 3))
+    hg.setAttribute("position", new THREE.BufferAttribute(hpos, 3))
     this.haloColors = new THREE.BufferAttribute(o.col.slice(), 3)
     hg.setAttribute("color", this.haloColors)
     this.geoms.push(hg)
@@ -130,6 +138,42 @@ export class LampSet {
     this.halo.frustumCulled = false
     this.halo.visible = false
     this.group.add(this.halo)
+
+    // In-pavement lamps also light the ground around them: a flat additive
+    // pool sitting just above the surface, so the glow sits on the lamp.
+    for (let i = 0; i < n; i++) if (flat(i)) this.poolIdx.push(i)
+    if (this.poolIdx.length) {
+      const poolGeo = new THREE.PlaneGeometry(1, 1)
+      poolGeo.rotateX(-Math.PI / 2)
+      this.geoms.push(poolGeo)
+      this.poolMat = fadeWithFog(
+        new THREE.MeshBasicMaterial({
+          map: o.glow,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          toneMapped: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -4,
+          polygonOffsetUnits: -4,
+        }),
+      )
+      this.fadeMats.push(this.poolMat)
+      this.pool = new THREE.InstancedMesh(poolGeo, this.poolMat, this.poolIdx.length)
+      this.poolIdx.forEach((i, k) => {
+        const r = o.radius(i) * 7
+        p.set(pos[i * 3], 0.045, pos[i * 3 + 2])
+        s.set(r, 1, r)
+        this.pool!.setMatrixAt(k, m.compose(p, q, s))
+      })
+      this.pool.frustumCulled = false
+      this.pool.visible = false
+      this.group.add(this.pool)
+    } else {
+      this.pool = null
+      this.poolMat = null
+    }
     this.paint(false)
   }
 
@@ -138,8 +182,12 @@ export class LampSet {
   }
 
   update(lit: boolean, alpha: number) {
-    this.haloMat.opacity = 0.55 * alpha
+    this.haloMat.opacity = 0.8 * alpha
     this.halo.visible = lit
+    if (this.pool && this.poolMat) {
+      this.poolMat.opacity = 0.6 * alpha
+      this.pool.visible = lit
+    }
     this.paint(lit)
   }
 
@@ -156,6 +204,19 @@ export class LampSet {
       this.lens.setColorAt(i, this.lensColor)
       for (let j = 0; j < 3; j++) hc[i * 3 + j] = this.base[i * 3 + j] * k
     }
+    if (this.pool) {
+      const c = this.lensColor
+      this.poolIdx.forEach((i, k) => {
+        const lv = lit ? this.level[i] : 0
+        c.setRGB(
+          this.base[i * 3] * lv * 0.8,
+          this.base[i * 3 + 1] * lv * 0.8,
+          this.base[i * 3 + 2] * lv * 0.8,
+        )
+        this.pool!.setColorAt(k, c)
+      })
+      if (this.pool.instanceColor) this.pool.instanceColor.needsUpdate = true
+    }
     if (this.lens.instanceColor) this.lens.instanceColor.needsUpdate = true
     this.haloColors.needsUpdate = true
   }
@@ -164,6 +225,7 @@ export class LampSet {
     this.group.removeFromParent()
     this.haloMat.dispose()
     this.lens.dispose()
+    this.pool?.dispose()
     for (const g of this.geoms) g.dispose()
     for (const m of this.fadeMats) m.dispose()
   }

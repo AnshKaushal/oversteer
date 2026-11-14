@@ -116,6 +116,10 @@ export class TrafficUpkeep {
             tc.hi = shouldBeHi
             tc.visual.setDetail(shouldBeHi)
           }
+          // Clearcoat only up close; hysteresis avoids flicker at the edge.
+          tc.visual.setGloss(
+            tc.visual.glossy ? d < 6400 : d < 3600,
+          )
         }
       }
     }

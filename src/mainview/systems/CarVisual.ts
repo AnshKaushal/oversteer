@@ -3,7 +3,7 @@ import { enableLampChannels, type LampChannels } from "./carVisual/lampChannels"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { WheelDef } from "../physics/vehicle/components/Suspension"
 import { CARS } from "../data/cars"
-import { tintCar, whitenRims } from "./carTint"
+import { tintCar, toClearcoatPaint, whitenRims } from "./carTint"
 import {
   collectBrakeLights,
   liftLampsOverGlass,
@@ -40,6 +40,9 @@ import {
 import {
   buildImposter,
   setDetail,
+  buildGlossSlots,
+  setGloss,
+  isInside,
   mergeStatic,
   mergeInto,
 } from "./carVisual/lod"
@@ -83,6 +86,16 @@ export class CarVisual {
   }[] = []
   buildImposter = buildImposter
   setDetail = setDetail
+  buildGlossSlots = buildGlossSlots
+  setGloss = setGloss
+  isInside = isInside
+  glossSlots: {
+    mesh: THREE.Mesh
+    glossy: THREE.Material
+    plain: THREE.MeshStandardMaterial
+  }[] = []
+  plainPaintMats: THREE.MeshStandardMaterial[] = []
+  glossy = true
   mergeStatic = mergeStatic
   mergeInto = mergeInto
   group = Object.assign(new THREE.Group(), { name: "car" })
@@ -150,8 +163,9 @@ export class CarVisual {
     model.traverse((o: any) => {
       if (o.isMesh && o.material) {
         const mats = Array.isArray(o.material) ? o.material : [o.material]
-        for (const m of mats) {
-          if (m && m.isMeshStandardMaterial && m.metalness > 0.6) {
+        for (let mi = 0; mi < mats.length; mi++) {
+          const m = mats[mi]
+          if (m && m.isMeshStandardMaterial && !m.isMeshPhysicalMaterial && m.metalness > 0.6) {
             const name = `${m.name} ${o.name}`.toLowerCase()
             if (
               name.includes("body") ||
@@ -159,8 +173,9 @@ export class CarVisual {
               (opts?.paintMatch &&
                 opts.paintMatch.some((p) => new RegExp(p, "i").test(m.name)))
             ) {
-              m.metalness = 0.25
-              m.roughness = 0.32
+              const glossy = toClearcoatPaint(m)
+              if (Array.isArray(o.material)) o.material[mi] = glossy
+              else o.material = glossy
             }
           }
         }
@@ -329,6 +344,7 @@ export class CarVisual {
     )
     this.setupHeadlights(opts?.isPlayer ?? false, opts?.headBeams ?? false)
     this.mergeStatic()
+    this.buildGlossSlots()
     this.setHeadlights(this.headlightsWanted)
   }
 
@@ -350,6 +366,7 @@ export class CarVisual {
     this.lastTint = color
     const c = new THREE.Color(color)
     for (const m of this.tintedMats) m.color.copy(c)
+    for (const m of this.plainPaintMats) m.color.copy(c)
     this.loPaint?.color.copy(c)
   }
 

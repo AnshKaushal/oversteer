@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "../gltf"
 import { trackLoad } from "../loadProgress"
 import type { WheelDef } from "../../physics/vehicle/components/Suspension"
 import { type PaintTextureRule } from "../carTint"
@@ -69,7 +69,7 @@ export async function loadSharedModel(
   const key = `${baseUrl}${modelFile}`
   const hit = modelCache.get(key)
   if (hit) return hit
-  const load = new GLTFLoader()
+  const load = createGLTFLoader()
     .loadAsync(key, (e) => trackLoad(key, e))
     .then((glb) => {
       const scene = glb.scene

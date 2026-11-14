@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "../../systems/gltf"
 import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import {
@@ -60,7 +60,7 @@ async function bakePropKit(baseUrl: string): Promise<PropKit | null> {
     }
   }
   try {
-    const glb = await new GLTFLoader().loadAsync(
+    const glb = await createGLTFLoader().loadAsync(
       `${baseUrl}models/low_poly_tree_pack.glb`,
     )
     const root = glb.scene

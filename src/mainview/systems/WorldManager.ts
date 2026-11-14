@@ -4,7 +4,7 @@ import { makeHillGeometry } from "./Hills"
 import { StreetLights } from "./StreetLights"
 import type { SurfaceId } from "../data/surfaces"
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "./gltf"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD_CONFIG } from "../constants/world"
 import { SkyDome } from "./SkyDome"
@@ -205,6 +205,14 @@ export class WorldManager {
     this.puddles?.prewarmReflection(renderer, scene, camera)
   }
 
+  async prewarmReflectionsAsync(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ) {
+    await this.puddles?.prewarmReflectionAsync(renderer, scene, camera)
+  }
+
   renderReflections(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,
@@ -308,7 +316,7 @@ export class WorldManager {
     return Math.min(cap, Math.max(5, Math.ceil(fog.far / this.segLen) + 2))
   }
   readonly ROAD_RIB = RIB_DIV
-  loader = new GLTFLoader()
+  loader = createGLTFLoader()
 
   readonly NUM_CLOUDS = 40
   cloudEntries: CloudEntry[] = []

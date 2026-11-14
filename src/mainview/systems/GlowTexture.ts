@@ -36,3 +36,39 @@ export function makeGlowTexture(
   t.needsUpdate = true
   return t
 }
+
+/**
+ * Light-bloom sprite: tight hot core, quick exponential falloff and a faint
+ * four-point streak. Reads as an emissive bulb instead of a flat blurry disc.
+ */
+export function makeBloomTexture(size = 128, star = 0.3): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4)
+  const sstep = (a: number, b: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = ((x + 0.5) / size - 0.5) * 2
+      const dy = ((y + 0.5) / size - 0.5) * 2
+      const r = Math.hypot(dx, dy)
+      const core = Math.exp(-((r / 0.1) ** 2))
+      const halo = 0.5 * Math.exp(-r * 6.5)
+      const streak =
+        star *
+        Math.exp(-Math.min(Math.abs(dx), Math.abs(dy)) * 40) *
+        Math.exp(-r * 3.2)
+      const a = Math.min(1, core + halo + streak) * (1 - sstep(0.75, 1, r))
+      const i = (y * size + x) * 4
+      data[i] = data[i + 1] = data[i + 2] = 255
+      data[i + 3] = Math.round(a * 255)
+    }
+  }
+  const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat)
+  t.magFilter = THREE.LinearFilter
+  t.minFilter = THREE.LinearMipmapLinearFilter
+  t.generateMipmaps = true
+  t.flipY = false
+  t.needsUpdate = true
+  return t
+}

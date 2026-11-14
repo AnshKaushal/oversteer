@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "./gltf"
 import { roadCenterX } from "./WorldManager"
 import {
   AirportView,
@@ -148,11 +148,16 @@ export class AirplaneFlyby {
   }
 
   async init(scene: THREE.Scene, baseUrl: string): Promise<boolean> {
-    for (const spec of AIRCRAFT) {
+    // Start every download up front; processing below stays in order.
+    const loads = AIRCRAFT.map((spec) => {
+      const p = createGLTFLoader().loadAsync(`${baseUrl}models/${spec.file}`)
+      p.catch(() => {})
+      return p
+    })
+    for (let ai = 0; ai < AIRCRAFT.length; ai++) {
+      const spec = AIRCRAFT[ai]
       try {
-        const glb = await new GLTFLoader().loadAsync(
-          `${baseUrl}models/${spec.file}`,
-        )
+        const glb = await loads[ai]
         const model = glb.scene
         model.updateMatrixWorld(true)
 

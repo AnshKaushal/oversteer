@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "./gltf"
 import { makeGlowTexture } from "./GlowTexture"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 
@@ -48,7 +48,7 @@ export class StreetLights {
 
   async load(baseUrl: string) {
     try {
-      const glb = await new GLTFLoader().loadAsync(
+      const glb = await createGLTFLoader().loadAsync(
         `${baseUrl}models/street_light.glb`,
       )
       glb.scene.updateMatrixWorld(true)

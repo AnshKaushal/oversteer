@@ -15,6 +15,10 @@ import { colorHex, rivalColor } from "../systems/carTint"
 import { trafficCountFor } from "../systems/RaceTypes"
 import { CARS } from "../data/cars"
 
+// Heavy models (high texture memory / draw calls) stay out of the traffic pool.
+const NO_TRAFFIC = new Set(["cheetah-84", "f1-car"])
+const TRAFFIC_CARS = CARS.filter((c) => !NO_TRAFFIC.has(c.id))
+
 export interface Rival {
   car: Vehicle
   visual: CarVisual
@@ -53,6 +57,10 @@ export interface SpawnEnv {
   timeOfDayRef: any
   trafficRef: any
   world: any
+  /** Spawn traffic after the caller finishes loading; see spawnTrafficLater. */
+  deferTraffic?: boolean
+  isDisposed?: () => boolean
+  onTraffic?: (r: Rival) => void
 }
 
 export async function spawnField(env: SpawnEnv) {
@@ -188,8 +196,11 @@ export async function spawnField(env: SpawnEnv) {
     { s: 0, half: 1 },
     { s: 0, half: -1 },
   ]
+  const spawnTraffic = async () => {
   for (let i = 0; i < trafficTarget; i++) {
-    const def = CARS[(Math.random() * CARS.length) | 0]
+    if (env.deferTraffic) await new Promise((r) => setTimeout(r, 40))
+    if (env.isDisposed?.()) return
+    const def = TRAFFIC_CARS[(Math.random() * TRAFFIC_CARS.length) | 0]
     const tdir: 1 | -1 = Math.random() < 0.55 ? 1 : -1
     const thalf: 1 | -1 = tdir === 1 ? 1 : -1
     let ts0 = 0
@@ -245,7 +256,7 @@ export async function spawnField(env: SpawnEnv) {
     }
     tvis.setHeadlights(isLowLight(timeOfDayRef.current))
     scene.add(tvis.group)
-    trafficCars.push({
+    const spawned: Rival = {
       car: tc,
       visual: tvis,
       ai: new AIDriver(tprof, lin),
@@ -260,8 +271,16 @@ export async function spawnField(env: SpawnEnv) {
       edgeArmed: false,
       brake: 0,
       hi: true,
-    })
+    }
+    trafficCars.push(spawned)
+    env.onTraffic?.(spawned)
   }
+  }
+  if (!env.deferTraffic) await spawnTraffic()
   activeTrafficRef.current = trafficCars
-  return { rivals, trafficCars }
+  return {
+    rivals,
+    trafficCars,
+    spawnTrafficLater: env.deferTraffic ? spawnTraffic : null,
+  }
 }

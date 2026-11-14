@@ -1,3 +1,6 @@
+import { SkyEnvironment } from "../systems/SkyEnvironment"
+import { prefetchModels } from "../systems/gltf"
+import { AIRCRAFT } from "../systems/airplane/types"
 import { conditions } from "../physics/core/Conditions"
 import { NPC_HEADLIGHT_CONE } from "../systems/headlightCutoff"
 import { WEATHER_WETNESS } from "../data/surfaces"
@@ -166,7 +169,28 @@ export function startSession(ctx: SessionCtx): () => void {
 
       applyRendererResolution(renderer, camera, mount, settingsRef.current)
 
-      const R = await initPhysics()
+      // Everything below used to wait on the previous step. Start the physics
+      // wasm and every model download together; later awaits hit the cache.
+      const loadT0 = performance.now()
+      const mark = (label: string) => {
+        if (import.meta.env.DEV)
+          console.debug(
+            `[load] ${label} +${(performance.now() - loadT0).toFixed(0)}ms`,
+          )
+      }
+      const physicsP = initPhysics()
+      {
+        const bootBase = import.meta.env.BASE_URL || "./"
+        prefetchModels(bootBase.endsWith("/") ? bootBase : bootBase + "/", [
+          getCar(carIdRef.current).modelFile ?? "bmw_m3.glb",
+          "garage.glb",
+          "street_light.glb",
+          "low_poly_tree_pack.glb",
+          ...AIRCRAFT.map((a) => a.file),
+        ])
+      }
+      const R = await physicsP
+      mark("physics ready")
       const world = createWorld()
 
       const map = createMap(
@@ -179,6 +203,7 @@ export function startSession(ctx: SessionCtx): () => void {
       const base = import.meta.env.BASE_URL || "./"
       const baseUrl = base.endsWith("/") ? base : base + "/"
       await wm.init(scene, baseUrl)
+      mark("world init")
       wm.setTimeOfDay(timeOfDayRef.current)
       applyFog(wm, settingsRef.current)
       const rain = new RainEffect(scene)
@@ -211,11 +236,25 @@ export function startSession(ctx: SessionCtx): () => void {
               THREE.MeshStandardMaterial | undefined
             if (m?.map) renderer!.initTexture(m.map)
           })
-        flyby.setPrecompile((o) => {
+        // Each step runs on its own frame so no single frame pays for texture
+        // upload + whole-scene light setup + program lookups together.
+        const nextFrame = () =>
+          new Promise<void>((r) => requestAnimationFrame(() => r()))
+        flyby.setPrecompile(async (o) => {
+          const t0 = performance.now()
+          await nextFrame()
           upload(o)
-          return renderer!.compileAsync(o, camera, scene).then(() => undefined)
+          const t1 = performance.now()
+          await nextFrame()
+          await renderer!.compileAsync(o, camera, scene)
+          await nextFrame()
+          if (import.meta.env.DEV)
+            console.debug(
+              `[airport] upload ${(t1 - t0).toFixed(1)}ms, total ${(performance.now() - t0).toFixed(1)}ms`,
+            )
         })
         await flyby.init(scene, baseUrl)
+        mark("flyby init")
         for (const t of flyby.warmTextures) renderer.initTexture(t)
       }
 
@@ -258,7 +297,10 @@ export function startSession(ctx: SessionCtx): () => void {
         scene,
         world,
       })
-      const { rivals, trafficCars } = await spawnField({
+      const { rivals, trafficCars, spawnTrafficLater } = await spawnField({
+        deferTraffic: true,
+        isDisposed: () => disposed,
+        onTraffic: (r) => allBodies.push(r.car.body),
         setup,
         R,
         activeRivalsRef,
@@ -352,6 +394,7 @@ export function startSession(ctx: SessionCtx): () => void {
         console.warn("player model failed, continuing with fallback wheels", e)
       }
       visual.setHeadlights(isLowLight(timeOfDayRef.current))
+      mark("spawnField done")
       if (disposed) {
         try {
           world.free()
@@ -610,7 +653,13 @@ export function startSession(ctx: SessionCtx): () => void {
       })
 
       if (disposed) return
-      renderer!.compile(scene, camera)
+      const skyEnv = new SkyEnvironment(renderer!)
+      skyEnv.refresh(scene)
+      mark("player+garage ready")
+      // Async compile lets the driver build shaders in parallel instead of
+      // blocking on each program in turn.
+      await renderer!.compileAsync(scene, camera)
+      mark("shaders compiled")
       {
         const revealed: THREE.Object3D[] = []
         const unculled: THREE.Object3D[] = []
@@ -627,6 +676,7 @@ export function startSession(ctx: SessionCtx): () => void {
         })
         try {
           aa = new AntiAlias(renderer!, scene, camera)
+          mark("AA created")
           aa.render(
             settingsRef.current.antiAliasing ?? "fxaa",
             settingsRef.current.motionBlur ?? 0,
@@ -636,14 +686,20 @@ export function startSession(ctx: SessionCtx): () => void {
           console.warn("warm-up render failed", e)
         }
         try {
-          wm.prewarmReflections?.(renderer!, scene, camera)
+          mark("warm render done")
+          if (wm.prewarmReflectionsAsync)
+            await wm.prewarmReflectionsAsync(renderer!, scene, camera)
+          else wm.prewarmReflections?.(renderer!, scene, camera)
         } catch (e) {
           console.warn("reflection warm-up failed", e)
         }
         for (const o of revealed) o.visible = false
         for (const o of unculled) o.frustumCulled = true
       }
+      mark("ready")
       setLoading(false)
+      // Traffic fills in over the first second or two, far from the player.
+      void spawnTrafficLater?.().then(() => mark("traffic spawned"))
 
       const circuit = map.circuit
       const lapTimer = circuit
@@ -662,6 +718,7 @@ export function startSession(ctx: SessionCtx): () => void {
       const loop = (now: number) => {
         if (disposed) return
         raf = requestAnimationFrame(loop)
+        skyEnv.refresh(scene)
         const loopT0 = performance.now()
         spike.enabled = hud.shown()
         spike.begin(now - last, () =>
@@ -1131,6 +1188,7 @@ export function startSession(ctx: SessionCtx): () => void {
             let upgrades = 0
             ranked.forEach(({ i, d }, rank) => {
               const r = rivals[i]
+              r.visual.setGloss(r.visual.glossy ? d < 6400 : d < 3600)
               if (r.hi && (d > DETAIL_FAR * DETAIL_FAR || rank >= HI_MAX + 2)) {
                 r.hi = false
                 r.visual.setDetail(false)
@@ -1453,6 +1511,7 @@ export function startSession(ctx: SessionCtx): () => void {
       ;(mount as any)._cleanup = () => {
         garageApiRef.current = null
         garage?.dispose()
+        skyEnv.dispose()
         window.removeEventListener("resize", onResize)
         hud.dispose()
         lock.dispose()

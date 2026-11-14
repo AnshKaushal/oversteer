@@ -1,6 +1,6 @@
 import * as THREE from "three"
 import { LampSet } from "./AirportLamps"
-import { makeGlowTexture } from "./GlowTexture"
+import { makeBloomTexture } from "./GlowTexture"
 import type { FlightPath, TerrainAt } from "./AirplaneFlyby"
 import { roadCenterX } from "./WorldManager"
 import {
@@ -502,11 +502,7 @@ function makeConnectorTexture(): THREE.CanvasTexture {
 }
 
 function makeLampGlow(): THREE.Texture {
-  return makeGlowTexture([
-    [0, 1],
-    [0.25, 0.55],
-    [1, 0],
-  ])
+  return makeBloomTexture(128, 0.25)
 }
 
 type Rgb = [number, number, number]
@@ -779,7 +775,7 @@ export class AirportView {
       stem: (i) => smallY(i) > 0.45 && smallY(i) < 3,
       flat: (i) => smallY(i) <= 0.45,
       glow,
-      haloScale: 9,
+      haloScale: 6,
     })
     this.group.add(this.lamps.group)
 
@@ -798,7 +794,7 @@ export class AirportView {
       radius: (i) => (i >= this.beaconIndex ? 0.7 : 0.5),
       stem: () => false,
       glow,
-      haloScale: 12,
+      haloScale: 8,
     })
     st.group.add(this.bigLamps.group)
     for (const set of [this.lamps, this.bigLamps]) {

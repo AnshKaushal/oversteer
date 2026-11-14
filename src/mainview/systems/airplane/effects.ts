@@ -1,6 +1,6 @@
 import { fadeWithFog } from "../fogFade"
 import * as THREE from "three"
-import { makeGlowTexture } from "../GlowTexture"
+import { makeBloomTexture } from "../GlowTexture"
 
 export function makeShadowTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas")
@@ -21,13 +21,7 @@ export function makeShadowTexture(): THREE.CanvasTexture {
 let sharedGlowTexture: THREE.Texture | null = null
 
 export function getAirplaneLightGlowTexture(): THREE.Texture {
-  sharedGlowTexture ??= makeGlowTexture([
-    [0, 1],
-    [0.1, 0.9],
-    [0.28, 0.32],
-    [0.55, 0.08],
-    [1, 0],
-  ])
+  sharedGlowTexture ??= makeBloomTexture(128, 0.45)
   return sharedGlowTexture
 }
 

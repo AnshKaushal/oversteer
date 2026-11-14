@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { createGLTFLoader } from "./gltf"
 import type { CarVisual } from "./CarVisual"
 import {
   SURFACES,
@@ -107,7 +107,7 @@ export class Garage {
   private shake = 0
 
   static async load(baseUrl: string): Promise<Garage> {
-    const glb = await new GLTFLoader().loadAsync(`${baseUrl}models/garage.glb`)
+    const glb = await createGLTFLoader().loadAsync(`${baseUrl}models/garage.glb`)
     const g = new Garage()
     const root = glb.scene
     const dummy = root.getObjectByName(DUMMY_CAR)

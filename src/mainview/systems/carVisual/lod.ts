@@ -184,3 +184,47 @@ export function mergeInto(
     this.hiMerged.push(out)
   }
 }
+
+/**
+ * Pair every clear-coated paint material with a plain standard twin so far-off
+ * cars can skip the extra clearcoat lobe. Call after mergeStatic so merged
+ * meshes (which hold the final materials) are covered.
+ */
+export function buildGlossSlots(this: CarVisual) {
+  const twins = new Map<THREE.Material, THREE.MeshStandardMaterial>()
+  this.glossSlots = []
+  this.plainPaintMats = []
+  this.group.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return
+    if (this.loGroup && this.isInside(mesh, this.loGroup)) return
+    const phys = mesh.material as THREE.MeshPhysicalMaterial
+    if (!phys.isMeshPhysicalMaterial || phys.clearcoat <= 0) return
+    let plain = twins.get(phys)
+    if (!plain) {
+      plain = new THREE.MeshStandardMaterial()
+      THREE.MeshStandardMaterial.prototype.copy.call(plain, phys)
+      plain.metalness = 0.25
+      plain.roughness = 0.32
+      twins.set(phys, plain)
+      this.plainPaintMats.push(plain)
+    }
+    this.glossSlots.push({ mesh, glossy: phys, plain })
+  })
+  this.glossy = true
+}
+
+export function setGloss(this: CarVisual, on: boolean) {
+  if (on === this.glossy) return
+  this.glossy = on
+  for (const s of this.glossSlots) s.mesh.material = on ? s.glossy : s.plain
+}
+
+export function isInside(
+  this: CarVisual,
+  o: THREE.Object3D,
+  root: THREE.Object3D,
+): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === root) return true
+  return false
+}

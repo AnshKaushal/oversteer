@@ -230,6 +230,35 @@ export class Puddles {
     }
   }
 
+  /** Compile the clipped half-float variants in parallel first, so the draw in
+   * prewarmReflection finds every program ready instead of building each one
+   * synchronously. Falls back to the sync path for anything it misses. */
+  async prewarmReflectionAsync(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ) {
+    const rt = new THREE.WebGLRenderTarget(4, 4, {
+      type: THREE.HalfFloatType,
+      samples: 0,
+    })
+    const prevTarget = renderer.getRenderTarget()
+    const prevClip = renderer.clippingPlanes
+    try {
+      renderer.clippingPlanes = [this.reflPlane]
+      renderer.setRenderTarget(rt)
+      // An empty render makes the renderer adopt the clip-plane state that
+      // compile() reads when it builds program keys.
+      renderer.render(new THREE.Scene(), camera)
+      await renderer.compileAsync(scene, camera)
+    } finally {
+      renderer.setRenderTarget(prevTarget)
+      renderer.clippingPlanes = prevClip
+      rt.dispose()
+    }
+    this.prewarmReflection(renderer, scene, camera)
+  }
+
   renderReflection(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,

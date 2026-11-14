@@ -29,6 +29,22 @@ function isPaintMaterial(mat: THREE.Material, meshName: string): boolean {
   return max > 0.15 && max - min < 0.18 && c.b >= c.r * 0.7
 }
 
+/** Convert a standard material to glossy clear-coated car paint. */
+export function toClearcoatPaint(
+  mat: THREE.MeshStandardMaterial,
+): THREE.MeshPhysicalMaterial {
+  const p = new THREE.MeshPhysicalMaterial()
+  // Physical.copy() reads physical-only fields a standard source lacks.
+  THREE.MeshStandardMaterial.prototype.copy.call(p, mat)
+  p.userData = { ...mat.userData }
+  p.metalness = 0.6
+  p.roughness = 0.38
+  p.clearcoat = 1
+  p.clearcoatRoughness = 0.04
+  p.envMapIntensity = 1
+  return p
+}
+
 export const PAINT_SWATCHES: { name: string; value: number | null }[] = [
   { name: "Stock", value: null },
   { name: "Black", value: 0x000000 },
@@ -150,7 +166,7 @@ export function tintCar(
       }
       if (!paint) return mat
       changed = true
-      const clone = mat.clone() as THREE.MeshStandardMaterial
+      const clone = toClearcoatPaint(mat as THREE.MeshStandardMaterial)
       if (clone.color) {
         clone.color.copy(tint)
         const shade = mat.userData?.paintShade
@@ -165,11 +181,8 @@ export function tintCar(
           )
           if (neutral) clone.map = neutral
         }
+        clone.metalness = 0.45
       } else {
-        if (clone.metalness !== undefined) {
-          clone.metalness = 0.25
-          clone.roughness = 0.32
-        }
         clone.map = null
         clone.emissiveMap = null
         if (clone.emissive) clone.emissive.setRGB(0, 0, 0)
