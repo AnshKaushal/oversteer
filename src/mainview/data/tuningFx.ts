@@ -1,6 +1,6 @@
-import { Engine } from "../physics/vehicle/components/Engine"
+import { Engine, enginePeaks } from "../physics/vehicle/components/Engine"
 import type { CarSpec } from "./schema"
-import { applyTuning, type Tuning } from "./tuning"
+import { applyTuning, STOCK_TUNING, type Tuning } from "./tuning"
 
 const G = 9.81
 const RPM_TO_RAD = (2 * Math.PI) / 60
@@ -135,9 +135,42 @@ export interface TuneEffects extends TunedStats {
   stockTopKmh: number
   /** Percent change against stock. */
   gripPct: number
+  powerHP: number
+  stockPowerHP: number
+  /** Percent change in braking force against stock. */
+  brakingPct: number
   /** -1 (planted) .. +1 (loose rear). */
   balance: number
 }
+
+// Alignment: a little camber helps cornering grip, too much loses it.
+const camberGain = (v: number) => {
+  const deg = (v - 1) * 3
+  return 0.012 * deg - 0.005 * deg * deg
+}
+const gripPct = (t: Tuning) =>
+  (t.gripBias -
+    1 +
+    (t.downforce - 1) * 0.05 +
+    camberGain(t.camberFront) * 0.6 +
+    camberGain(t.camberRear) * 0.4) *
+  100
+
+/** -1 (planted) .. +1 (loose rear). */
+const balance = (t: Tuning) =>
+  Math.max(
+    -1,
+    Math.min(
+      1,
+      (t.rearBias - 1) / 0.6 +
+        (t.diffLock - 1) * 0.25 +
+        (t.brakeBias - 1) * -0.5 +
+        (t.toeRear - 1) * -0.6 +
+        (t.toeFront - 1) * 0.3 +
+        (t.camberRear - 1) * -0.3 +
+        (t.camberFront - 1) * 0.3,
+    ),
+  )
 
 export function tuneEffects(car: CarSpec, t: Tuning): TuneEffects {
   const tuned = tunedStats(car, t)
@@ -145,48 +178,63 @@ export function tuneEffects(car: CarSpec, t: Tuning): TuneEffects {
     ...tuned,
     stockZeroTo100: car.tested.zeroToHundredS,
     stockTopKmh: car.tested.topSpeedKmh,
-    gripPct: (t.gripBias - 1 + (t.downforce - 1) * 0.05) * 100,
-    balance: Math.max(-1, Math.min(1, (t.rearBias - 1) / 0.6)),
+    gripPct: gripPct(t),
+    powerHP: enginePeaks(applyTuning(car, t).physics.engine).powerHP,
+    stockPowerHP: enginePeaks(car.physics.engine).powerHP,
+    brakingPct: (t.brakeForce - 1) * 100,
+    balance: balance(t),
   }
 }
 
+const preset = (o: Partial<Tuning>): Tuning => ({ ...STOCK_TUNING, ...o })
+
 export const TUNE_PRESETS: { id: string; label: string; t: Tuning }[] = [
-  {
-    id: "stock",
-    label: "Stock",
-    t: { gearing: 1, springs: 1, rearBias: 1, downforce: 1, gripBias: 1 },
-  },
+  { id: "stock", label: "Stock", t: preset({}) },
   {
     id: "grip",
     label: "Grip",
-    t: {
+    t: preset({
       gearing: 1.05,
       springs: 1.15,
       rearBias: 0.8,
       downforce: 1.5,
       gripBias: 1.03,
-    },
+      damping: 1.2,
+      diffLock: 0.8,
+      camberFront: 1.3,
+      camberRear: 1.15,
+      brakeForce: 1.1,
+      driftAssist: 1.1,
+    }),
   },
   {
     id: "drift",
     label: "Drift",
-    t: {
+    t: preset({
       gearing: 1.08,
       springs: 0.9,
       rearBias: 1.45,
       downforce: 0.7,
       gripBias: 0.97,
-    },
+      power: 1.15,
+      diffLock: 1.9,
+      steerAngle: 1.2,
+      toeFront: 0.7,
+      camberFront: 1.25,
+      camberRear: 0.8,
+      brakeBias: 0.9,
+      driftAssist: 0.6,
+    }),
   },
   {
     id: "speed",
     label: "Top speed",
-    t: {
+    t: preset({
       gearing: 0.88,
       springs: 1.1,
-      rearBias: 1,
       downforce: 0.55,
-      gripBias: 1,
-    },
+      power: 1.2,
+      damping: 1.1,
+    }),
   },
 ]

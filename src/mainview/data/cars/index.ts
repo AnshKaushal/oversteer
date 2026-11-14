@@ -7,11 +7,11 @@ import { porsche997Gt2 } from "./porsche-997-gt2"
 import { gWagon } from "./g-wagon"
 import { lamboUrus } from "./lambo-urus"
 import { lamboAventador } from "./lambo-aventador"
-import { dodgeChallenger } from "./dodge-challenger"
+import { dodgeChallengerHellcat } from "./dodge-challenger-hellcat"
 import { f1Car } from "./f1-car"
 import { cheetah84 } from "./cheetah-84"
-import { dodgeCharger69 } from "./dodge-charger-69"
-import { mercedesSl65 } from "./mercedes-sl65-amg"
+import { fordMustang69 } from "./ford-mustang-69"
+import { mercedesW124 } from "./mercedes-w124"
 import { bugattiChironPurSport } from "./bugatti-chiron-pur-sport"
 import { mitsubishiLancerEvo6 } from "./mitsubishi-lancer-evo-6"
 import { nissan350z } from "./nissan-350z"
@@ -25,11 +25,11 @@ const ALL_CARS: CarSpec[] = [
   gWagon,
   lamboUrus,
   lamboAventador,
-  dodgeChallenger,
+  dodgeChallengerHellcat,
   f1Car,
   cheetah84,
-  dodgeCharger69,
-  mercedesSl65,
+  fordMustang69,
+  mercedesW124,
   bugattiChironPurSport,
   mitsubishiLancerEvo6,
   nissan350z,

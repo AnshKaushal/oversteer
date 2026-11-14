@@ -66,13 +66,29 @@ function clearPadFocus() {
   })
 }
 
+// The < > car arrows are part of the orbit-view navigation too.
+let arrowFocus: HTMLElement | null = null
+const ARROWS = "[data-car-arrow]"
+const liveArrow = () => (arrowFocus?.isConnected ? arrowFocus : null)
+function clearArrow() {
+  arrowFocus?.removeAttribute(PAD_ATTR)
+  arrowFocus = null
+}
+
 function navigateOrbit(dir: Dir) {
   const pts: Pt[] = SURFACES.map((s) => pillPositions.get(s.id))
     .filter((p): p is NonNullable<typeof p> => !!p)
     .map((p) => ({ key: p.id, x: p.x, y: p.y }))
+  for (const el of document.querySelectorAll<HTMLElement>(ARROWS)) {
+    const r = el.getBoundingClientRect()
+    if (r.width > 1 && r.height > 1)
+      pts.push({ key: el, x: r.left + r.width / 2, y: r.top + r.height / 2 })
+  }
   if (!pts.length) return
+  const arrow = liveArrow()
   const cur = getHot()
-  const from = pts.find((p) => p.key === cur) ?? null
+  const from = (arrow && pts.find((p) => p.key === arrow)) ||
+    pts.find((p) => p.key === cur) || null
   const next = pick(
     from,
     pts,
@@ -80,13 +96,18 @@ function navigateOrbit(dir: Dir) {
     window.innerWidth / 2,
     window.innerHeight / 2,
   )
-  if (next) {
-    // clear pad-focus from all pills
-    for (const s of SURFACES) {
-      getPillElement(s.id)?.removeAttribute(PAD_ATTR)
-    }
+  if (!next) return
+  for (const s of SURFACES) {
+    getPillElement(s.id)?.removeAttribute(PAD_ATTR)
+  }
+  clearArrow()
+  if (typeof next.key === "string") {
     setHot(next.key as SurfaceId)
     getPillElement(next.key as SurfaceId)?.setAttribute(PAD_ATTR, "")
+  } else {
+    arrowFocus = next.key as HTMLElement
+    arrowFocus.setAttribute(PAD_ATTR, "")
+    setHot(null)
   }
 }
 
@@ -148,8 +169,16 @@ function navigateBoard(id: SurfaceId, dir: Dir) {
 function activate() {
   const f = getFocus()
   if (!f) {
+    const a = liveArrow()
+    if (a) {
+      a.click()
+      return
+    }
     const h = getHot()
-    if (h) setFocus(h)
+    if (h) {
+      clearArrow()
+      setFocus(h)
+    }
     return
   }
   const a = document.activeElement as HTMLElement | null
@@ -182,6 +211,7 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
     const prev: Record<number, boolean> = {}
     let stickDir: Dir | null = null
     let nextRepeat = 0
+    let lastStep = 0
     const loop = () => {
       raf = requestAnimationFrame(loop)
       const pad = Array.from(navigator.getGamepads?.() ?? []).find(
@@ -214,7 +244,7 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
       const ax = pad.axes[0] ?? 0
       const ay = pad.axes[1] ?? 0
       let sd: Dir | null = null
-      if (Math.hypot(ax, ay) > 0.6)
+      if (Math.hypot(ax, ay) > (stickDir ? 0.4 : 0.65))
         sd =
           Math.abs(ax) > Math.abs(ay)
             ? ax > 0
@@ -224,10 +254,14 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
               ? "down"
               : "up"
       const now = performance.now()
-      if (sd && (sd !== stickDir || now > nextRepeat)) {
+      // First tilt moves at once, then a slow repeat; a minimum gap stops
+      // jitter around the threshold or a direction flip from double-firing.
+      if (sd && now > nextRepeat && now - lastStep > 170) {
         if (!dir) dir = sd
-        nextRepeat = now + (sd === stickDir ? 220 : 380)
+        nextRepeat = now + (sd === stickDir ? 330 : 480)
+        lastStep = now
       }
+      if (!sd) nextRepeat = 0
       stickDir = sd
       if (dir) {
         const f = getFocus()

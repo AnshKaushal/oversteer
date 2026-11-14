@@ -485,19 +485,60 @@ export class CircuitWorld implements MapWorld {
     const e = new THREE.Euler()
     const pos = new THREE.Vector3()
     const scale = new THREE.Vector3()
-    for (let c = 0; c < chunkCount; c++) {
+    // Jobs: the first chunkCount hug the track (the dense verge band); the
+    // rest are open-field cells so vegetation spreads across the whole map.
+    let FIELD_CELL_M = 250
+    const FIELD_MARGIN_M = 500
+    const FIELD_PER_TREE_M2 = 600 // match the verge density
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity
+    for (let i = 0; i <= 400; i++) {
+      const p = t.at((i / 400) * t.lengthM)
+      minX = Math.min(minX, p.x)
+      maxX = Math.max(maxX, p.x)
+      minZ = Math.min(minZ, p.z)
+      maxZ = Math.max(maxZ, p.z)
+    }
+    minX -= FIELD_MARGIN_M
+    maxX += FIELD_MARGIN_M
+    minZ -= FIELD_MARGIN_M
+    maxZ += FIELD_MARGIN_M
+    // keep the cell count sane on huge tracks
+    const area = (maxX - minX) * (maxZ - minZ)
+    FIELD_CELL_M = Math.max(FIELD_CELL_M, Math.sqrt(area / 1600))
+    const FIELD_PER_CELL = Math.round(
+      (FIELD_CELL_M * FIELD_CELL_M) / FIELD_PER_TREE_M2,
+    )
+    const cellsX = Math.ceil((maxX - minX) / FIELD_CELL_M)
+    const cellsZ = Math.ceil((maxZ - minZ) / FIELD_CELL_M)
+    const jobs = chunkCount + cellsX * cellsZ
+    for (let c = 0; c < jobs; c++) {
+      const field = c >= chunkCount
       const rng = mulberry32(cfg.seed * 7919 + c * 104729 + 17)
       const mats: THREE.Matrix4[][] = protos.map(() => [])
       const tints: THREE.Color[][] = protos.map(() => [])
       let placed = 0
       const sLo = (c * t.lengthM) / chunkCount
       const sHi = ((c + 1) * t.lengthM) / chunkCount
-      for (let k = 0; k < perChunk * 2 && placed < perChunk; k++) {
-        const p = t.at(sLo + rng() * (sHi - sLo))
-        const side = rng() < 0.5 ? -1 : 1
-        const d = clear + Math.pow(rng(), 1.4) * cfg.treeBandM
-        const x = p.x - p.tz * side * d + (rng() - 0.5) * 3
-        const z = p.z + p.tx * side * d + (rng() - 0.5) * 3
+      const fi = c - chunkCount
+      const cellX0 = minX + (fi % cellsX) * FIELD_CELL_M
+      const cellZ0 = minZ + Math.floor(fi / cellsX) * FIELD_CELL_M
+      const target = field ? FIELD_PER_CELL : perChunk
+      for (let k = 0; k < target * 2 && placed < target; k++) {
+        let x: number
+        let z: number
+        if (field) {
+          x = cellX0 + rng() * FIELD_CELL_M
+          z = cellZ0 + rng() * FIELD_CELL_M
+        } else {
+          const p = t.at(sLo + rng() * (sHi - sLo))
+          const side = rng() < 0.5 ? -1 : 1
+          const d = clear + rng() * cfg.treeBandM
+          x = p.x - p.tz * side * d + (rng() - 0.5) * 3
+          z = p.z + p.tx * side * d + (rng() - 0.5) * 3
+        }
         const hit = t.nearby(x, z)
         if (hit && hit.dist < clear) continue
         const sc =

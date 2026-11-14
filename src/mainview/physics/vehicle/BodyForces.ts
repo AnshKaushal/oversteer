@@ -15,6 +15,14 @@ const HIGH_SPEED_SPAN = 1.5
 /** Cut begins at this share of the tire's peak slip angle, full a peak later. */
 const SLIDE_CUT_START_SHARE = 0
 const SLIDE_CUT_MAX = 0.85
+/**
+ * Drift leniency, set per car through the drift-assist tuning slider (the
+ * spec's driftDeadzoneScale / driftAuthorityScale, 1 = stock). While the driver
+ * steers, the assist waits for a wider slip angle and pulls back less; the
+ * effect fades out toward a spin so the car still catches itself.
+ */
+const DRIFT_FADE_FROM = 0.6 // rad of slip angle where leniency starts to fade
+const DRIFT_FADE_SPAN = 0.35
 const SLIDE_CUT_MIN_SPEED = 5
 const SLIDE_CUT_RISE = 4
 const SLIDE_CUT_FALL = 3
@@ -174,8 +182,17 @@ export class BodyForces {
       !input.handbrake
     ) {
       const steering = Math.abs(input.steer) >= b.steeringThreshold
+      const lenient =
+        steering && !input.handbrake
+          ? 1 -
+            clamp((Math.abs(k.beta) - DRIFT_FADE_FROM) / DRIFT_FADE_SPAN, 0, 1)
+          : 0
       const excess =
-        Math.abs(k.beta) - (steering ? b.deadzoneSteering : b.deadzone)
+        Math.abs(k.beta) -
+        (steering
+          ? b.deadzoneSteering *
+            (1 + ((b.driftDeadzoneScale ?? 1) - 1) * lenient)
+          : b.deadzone)
       if (excess > 0) {
         const speedF = clamp(Math.abs(k.fwdSpeed) / b.speedRef, 0, 1)
         const highSpeed =
@@ -195,7 +212,8 @@ export class BodyForces {
             : 1) *
           (b.baseAuthority + b.authority) *
           (powerOn ? 1 : b.liftBoost) *
-          highSpeed
+          highSpeed *
+          (1 + ((b.driftAuthorityScale ?? 1) - 1) * lenient)
         const countersteering = Math.sign(input.steer) === -Math.sign(k.beta)
         const intent = countersteering
           ? input.steer *

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react"
 import { curveLookup } from "../physics/math"
 import { Engine } from "../physics/vehicle/components/Engine"
 import { getCar } from "../data/cars"
-import { applyTuning, gearSpeeds, loadTuning } from "../data/tuning"
+import { applyTuning, gearSpeeds, loadTuning, STOCK_TUNING } from "../data/tuning"
 import type { CarSpec } from "../data/schema"
 
 const RAD_TO_RPM = 60 / (2 * Math.PI)
@@ -172,13 +172,7 @@ function reload() {
 /** Speed at redline in the current gear - the same formula as the tuning board. */
 function redlineKmh(): number {
   if (!car) return 0
-  const g = gearSpeeds(car, {
-    gearing: 1,
-    springs: 1,
-    rearBias: 1,
-    downforce: 1,
-    gripBias: 1,
-  })
+  const g = gearSpeeds(car, STOCK_TUNING)
   return g[state.gear - 1]?.kmhAtRedline ?? 0
 }
 

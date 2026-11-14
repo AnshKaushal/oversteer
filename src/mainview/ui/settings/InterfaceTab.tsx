@@ -1,5 +1,13 @@
-import { Check, Gauge, Activity } from "lucide-react"
+import { Check, Gauge, Activity, Timer, Plus, X } from "lucide-react"
 import type { TabProps } from "./types"
+
+const DEFAULT_RUNS = [
+  { from: 0, to: 100 },
+  { from: 100, to: 200 },
+  { from: 100, to: 0 },
+]
+const MAX_RUNS = 5
+const num = (v: string) => Math.max(0, Math.min(500, Math.round(Number(v) || 0)))
 
 export function InterfaceTab({ settings, onUpdateSettings }: TabProps) {
   const handleSelectDashStyle = (style: "modern" | "classic" | "single") =>
@@ -134,6 +142,119 @@ export function InterfaceTab({ settings, onUpdateSettings }: TabProps) {
           aria-label="Camera Movement Speed"
           className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#51a7d5]"
         />
+      </div>
+
+      {}
+      <div
+        data-anim-item
+        className="rounded border border-white/10 bg-white/[0.02] p-4 space-y-3"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-wider text-[#8f99a8] uppercase flex items-center gap-1.5">
+              <Timer size={14} className="text-[#51a7d5]" />
+              Speed Timer
+            </div>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              Times 0–100, 100–0, 100–200 and your own speed gates (km/h) in
+              free roam, shown above the right dial. Stop, then accelerate or
+              brake through the gates.
+            </p>
+          </div>
+          <button
+            onClick={() =>
+              onUpdateSettings({
+                ...settings,
+                speedTimer: settings.speedTimer === false,
+              })
+            }
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+              settings.speedTimer !== false ? "bg-[#51a7d5]" : "bg-gray-700"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                settings.speedTimer !== false ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+        {settings.speedTimer !== false && (
+          <div className="space-y-2">
+            {(settings.speedRuns ?? DEFAULT_RUNS).map((r, i) => {
+              const runs = settings.speedRuns ?? DEFAULT_RUNS
+              const set = (next: { from: number; to: number }) =>
+                onUpdateSettings({
+                  ...settings,
+                  speedRuns: runs.map((x, j) => (j === i ? next : x)),
+                })
+              const field =
+                "w-20 rounded border border-white/10 bg-black/40 px-2 py-1 text-center text-sm font-semibold tabular-nums text-white focus:border-[#51a7d5] focus:outline-none"
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={500}
+                    value={r.from}
+                    aria-label="From km/h"
+                    onChange={(e) => set({ ...r, from: num(e.target.value) })}
+                    className={field}
+                  />
+                  <span className="text-gray-400">→</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={500}
+                    value={r.to}
+                    aria-label="To km/h"
+                    onChange={(e) => set({ ...r, to: num(e.target.value) })}
+                    className={field}
+                  />
+                  <span className="text-[11px] text-gray-400">km/h</span>
+                  <button
+                    onClick={() =>
+                      onUpdateSettings({
+                        ...settings,
+                        speedRuns: runs.filter((_, j) => j !== i),
+                      })
+                    }
+                    aria-label="Remove run"
+                    className="ml-auto rounded p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )
+            })}
+            <div className="flex gap-2 pt-1">
+              {(settings.speedRuns ?? DEFAULT_RUNS).length < MAX_RUNS && (
+                <button
+                  onClick={() =>
+                    onUpdateSettings({
+                      ...settings,
+                      speedRuns: [
+                        ...(settings.speedRuns ?? DEFAULT_RUNS),
+                        { from: 0, to: 60 },
+                      ],
+                    })
+                  }
+                  className="flex items-center gap-1 rounded border border-white/10 bg-black/30 px-2.5 py-1 text-xs font-semibold text-gray-300 hover:border-white/25 hover:text-white"
+                >
+                  <Plus size={13} /> Add run
+                </button>
+              )}
+              <button
+                onClick={() =>
+                  onUpdateSettings({ ...settings, speedRuns: DEFAULT_RUNS })
+                }
+                className="rounded border border-white/10 bg-black/30 px-2.5 py-1 text-xs font-semibold text-gray-300 hover:border-white/25 hover:text-white"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

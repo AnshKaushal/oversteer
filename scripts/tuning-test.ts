@@ -43,6 +43,46 @@ ok(
   "downforce applied",
 )
 ok(validateCar(t).length === 0, "tuned car still validates")
+const t2 = applyTuning(car, {
+  ...STOCK_TUNING,
+  power: 1.2,
+  brakeForce: 1.2,
+  diffLock: 1.5,
+  camberFront: 1.3,
+  toeRear: 1.5,
+  steerAngle: 1.1,
+})
+const c0 = car.physics
+ok(t2.physics.engine.maxTorqueNm > c0.engine.maxTorqueNm, "power applied")
+ok(t2.physics.wheels.brakeForce.front > c0.wheels.brakeForce.front, "brakes applied")
+ok(
+  t2.physics.differential.lsdAccelLock >= c0.differential.lsdAccelLock,
+  "diff lock applied",
+)
+ok(
+  t2.physics.wheels.alignment.front.camberDeg >
+    c0.wheels.alignment.front.camberDeg,
+  "camber applied",
+)
+ok(validateCar(t2).length === 0, "alignment/diff tuned car validates")
+const ext = applyTuning(car, {
+  ...STOCK_TUNING,
+  camberFront: 0.5,
+  camberRear: 1.5,
+  toeFront: 0.5,
+  toeRear: 1.5,
+  diffLock: 2,
+  brakeForce: 1.3,
+  brakeBias: 1.2,
+})
+ok(validateCar(ext).length === 0, "extreme tuning still validates")
+const dr = applyTuning(car, { ...STOCK_TUNING, driftAssist: 0.6 })
+ok(
+  (dr.physics.assists.bodyStability.driftDeadzoneScale ?? 1) > 1 &&
+    (dr.physics.assists.bodyStability.driftAuthorityScale ?? 1) < 1,
+  "drift assist lenient",
+)
+ok(validateCar(dr).length === 0, "drift-tuned car validates")
 const clamp = applyTuning(car, { ...STOCK_TUNING, gearing: 99 })
 ok(
   clamp.physics.transmission.finalDriveRatio <=

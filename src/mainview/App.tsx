@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { onLoadProgress } from "./systems/loadProgress"
 import { LiveDashboard } from "./ui/LiveHud"
+import { SpeedTimerHud } from "./ui/SpeedTimerHud"
 import { listMaps, getMap, randomSeed, type MapWorld } from "./maps"
 import {
   type TimeOfDayMode,
@@ -637,6 +638,7 @@ export default function App() {
             initial={initialTele}
             dashStyle={settings.dashStyle ?? "modern"}
           />
+          {settings.speedTimer !== false && !race.active && <SpeedTimerHud />}
         </Screen>
       )}
       {hudVisible && (

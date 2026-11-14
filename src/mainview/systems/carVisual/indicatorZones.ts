@@ -12,6 +12,8 @@ export interface IndicatorZone {
   glow?: number
   /** The zone is the tail lamp itself: dim at rest, bright while braking. */
   brake?: boolean
+  /** The zone is a headlight: lit with the headlights, amber when flashing. */
+  head?: boolean
 }
 
 const AMBER_LENS = 0x6a3300
@@ -29,6 +31,28 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
   // bright when braking, amber when flashing
   "aston_martin_db12.glb": [
     { end: "rear", mesh: "^Tail_Lamp$", glow: 0xff0000, brake: true },
+  ],
+  // Chiron rear: the red lamp strip is the indicator, like the DB12's
+  "bugatti_chiron_pur_sport.glb": [
+    { end: "rear", mesh: "^Tail_Lamp$", glow: 0xff0000, brake: true },
+  ],
+  // W124: the orange corner lenses are the indicators, front and rear; the
+  // red tail lamps stay separate and glow on braking
+  "mercedes_benz_w124.glb": [
+    { end: "front", mesh: "^Indicator_Amber", idle: AMBER_LENS },
+    { end: "rear", mesh: "^Indicator_Amber", idle: AMBER_LENS },
+  ],
+  // Mustang front: the housing ring round each headlight is the indicator;
+  // rear: the outer of the three red bars (dim red, bright on braking)
+  "ford_mustang_1969.glb": [
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x2d2d2d },
+    { end: "rear", mesh: "^Indicator_Amber", glow: 0xff0000, brake: true },
+  ],
+  // Hellcat front: the outer of the two lamp rings (lit with the headlights);
+  // rear: the lower of the two red bars (dim red, bright on braking)
+  "dodge_challenger_srt_hellcat.glb": [
+    { end: "front", mesh: "^Indicator_Amber", glow: 0xffffff, head: true },
+    { end: "rear", mesh: "^Indicator_Amber", glow: 0xff0000, brake: true },
   ],
   "nissan_350z.glb": [
     { end: "front", mesh: "^Object_6$", dx: [0.3, 0.42], y: [0.15, 0.42] },

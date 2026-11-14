@@ -24,6 +24,7 @@ import {
 } from "../physics/core/PhysicsSystem"
 import { PoseHistory } from "../physics/core/PoseHistory"
 import { teleStore } from "../ui/LiveHud"
+import { speedTimer } from "../systems/speedTimer"
 import { Skidmarks } from "../systems/Skidmarks"
 import { applyTuning, loadTuning } from "../data/tuning"
 import { Vehicle } from "../physics/vehicle/Vehicle"
@@ -66,7 +67,7 @@ import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD } from "../data/world"
 import { getCar } from "../data/cars"
 import { Garage } from "../systems/Garage"
-import { placeSurface } from "../systems/garageBoard"
+import { placeSurface, resolvePills, pointerOverOpenBoard } from "../systems/garageBoard"
 import { SURFACES } from "../systems/garageSurfaces"
 import { getFocus } from "../systems/garageFocus"
 import { dyno } from "../systems/dyno"
@@ -668,7 +669,14 @@ export function startSession(ctx: SessionCtx): () => void {
             padAbsApplied = true
           }
         } else padAbsApplied = false
-        if (!startedRef.current && !showIntroRef.current && inp.startPressed)
+        // In the garage the pad's A button selects menu items (useGarageNav),
+        // so it must not also start free roam.
+        if (
+          !startedRef.current &&
+          !showIntroRef.current &&
+          inp.startPressed &&
+          !(garage && input.padConnected)
+        )
           startGame()
         if (startedRef.current && inp.pausePressed) {
           if (pausedRef.current) resumeFnRef.current()
@@ -1356,9 +1364,15 @@ export function startSession(ctx: SessionCtx): () => void {
             const hole = garage.holes.get(sf.id)
             if (hole) hole.visible = shown
           }
+          resolvePills(
+            renderer!.domElement.clientWidth,
+            renderer!.domElement.clientHeight,
+          )
           // Focused screens sit behind the canvas; let clicks fall through.
           renderer!.domElement.style.pointerEvents =
-            focused && focused !== "dyno" ? "none" : "auto"
+            (focused && focused !== "dyno") || (!focused && pointerOverOpenBoard())
+              ? "none"
+              : "auto"
         }
 
         flyby?.update(
@@ -1407,6 +1421,14 @@ export function startSession(ctx: SessionCtx): () => void {
               input.rumble(jolt, Math.max(slip * 0.6, t.drift ? 0.35 : 0))
             }
           }
+        }
+
+        if (t && startedRef.current && !pausedRef.current) {
+          const st = settingsRef.current
+          if (st.speedTimer !== false && !raceActive) {
+            speedTimer.configure(st.speedRuns ?? [])
+            speedTimer.update(t.speedKmh, dt)
+          } else speedTimer.reset()
         }
 
         if (t && now - teleRef.last > 50) {

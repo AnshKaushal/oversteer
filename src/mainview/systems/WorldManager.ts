@@ -113,7 +113,7 @@ export class WorldManager {
   segProps = new Map<number, PropEntry[]>()
   segMin = 0
   segMax = -1
-  maxProps = 18000
+  maxProps = 36000
   slotFree = new Map<number, number[]>()
   slotHigh = new Map<number, number>()
   segSlots = new Map<number, { vi: number; idx: number; t: PropEntry }[]>()

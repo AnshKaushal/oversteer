@@ -137,6 +137,8 @@ export interface AppSettings {
   cameraSpeed?: number
   motionBlur?: number
   antiAliasing?: "off" | "fxaa" | "smaa" | "msaa"
+  speedTimer?: boolean
+  speedRuns?: { from: number; to: number }[]
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -157,6 +159,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   rumble: true,
   cameraSpeed: 1,
   motionBlur: 0,
+  speedTimer: true,
+  speedRuns: [
+    { from: 0, to: 100 },
+    { from: 100, to: 200 },
+    { from: 100, to: 0 },
+  ],
 }
 
 const SETTINGS_KEY = "oversteer_settings"

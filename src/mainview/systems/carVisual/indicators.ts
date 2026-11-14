@@ -396,6 +396,7 @@ export function planIndicators(
         if (mat) {
           mat.userData.glow = z.glow
           if (z.brake) mat.userData.brakeLamp = true
+          if (z.head) mat.userData.headLamp = true
         }
       }
     }
@@ -556,7 +557,11 @@ export function updateIndicators(this: CarVisual, dt: number) {
           : this.headlightsOn
             ? TAIL_RUNNING
             : TAIL_OFF
-        : 4.373
+        : mat.userData.headLamp
+          ? this.headlightsOn
+            ? 4.373
+            : 0
+          : 4.373
       mat.emissiveIntensity = (active ? (flash ? 5 : 0) : rest) * this.power
       if (mat.userData.brakeLamp && !active) mat.color.setRGB(0.25, 0.01, 0.01)
       else mat.color.setScalar(active && !flash ? 0.03 : 0.8)

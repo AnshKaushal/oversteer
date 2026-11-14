@@ -145,3 +145,91 @@ export function placeSurface(
   }
   return !!h && !def.hud
 }
+
+/**
+ * Nudge hotspot pills apart so none covers another. Run once per frame after
+ * every surface is placed; positions are recomputed from scratch each frame so
+ * the result is stable, and gamepad navigation sees the nudged positions.
+ */
+export function resolvePills(width: number, height: number) {
+  const items: { p: PillPos; hw: number; hh: number; e: Entry }[] = []
+  for (const s of SURFACES) {
+    const p = pillPositions.get(s.id)
+    const e = entries.get(s.id)
+    if (!p || !e?.pill || e.pill.style.visibility === "hidden") continue
+    items.push({
+      p,
+      e,
+      hw: e.pill.offsetWidth / 2 + 6,
+      hh: e.pill.offsetHeight / 2 + 6,
+    })
+  }
+  if (items.length < 2) return
+  for (let it = 0; it < 12; it++) {
+    let moved = false
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i]
+        const b = items[j]
+        const dx = b.p.x - a.p.x
+        const dy = b.p.y - a.p.y
+        const ox = a.hw + b.hw - Math.abs(dx)
+        const oy = a.hh + b.hh - Math.abs(dy)
+        if (ox <= 0 || oy <= 0) continue
+        moved = true
+        // Separate along the shallower axis; prefer vertical (pills are wide).
+        if (oy <= ox * 1.5) {
+          const s = (dy === 0 ? (i % 2 ? 1 : -1) : Math.sign(dy)) * (oy / 2 + 0.5)
+          a.p.y -= s
+          b.p.y += s
+        } else {
+          const s = (dx === 0 ? (i % 2 ? 1 : -1) : Math.sign(dx)) * (ox / 2 + 0.5)
+          a.p.x -= s
+          b.p.x += s
+        }
+      }
+    }
+    for (const { p, hw, hh } of items) {
+      p.x = Math.max(hw, Math.min(width - hw, p.x))
+      p.y = Math.max(hh, Math.min(height - hh, p.y))
+    }
+    if (!moved) break
+  }
+  for (const { p, e } of items)
+    e.pill!.style.transform = `translate3d(${p.x}px,${p.y}px,0) translate(-50%,-50%)`
+}
+
+let mx = -1
+let my = -1
+let down = false
+let tracking = false
+function trackPointer() {
+  if (tracking || typeof window === "undefined") return
+  tracking = true
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      mx = e.clientX
+      my = e.clientY
+    },
+    true,
+  )
+  window.addEventListener("pointerdown", () => (down = true), true)
+  window.addEventListener("pointerup", () => (down = false), true)
+  window.addEventListener("pointercancel", () => (down = false), true)
+}
+let lastOver = false
+/**
+ * True while the pointer is over the always-clickable Color board. The canvas
+ * sits above the boards, so the session lets clicks fall through it then. Held
+ * steady during a drag so orbiting never gets interrupted.
+ */
+export function pointerOverOpenBoard(): boolean {
+  trackPointer()
+  if (down) return lastOver
+  const el = entries.get("paint")?.el
+  if (!el || el.style.visibility === "hidden" || mx < 0) return (lastOver = false)
+  return (lastOver = document
+    .elementsFromPoint(mx, my)
+    .some((n) => el.contains(n)))
+}

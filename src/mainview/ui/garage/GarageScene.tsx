@@ -104,7 +104,9 @@ function Surface({
     <div
       ref={ref}
       className={`absolute top-0 left-0 origin-top-left overflow-hidden text-white ${
-        focused ? "pointer-events-auto" : "pointer-events-none"
+        focused || id === "paint"
+          ? "pointer-events-auto"
+          : "pointer-events-none"
       } ${def.real ? "p-10" : "bg-[#0c0f14] p-7"}`}
       style={{ width: def.px[0], height: def.px[1], visibility: "hidden" }}
     >
@@ -466,6 +468,7 @@ export function GarageScene(p: GarageSceneProps) {
           <button
             onClick={p.onPrevCar}
             aria-label="Previous car"
+            data-car-arrow
             className={`${arrowBtn} left-3 md:left-6`}
           >
             <ChevronLeft />
@@ -473,6 +476,7 @@ export function GarageScene(p: GarageSceneProps) {
           <button
             onClick={p.onNextCar}
             aria-label="Next car"
+            data-car-arrow
             className={`${arrowBtn} right-3 md:right-6`}
           >
             <ChevronRight />

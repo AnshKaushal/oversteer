@@ -139,7 +139,20 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
         maxD = W.maxDistanceFromRoad
       }
       pushProp(s, seed, i, minD, maxD, pool, base, -0.15, pool === rockIdxs)
-      if (out.length > 60) return out
+      if (out.length > 60) break
+    }
+    if (out.length > 60) break
+  }
+
+  // sparse far-field trees so vegetation spreads across the map, not just the verge
+  if (treeIdxs.length > 0) {
+    const farFrom = W.maxDistanceFromRoad
+    for (let s = s0; s < s0 + this.segLen; s += 2) {
+      const seed = Math.floor(s * 4) * 11 + seg * 20011 + 4242
+      const n = 1 + Math.floor(this.rand(seed) * 2)
+      for (let i = 0; i < n; i++) {
+        pushProp(s, seed, i + 2000, farFrom, 380, treeIdxs, 1.8, -0.15)
+      }
     }
   }
 

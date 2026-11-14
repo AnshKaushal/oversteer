@@ -283,6 +283,10 @@ export interface BodyStabilitySpec {
    * steady drift. Defaults to DEFAULT_HIGH_SPEED_GAIN when omitted.
    */
   highSpeedGain?: number
+  /** Drift tuning (1 = stock): scales the slip-angle deadzone while steering. */
+  driftDeadzoneScale?: number
+  /** Drift tuning (1 = stock): scales how hard the assist pulls back. */
+  driftAuthorityScale?: number
 }
 
 export interface Assists {

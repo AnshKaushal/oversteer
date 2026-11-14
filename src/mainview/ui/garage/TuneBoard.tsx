@@ -1,15 +1,24 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   ChevronRight,
   CircleDot,
   Cog,
+  Disc,
+  Gauge,
+  Link2,
   MoveVertical,
+  RotateCw,
   Scale,
+  Shield,
+  Shrink,
+  Waves,
   Wind,
+  Zap,
   type LucideIcon,
 } from "lucide-react"
 import type { CarSpec } from "../../data/schema"
 import {
+  ALIGN_DEG,
   STOCK_TUNING,
   TUNING_LIMITS,
   type Tuning,
@@ -20,41 +29,142 @@ import {
 } from "../../data/tuning"
 import { TUNE_PRESETS, tuneEffects } from "../../data/tuningFx"
 
+type Tab = "power" | "suspension" | "alignment" | "chassis"
+const TABS: { id: Tab; label: string }[] = [
+  { id: "power", label: "Powertrain" },
+  { id: "suspension", label: "Suspension" },
+  { id: "alignment", label: "Alignment" },
+  { id: "chassis", label: "Brakes & Aero" },
+]
+
+const deg = (per: number) => (v: number) => {
+  const d = (v - 1) * per
+  return Math.abs(d) < 0.005 ? "STOCK" : `${d > 0 ? "+" : ""}${d.toFixed(2)}°`
+}
+
 const ROWS: {
   key: keyof Tuning
+  tab: Tab
   label: string
   hint: [string, string]
   Icon: LucideIcon
+  fmt?: (v: number) => string
 }[] = [
   {
+    key: "power",
+    tab: "power",
+    label: "Engine output (ECU / boost)",
+    hint: ["Detuned", "More power"],
+    Icon: Zap,
+  },
+  {
     key: "gearing",
+    tab: "power",
     label: "Final drive",
     hint: ["Taller: top speed", "Shorter: acceleration"],
     Icon: Cog,
   },
   {
+    key: "diffLock",
+    tab: "power",
+    label: "Diff lock (power & coast)",
+    hint: ["Open: smooth, safe", "Locked: drift, tail-happy"],
+    Icon: Link2,
+  },
+  {
     key: "springs",
+    tab: "suspension",
     label: "Spring stiffness",
     hint: ["Softer: compliance", "Stiffer: sharp turn-in"],
     Icon: MoveVertical,
   },
   {
+    key: "damping",
+    tab: "suspension",
+    label: "Damper stiffness",
+    hint: ["Bouncy, more roll", "Controlled, harsh"],
+    Icon: Waves,
+  },
+  {
     key: "rearBias",
+    tab: "suspension",
     label: "Rear roll-bar",
     hint: ["Planted rear", "Loose, more oversteer"],
     Icon: Scale,
   },
   {
-    key: "downforce",
-    label: "Downforce",
-    hint: ["Less drag", "More grip at speed"],
-    Icon: Wind,
+    key: "camberFront",
+    tab: "alignment",
+    label: "Front camber",
+    hint: ["Less negative", "More corner grip"],
+    Icon: Shrink,
+    fmt: deg(ALIGN_DEG.camber),
+  },
+  {
+    key: "camberRear",
+    tab: "alignment",
+    label: "Rear camber",
+    hint: ["Less negative", "More corner grip"],
+    Icon: Shrink,
+    fmt: deg(ALIGN_DEG.camber),
+  },
+  {
+    key: "toeFront",
+    tab: "alignment",
+    label: "Front toe",
+    hint: ["Toe-out: sharp turn-in", "Toe-in: stable"],
+    Icon: RotateCw,
+    fmt: deg(ALIGN_DEG.toe),
+  },
+  {
+    key: "toeRear",
+    tab: "alignment",
+    label: "Rear toe",
+    hint: ["Toe-out: loose rear", "Toe-in: stable rear"],
+    Icon: RotateCw,
+    fmt: deg(ALIGN_DEG.toe),
   },
   {
     key: "gripBias",
+    tab: "alignment",
     label: "Tyre pressure",
     hint: ["Lower grip", "Higher grip"],
     Icon: CircleDot,
+  },
+  {
+    key: "brakeForce",
+    tab: "chassis",
+    label: "Brake force",
+    hint: ["Weak", "Strong"],
+    Icon: Disc,
+  },
+  {
+    key: "brakeBias",
+    tab: "chassis",
+    label: "Brake bias",
+    hint: ["Rear: rotates", "Front: stable"],
+    Icon: Gauge,
+  },
+  {
+    key: "steerAngle",
+    tab: "chassis",
+    label: "Steering lock",
+    hint: ["Less lock", "More lock (drift)"],
+    Icon: RotateCw,
+  },
+  {
+    key: "driftAssist",
+    tab: "chassis",
+    label: "Drift assist",
+    hint: ["Lenient: longer drifts", "Strict: self-corrects"],
+    Icon: Shield,
+  },
+  {
+    key: "downforce",
+    tab: "chassis",
+    label: "Downforce",
+    hint: ["Less drag", "More grip at speed"],
+    Icon: Wind,
   },
 ]
 
@@ -102,7 +212,7 @@ function Slider({
               : "border-white/10 bg-white/5 text-gray-400"
           }`}
         >
-          {fmtDelta(value)}
+          {row.fmt ? row.fmt(value) : fmtDelta(value)}
         </span>
       </div>
       <div className="relative mt-1">
@@ -282,6 +392,7 @@ export function TuneBoard({
   const t = useTuning(car.id)
   const update = (next: Tuning) => saveTuning(car.id, next)
   const fx = useMemo(() => tuneEffects(car, t), [car, t])
+  const [tab, setTab] = useState<Tab>("power")
   const dirty = (Object.keys(STOCK_TUNING) as (keyof Tuning)[]).some(
     (k) => Math.abs(t[k] - 1) > 0.004,
   )
@@ -320,7 +431,28 @@ export function TuneBoard({
       </div>
       <div className="mt-4 grid min-h-0 flex-1 grid-cols-[1fr_372px] gap-7">
         <div className="flex flex-col justify-between">
-          {ROWS.map((r) => (
+          <div className="flex gap-1">
+            {TABS.map((x) => {
+              const mod = ROWS.some(
+                (r) => r.tab === x.id && Math.abs(t[r.key] - 1) > 0.004,
+              )
+              return (
+                <button
+                  key={x.id}
+                  onClick={() => setTab(x.id)}
+                  className={`flex-1 border px-2 py-1 text-[11px] font-semibold transition ${
+                    tab === x.id
+                      ? "border-white bg-white text-[#0b0e14]"
+                      : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  {x.label}
+                  {mod && <span className="ml-1 text-[#ffb020]">●</span>}
+                </button>
+              )
+            })}
+          </div>
+          {ROWS.filter((r) => r.tab === tab).map((r) => (
             <Slider
               key={r.key}
               row={r}
@@ -352,6 +484,18 @@ export function TuneBoard({
               delta={
                 <Delta
                   value={fx.topKmh - fx.stockTopKmh}
+                  unit=""
+                  better="higher"
+                  digits={0}
+                />
+              }
+            />
+            <Stat
+              label="POWER"
+              value={`${Math.round(fx.powerHP)} hp`}
+              delta={
+                <Delta
+                  value={fx.powerHP - fx.stockPowerHP}
                   unit=""
                   better="higher"
                   digits={0}

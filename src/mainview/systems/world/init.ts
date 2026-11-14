@@ -266,7 +266,7 @@ export async function init(
       }
     }
 
-    buildVariant("tree", TREE_NODES, 6.5, 150)
+    buildVariant("tree", TREE_NODES, 6.5, 1200)
     buildVariant("cloud", CLOUD_NODES, 14.0, this.NUM_CLOUDS)
 
     const bakeNodes = (names: string[]): THREE.Group | null => {

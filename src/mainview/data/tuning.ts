@@ -7,7 +7,29 @@ export interface Tuning {
   rearBias: number
   downforce: number
   gripBias: number
+  /** Engine output (ECU / boost map). */
+  power: number
+  /** Rear-diff lock: power and coast lock rate, preload. */
+  diffLock: number
+  /** Damper rate on top of the spring-linked damping. */
+  damping: number
+  /** Overall brake force. */
+  brakeForce: number
+  /** >1 shifts braking forward, <1 rearward. */
+  brakeBias: number
+  /** Steering lock. */
+  steerAngle: number
+  /** Camber/toe: 1 = stock, each 0.1 = ALIGN_DEG/10 degrees of change. */
+  camberFront: number
+  camberRear: number
+  toeFront: number
+  toeRear: number
+  /** Drift assist: <1 lets drifts run wider and longer, >1 corrects sooner. */
+  driftAssist: number
 }
+
+/** Degrees of alignment change per 1.0 of slider offset. */
+export const ALIGN_DEG = { camber: 3, toe: 0.4 }
 
 export const STOCK_TUNING: Tuning = {
   gearing: 1,
@@ -15,6 +37,17 @@ export const STOCK_TUNING: Tuning = {
   rearBias: 1,
   downforce: 1,
   gripBias: 1,
+  power: 1,
+  diffLock: 1,
+  damping: 1,
+  brakeForce: 1,
+  brakeBias: 1,
+  steerAngle: 1,
+  camberFront: 1,
+  camberRear: 1,
+  toeFront: 1,
+  toeRear: 1,
+  driftAssist: 1,
 }
 
 export const TUNING_LIMITS: Record<keyof Tuning, [number, number]> = {
@@ -23,6 +56,17 @@ export const TUNING_LIMITS: Record<keyof Tuning, [number, number]> = {
   rearBias: [0.6, 1.6],
   downforce: [0.5, 1.8],
   gripBias: [0.95, 1.05],
+  power: [0.7, 1.3],
+  diffLock: [0.2, 2],
+  damping: [0.6, 1.7],
+  brakeForce: [0.6, 1.3],
+  brakeBias: [0.8, 1.2],
+  steerAngle: [0.85, 1.2],
+  camberFront: [0.5, 1.5],
+  camberRear: [0.5, 1.5],
+  toeFront: [0.5, 1.5],
+  toeRear: [0.5, 1.5],
+  driftAssist: [0.4, 1.2],
 }
 
 const KEY = "oversteer_tuning"
@@ -86,6 +130,30 @@ export function applyTuning(car: CarSpec, tuning: Tuning): CarSpec {
   p.aero.downforceAt100kmh *= t.downforce
   p.aero.dragCoefficient *= 1 + (t.downforce - 1) * 0.15
   p.wheels.frictionMu *= t.gripBias
+  for (const a of [s.front, s.rear]) {
+    a.bumpDamping *= t.damping
+    a.reboundDamping *= t.damping
+  }
+  p.engine.maxTorqueNm *= t.power
+  const d = p.differential
+  if (d.type === "lsd") {
+    d.lsdAccelLock = Math.min(1, d.lsdAccelLock * t.diffLock)
+    d.lsdDecelLock = Math.min(1, d.lsdDecelLock * t.diffLock)
+    d.preloadTorque *= t.diffLock
+  }
+  const bf = p.wheels.brakeForce
+  const bias = Math.sqrt(t.brakeBias)
+  bf.front *= t.brakeForce * bias
+  bf.rear *= t.brakeForce / bias
+  p.wheels.steering.maxAngle *= t.steerAngle
+  const bs = p.assists.bodyStability
+  bs.driftDeadzoneScale = 1 + (1 - t.driftAssist) * 1.4
+  bs.driftAuthorityScale = t.driftAssist
+  const al = p.wheels.alignment
+  al.front.camberDeg += (t.camberFront - 1) * ALIGN_DEG.camber
+  al.rear.camberDeg += (t.camberRear - 1) * ALIGN_DEG.camber
+  al.front.toeDeg += (t.toeFront - 1) * ALIGN_DEG.toe
+  al.rear.toeDeg += (t.toeRear - 1) * ALIGN_DEG.toe
   return c
 }
 

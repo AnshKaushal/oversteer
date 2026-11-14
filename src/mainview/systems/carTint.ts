@@ -153,6 +153,8 @@ export function tintCar(
       const clone = mat.clone() as THREE.MeshStandardMaterial
       if (clone.color) {
         clone.color.copy(tint)
+        const shade = mat.userData?.paintShade
+        if (typeof shade === "number") clone.color.multiplyScalar(shade)
       }
       if (texRule?.keepMap) {
         if (texRule.neutralize && clone.map) {

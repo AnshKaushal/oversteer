@@ -71,6 +71,7 @@ export function useMenuGamepadNav(
     const prev: Record<number, boolean> = {}
     let stickDir: Dir | null = null
     let nextRepeat = 0
+    let lastStep = 0
 
     const loop = () => {
       raf = requestAnimationFrame(loop)
@@ -102,7 +103,7 @@ export function useMenuGamepadNav(
       const ax = pad.axes[0] ?? 0
       const ay = pad.axes[1] ?? 0
       let sd: Dir | null = null
-      if (Math.hypot(ax, ay) > 0.6) {
+      if (Math.hypot(ax, ay) > (stickDir ? 0.4 : 0.65)) {
         sd =
           Math.abs(ax) > Math.abs(ay)
             ? ax > 0
@@ -113,10 +114,14 @@ export function useMenuGamepadNav(
               : "up"
       }
       const now = performance.now()
-      if (sd && (sd !== stickDir || now > nextRepeat)) {
+      // First tilt moves at once, then a slow repeat; a minimum gap stops
+      // jitter around the threshold or a direction flip from double-firing.
+      if (sd && now > nextRepeat && now - lastStep > 170) {
         if (!dir) dir = sd
-        nextRepeat = now + (sd === stickDir ? 220 : 380)
+        nextRepeat = now + (sd === stickDir ? 330 : 480)
+        lastStep = now
       }
+      if (!sd) nextRepeat = 0
       stickDir = sd
 
       const root = containerRef.current

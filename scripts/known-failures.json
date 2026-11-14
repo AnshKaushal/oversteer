@@ -34,12 +34,6 @@
       "donuts possible (sustained rotation)",
       "burnout spins rears (TC off on handbrake)"
     ],
-    "dodge-challenger": [
-      "lift-off re-attaches grip quickly",
-      "donuts possible (sustained rotation)",
-      "burnout spins rears (TC off on handbrake)",
-      "donut is entered"
-    ],
     "f1-car": [
       "idle creep cruises slowly",
       "lift-off re-attaches grip quickly",
@@ -55,16 +49,15 @@
       "burnout spins rears (TC off on handbrake)",
       "donut is entered"
     ],
-    "dodge-charger-69": [
+    "aston-martin-db12": [
       "donuts possible (sustained rotation)",
-      "burnout spins rears (TC off on handbrake)",
-      "countersteer flips the car the other way (low speed donut)"
-    ],
-    "mercedes-sl65-amg": [
-      "burnout spins rears (TC off on handbrake)",
       "donut is entered"
     ],
-    "aston-martin-db12": [
+    "ford-mustang-69": [
+      "donuts possible (sustained rotation)",
+      "donut is entered"
+    ],
+    "dodge-challenger-hellcat": [
       "donuts possible (sustained rotation)",
       "donut is entered"
     ]
@@ -106,11 +99,6 @@
       "pitch sign nose-down under braking",
       "outer wheels compress more (lean-out)"
     ],
-    "dodge-challenger": [
-      "front share plausible 40-53% (rear-biased)",
-      "FL contact patch sits ~plank height above the others",
-      "body rolls in response to single-corner lift"
-    ],
     "f1-car": [
       "front share plausible 40-53% (rear-biased)",
       "corners near individual equilibrium 40-110mm",
@@ -126,14 +114,6 @@
       "FL contact patch sits ~plank height above the others",
       "body rolls in response to single-corner lift",
       "acceleration squats rear (rear comp > front)"
-    ],
-    "dodge-charger-69": [
-      "FL contact patch sits ~plank height above the others",
-      "body rolls in response to single-corner lift"
-    ],
-    "mercedes-sl65-amg": [
-      "FL contact patch sits ~plank height above the others",
-      "body rolls in response to single-corner lift"
     ]
   },
   "wheel-dynamics-test.ts": {
@@ -161,10 +141,8 @@
       "front wheels receive zero drive torque (RWD)",
       "airborne undriven wheels hold velocity (no fake ground)"
     ],
-    "dodge-challenger": [],
     "f1-car": [],
-    "cheetah-84": [],
-    "dodge-charger-69": []
+    "cheetah-84": []
   },
   "tire-model-test.ts": {
     "bmw-m3": [],
@@ -192,24 +170,11 @@
       "reaction = contact force × radius exactly",
       "reaction overwritten per step (never accumulated)"
     ],
-    "dodge-challenger": [
-      "reaction = contact force × radius exactly",
-      "reaction overwritten per step (never accumulated)",
-      "reverse: rear slip and force point backward"
-    ],
     "f1-car": [
       "reaction = contact force × radius exactly",
       "reaction overwritten per step (never accumulated)"
     ],
     "cheetah-84": [
-      "reaction = contact force × radius exactly",
-      "reaction overwritten per step (never accumulated)"
-    ],
-    "dodge-charger-69": [
-      "reaction = contact force × radius exactly",
-      "reaction overwritten per step (never accumulated)"
-    ],
-    "mercedes-sl65-amg": [
       "reaction = contact force × radius exactly",
       "reaction overwritten per step (never accumulated)"
     ]
@@ -226,9 +191,6 @@
     "g-wagon": [],
     "lambo-urus": [],
     "lambo-aventador": [],
-    "dodge-challenger": [
-      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
-    ],
     "f1-car": [
       "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)",
       "abs: wheels are kept from locking"
@@ -236,10 +198,11 @@
     "cheetah-84": [
       "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
     ],
-    "dodge-charger-69": [
-      "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
+    "ford-mustang-69": [
+      "manual mode in top gear from rest: engine keeps running"
     ],
-    "mercedes-sl65-amg": [
+    "dodge-challenger-hellcat": [
+      "manual mode in top gear from rest: engine keeps running",
       "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
     ]
   }

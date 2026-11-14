@@ -416,32 +416,32 @@ export const bugattiChironPurSport: CarSpec = {
   },
   wheels: [
     {
-      x: -0.842,
-      z: -1.339,
+      x: -0.877,
+      z: -1.318,
       front: true,
       left: true,
     },
     {
-      x: 0.843,
-      z: -1.339,
+      x: 0.877,
+      z: -1.318,
       front: true,
       left: false,
     },
     {
-      x: -0.822,
-      z: 1.382,
+      x: -0.878,
+      z: 1.433,
       front: false,
       left: true,
     },
     {
-      x: 0.823,
-      z: 1.382,
+      x: 0.878,
+      z: 1.433,
       front: false,
       left: false,
     },
   ],
   pivots: {
-    pattern: "^Wheel_[FLR][LR]$",
+    pattern: "^Wheel_[FR][LR]$",
   },
   dash: {
     maxRpm: 8000,
@@ -449,7 +449,7 @@ export const bugattiChironPurSport: CarSpec = {
     maxKmh: 500,
   },
   defaultTint: null,
-  paintMatch: ["^Paint$"],
+  paintMatch: ["^Body_Paint"],
   tested: {
     zeroToHundredS: 2.4,
     topSpeedKmh: 449,
