@@ -12,7 +12,7 @@ const HEAD_HEIGHT = 16.1 * SCALE - SINK
 const AIM_REACH = 3
 const RANGE = 700
 const MAX_LAMPS = Math.ceil((RANGE * 2) / SPACING) + 4
-const LIGHTS = 6
+const LIGHTS = 4
 const FULL_BY = 55
 const GONE_BY = 120
 
@@ -116,7 +116,7 @@ export class StreetLights {
       for (let i = 0; i < LIGHTS; i++) {
         const s = new THREE.SpotLight(GLOW, 0, GONE_BY, 0.6, 0.9, 1.1)
         s.castShadow = i < 2
-        s.shadow.mapSize.set(1024, 1024)
+        s.shadow.mapSize.set(512, 512)
         s.shadow.radius = 3
         s.shadow.camera.near = 0.5
         s.shadow.camera.far = 70
@@ -238,25 +238,35 @@ export class StreetLights {
     }
   }
 
-  private readonly pick: { i: number; d: number }[] = []
+  private readonly pickI = new Int32Array(LIGHTS)
+  private readonly pickD = new Float32Array(LIGHTS)
 
   private assignLights(car: THREE.Vector3) {
-    const pick = this.pick
-    pick.length = 0
+    const pi = this.pickI
+    const pd = this.pickD
+    let n = 0
     for (let i = 0; i < this.count; i++) {
       const dx = this.head[i * 3] - car.x
       const dz = this.head[i * 3 + 2] - car.z
-      pick.push({ i, d: Math.hypot(dx, dz) })
+      const d = dx * dx + dz * dz
+      if (n === LIGHTS && d >= pd[n - 1]) continue
+      let j = n < LIGHTS ? n++ : n - 1
+      while (j > 0 && pd[j - 1] > d) {
+        pd[j] = pd[j - 1]
+        pi[j] = pi[j - 1]
+        j--
+      }
+      pd[j] = d
+      pi[j] = i
     }
-    pick.sort((a, b) => a.d - b.d)
     for (let k = 0; k < this.spots.length; k++) {
       const s = this.spots[k]
-      const c = pick[k]
-      if (!c) {
+      if (k >= n) {
         s.intensity = 0
         continue
       }
-      const i = c.i
+      const i = pi[k]
+      const dist = Math.sqrt(pd[k])
       s.position.set(
         this.head[i * 3],
         this.head[i * 3 + 1],
@@ -267,7 +277,7 @@ export class StreetLights {
         this.aim[i * 3 + 1],
         this.aim[i * 3 + 2],
       )
-      const f = 1 - smooth((c.d - FULL_BY) / (GONE_BY - FULL_BY))
+      const f = 1 - smooth((dist - FULL_BY) / (GONE_BY - FULL_BY))
       s.intensity = 260 * f
     }
   }

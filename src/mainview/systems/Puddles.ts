@@ -198,6 +198,38 @@ export class Puddles {
     this.mat.emissiveIntensity = this.baseGlow + f * 2.2
   }
 
+  /** The reflection pass draws the whole scene into a half-float target with a
+   * clip plane, which is a different shader variant for every material. The
+   * first wet frame compiled them all at once (a multi-second freeze, worse
+   * with a big AI field), so draw once into a tiny target at load. */
+  prewarmReflection(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ) {
+    const rt = new THREE.WebGLRenderTarget(4, 4, {
+      type: THREE.HalfFloatType,
+      samples: 0,
+    })
+    const prevTarget = renderer.getRenderTarget()
+    const prevClip = renderer.clippingPlanes
+    const prevAuto = renderer.shadowMap.autoUpdate
+    const wasVisible = this.mesh.visible
+    this.mesh.visible = false
+    renderer.shadowMap.autoUpdate = false
+    renderer.clippingPlanes = [this.reflPlane]
+    renderer.setRenderTarget(rt)
+    try {
+      renderer.render(scene, camera)
+    } finally {
+      renderer.setRenderTarget(prevTarget)
+      renderer.clippingPlanes = prevClip
+      renderer.shadowMap.autoUpdate = prevAuto
+      this.mesh.visible = wasVisible
+      rt.dispose()
+    }
+  }
+
   renderReflection(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,

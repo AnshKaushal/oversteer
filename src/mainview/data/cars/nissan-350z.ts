@@ -110,7 +110,7 @@ export const nissan350z: CarSpec = {
     },
     transmission: {
       gearRatios: [3.79, 2.32, 1.62, 1.27, 1.0, 0.78],
-      finalDriveRatio: 3.35,
+      finalDriveRatio: 3.655,
       reverseRatio: 3.44,
       shiftTimeAuto: 0.13,
       shiftTimeManual: 0.07,
@@ -143,7 +143,7 @@ export const nissan350z: CarSpec = {
       feedTime: 0.5,
     },
     wheels: {
-      radius: 0.33,
+      radius: 0.36,
       width: 0.265,
       ...tyre("sport", { frictionMu: 1.55, rollingResist: 0.012 }),
       referenceLoad: 3800,
@@ -408,32 +408,32 @@ export const nissan350z: CarSpec = {
   },
   wheels: [
     {
-      x: -0.767,
-      z: -1.351,
+      x: -0.758,
+      z: -1.328,
       front: true,
       left: true,
     },
     {
-      x: 0.767,
-      z: -1.351,
+      x: 0.758,
+      z: -1.328,
       front: true,
       left: false,
     },
     {
-      x: -0.773,
-      z: 1.306,
+      x: -0.741,
+      z: 1.295,
       front: false,
       left: true,
     },
     {
-      x: 0.773,
-      z: 1.305,
+      x: 0.741,
+      z: 1.295,
       front: false,
       left: false,
     },
   ],
   pivots: {
-    pattern: "^Wheel_[FLR][LR]$",
+    pattern: "^Wheel_[FR][LR]$",
   },
   dash: {
     maxRpm: 8500,
@@ -441,7 +441,7 @@ export const nissan350z: CarSpec = {
     maxKmh: 360,
   },
   defaultTint: null,
-  paintMatch: ["^Paint$"],
+  paintMatch: ["^Body_Paint"],
   tested: {
     zeroToHundredS: 4.4,
     topSpeedKmh: 344,

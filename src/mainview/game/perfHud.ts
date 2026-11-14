@@ -68,7 +68,18 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
         }
       }
     })
-    return `lights=${litLights}(${litSpots} spot) basic=${basicMat} shadowsOff=${shadowsOff} ${ri.calls} calls ${(ri.triangles / 1000).toFixed(0)}k tris, ${objCount} objs, steps=${steps}, scale=${settingsRef.current.renderScale}, buf=${renderer.domElement.width}x${renderer.domElement.height}, aa=${settingsRef.current.antiAliasing ?? "fxaa"}, shadows=${renderer.shadowMap.enabled}, preset=${settingsRef.current.qualityPreset}, speed=${Math.round(speedKmh)}kmh, started=${startedRef.current}, hasFocus=${document.hasFocus()}`
+    const top: string[] = []
+    for (const c of scene.children) {
+      let n = 0
+      let shadowCasters = 0
+      c.traverse((o) => {
+        n++
+        if ((o as THREE.Mesh).castShadow) shadowCasters++
+      })
+      if (n > 50) top.push(`${c.name || c.type}:${n}/${shadowCasters}sh`)
+    }
+    top.sort((a, b) => parseInt(b.split(":")[1]) - parseInt(a.split(":")[1]))
+    return `groups=[${top.slice(0, 5).join(" ")}] lights=${litLights}(${litSpots} spot) basic=${basicMat} shadowsOff=${shadowsOff} ${ri.calls} calls ${(ri.triangles / 1000).toFixed(0)}k tris, ${objCount} objs, steps=${steps}, scale=${settingsRef.current.renderScale}, buf=${renderer.domElement.width}x${renderer.domElement.height}, aa=${settingsRef.current.antiAliasing ?? "fxaa"}, shadows=${renderer.shadowMap.enabled}, preset=${settingsRef.current.qualityPreset}, speed=${Math.round(speedKmh)}kmh, started=${startedRef.current}, hasFocus=${document.hasFocus()}`
   }
 
   const frame = (

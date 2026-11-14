@@ -3,7 +3,7 @@ import { validateCar } from "../validate"
 import { bmwM3 } from "./bmw-m3"
 import { audiR8 } from "./audi-r8"
 import { audiRs7 } from "./audi-rs7"
-import { porsche997Gt2 } from "./porsche-997-gt2"
+import { porsche911TurboS } from "./porsche-911-turbo-s"
 import { gWagon } from "./g-wagon"
 import { lamboUrus } from "./lambo-urus"
 import { lamboAventador } from "./lambo-aventador"
@@ -13,7 +13,7 @@ import { cheetah84 } from "./cheetah-84"
 import { fordMustang69 } from "./ford-mustang-69"
 import { mercedesW124 } from "./mercedes-w124"
 import { bugattiChironPurSport } from "./bugatti-chiron-pur-sport"
-import { mitsubishiLancerEvo6 } from "./mitsubishi-lancer-evo-6"
+import { mitsubishiLancerEvoX } from "./mitsubishi-lancer-evo-x"
 import { nissan350z } from "./nissan-350z"
 import { astonMartinDb12 } from "./aston-martin-db12"
 
@@ -21,7 +21,7 @@ const ALL_CARS: CarSpec[] = [
   bmwM3,
   audiR8,
   audiRs7,
-  porsche997Gt2,
+  porsche911TurboS,
   gWagon,
   lamboUrus,
   lamboAventador,
@@ -31,7 +31,7 @@ const ALL_CARS: CarSpec[] = [
   fordMustang69,
   mercedesW124,
   bugattiChironPurSport,
-  mitsubishiLancerEvo6,
+  mitsubishiLancerEvoX,
   nissan350z,
   astonMartinDb12,
 ]

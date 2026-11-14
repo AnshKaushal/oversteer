@@ -12,6 +12,8 @@ export interface IndicatorZone {
   glow?: number
   /** The zone is the tail lamp itself: dim at rest, bright while braking. */
   brake?: boolean
+  /** Flash by turning the lamp's own red texture amber (no flat overlay). */
+  amber?: boolean
   /** The zone is a headlight: lit with the headlights, amber when flashing. */
   head?: boolean
 }
@@ -23,18 +25,29 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "front", mesh: "Blinkers" },
     { end: "rear", mesh: "Blinkers" },
   ],
-  "mitsubishi_lancer_evolution_6.glb": [
-    { end: "front", mesh: "^Object_5$", idle: AMBER_LENS },
+  // Evo X: the dark housing round each headlight and tail lamp is the
+  // indicator (front and rear), like the Mustang's front ring
+  "mitsubishi_lancer_evo_x.glb": [
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
+    { end: "rear", mesh: "^Indicator_Amber", idle: 0x141414 },
   ],
   // DB12 rear: the whole tail-lamp strip (the "Tail_Lamp" material made by
   // scripts/prepare-aston-martin-db12.ts) is the indicator: dim red at rest,
   // bright when braking, amber when flashing
   "aston_martin_db12.glb": [
+    // front: the dark housing round each headlight (not the headlight itself)
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
     { end: "rear", mesh: "^Tail_Lamp$", glow: 0xff0000, brake: true },
   ],
-  // Chiron rear: the red lamp strip is the indicator, like the DB12's
+  // Chiron rear: the upper red lamps are the indicators
   "bugatti_chiron_pur_sport.glb": [
-    { end: "rear", mesh: "^Tail_Lamp$", glow: 0xff0000, brake: true },
+    // only the two upper lamps flash; the low strip stays a plain tail lamp
+    {
+      end: "rear",
+      mesh: "^Indicator_Amber_Rear$",
+      glow: 0xff0000,
+      brake: true,
+    },
   ],
   // W124: the orange corner lenses are the indicators, front and rear; the
   // red tail lamps stay separate and glow on braking
@@ -55,11 +68,14 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "rear", mesh: "^Indicator_Amber", glow: 0xff0000, brake: true },
   ],
   "nissan_350z.glb": [
-    { end: "front", mesh: "^Object_6$", dx: [0.3, 0.42], y: [0.15, 0.42] },
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
+    { end: "rear", mesh: "^Indicator_Amber", idle: 0x141414 },
   ],
-  "porsche_997.1_gt2.glb": [
-    { end: "front", mesh: "^Object_23$", dx: [0.23, 0.35], y: [0.27, 0.325] },
-    { end: "front", mesh: "^Object_23$", dx: [0.42, 0.5], y: [0.39, 0.45] },
+  // 911 Turbo S: dark housing round the headlight (front) and the model's
+  // own indicator strip (rear)
+  "porsche_911.glb": [
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
+    { end: "rear", mesh: "^Indicator_Amber", idle: 0x141414 },
   ],
   // R8 rear: the thin lines are the indicator and glow red like the brake boxes
   "audi_r8.glb": [
@@ -67,11 +83,11 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "rear", mesh: "rearlight", glow: 0xff0000 },
   ],
 
-  // Aventador rear: only the two upper strips (glass013 right, glass016 left)
-  // are the indicators; the lower hex lamps (glass015, glass021) stay tail lamps.
+  // Aventador: the amber lens in each headlight (front, flashes amber) and the
+  // tail-lamp bar (rear: the lamp's own artwork, turned amber while flashing)
   "lamborghini_aventador.glb": [
-    { end: "front", mesh: "^glasses_glass0(17|18|20|24)" },
-    { end: "rear", mesh: "^glasses_glass0(13|16)", glow: 0xff0000 },
+    { end: "front", mesh: "^Indicator", amber: true },
+    { end: "rear", mesh: "^Tail_Lamp$", amber: true },
   ],
 
   // M3 rear: the black bars above the red lamps are the indicators

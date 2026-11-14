@@ -309,7 +309,7 @@ export const lamboAventador: CarSpec = {
       pauseReverseSpeed: -0.5,
       minSetKmh: 30,
       throttleGain: 0.06,
-      throttleMax: 0.85,
+      throttleMax: 0.77,
       trimGain: 0.09,
       trimMin: -0.3,
       trimMax: 0.35,
@@ -417,32 +417,32 @@ export const lamboAventador: CarSpec = {
   },
   wheels: [
     {
-      x: -0.86,
+      x: -0.77,
       z: -1.25,
       front: true,
       left: true,
     },
     {
-      x: 0.86,
+      x: 0.77,
       z: -1.25,
       front: true,
       left: false,
     },
     {
-      x: -0.85,
+      x: -0.77,
       z: 1.45,
       front: false,
       left: true,
     },
     {
-      x: 0.85,
+      x: 0.77,
       z: 1.45,
       front: false,
       left: false,
     },
   ],
   pivots: {
-    pattern: "^Wheel(FL|FR|BL|BR)$",
+    pattern: "^Wheel_[FLR][LR]$",
   },
   dash: {
     maxRpm: 9000,
@@ -450,8 +450,8 @@ export const lamboAventador: CarSpec = {
     maxKmh: 380,
   },
   defaultTint: null,
-  paintMatch: ["carpaint", "detach_door", "detach_bumper_\\w*carpaint"],
-  tailLampMeshes: ["^glasses_glass0(13|15|16|21)"],
+  paintMatch: ["^Body_Paint"],
+  paintTexture: { keepMap: true },
   tested: {
     zeroToHundredS: 3.3,
     topSpeedKmh: 352,

@@ -115,6 +115,87 @@ function pieces(mesh: THREE.Mesh, inv: THREE.Matrix4) {
   return { find, info }
 }
 
+const amberCache = new Map<string, THREE.Texture>()
+/** A copy of a lamp texture with its red artwork turned amber. */
+function amberTexture(map: THREE.Texture): THREE.Texture | null {
+  const hit = amberCache.get(map.uuid)
+  if (hit) return hit
+  if (typeof document === "undefined") return null
+  const img = map.image as CanvasImageSource & {
+    width?: number
+    height?: number
+  }
+  const w = img?.width ?? 0
+  const h = img?.height ?? 0
+  if (!w || !h) return null
+  const cv = document.createElement("canvas")
+  cv.width = w
+  cv.height = h
+  const ctx = cv.getContext("2d", { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.drawImage(img, 0, 0)
+  const data = ctx.getImageData(0, 0, w, h)
+  const p = data.data
+  for (let i = 0; i < p.length; i += 4)
+    if (p[i] > 90 && p[i + 1] < p[i] * 0.45 && p[i + 2] < p[i] * 0.45) {
+      p[i + 1] = Math.round(p[i] * 0.55)
+      p[i + 2] = 0
+    } else {
+      p[i] = p[i + 1] = p[i + 2] = 0
+    }
+  ctx.putImageData(data, 0, 0)
+  const out = new THREE.CanvasTexture(cv)
+  out.colorSpace = map.colorSpace
+  out.flipY = map.flipY
+  out.wrapS = map.wrapS
+  out.wrapT = map.wrapT
+  amberCache.set(map.uuid, out)
+  return out
+}
+
+/** Overlay for a lamp that flashes by turning its own red artwork amber. */
+function amberLampMaterial(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+  const src = mats.find((x) => (x as THREE.MeshStandardMaterial).map) as
+    THREE.MeshStandardMaterial | undefined
+  const map = src?.map ? amberTexture(src.map) : null
+  // the model's own emissive lens must not glow at rest: only the flash lights it
+  for (const x of mats) {
+    const std = x as THREE.MeshStandardMaterial
+    if (std.emissive && /indicator|tail/i.test(std.name) && !std.map)
+      std.emissiveIntensity = 0
+    // at rest the indicator is the same white as the headlight lens, not black
+    if (
+      /indicator/i.test(std.name) &&
+      !std.map &&
+      std.color.getHex() < 0x101010
+    )
+      std.color.setHex(0xe8eaf0)
+  }
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x000000,
+    map,
+    // no texture (a plain amber lens): flash in flat amber
+    emissive: map ? 0xffffff : AMBER,
+    emissiveMap: map,
+    emissiveIntensity: 0,
+    roughness: 0.4,
+    transparent: true,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  })
+  mat.userData.amberTex = true
+  // a plain lens (no texture) is white like the headlight: it glows with the
+  // headlights and only turns amber while it flashes
+  if (!map) {
+    mat.userData.lensWhite = true
+    mat.color.setHex(0xe8eaf0)
+  }
+  return mat
+}
+
 function overlayFor(
   mesh: THREE.Mesh,
   inv: THREE.Matrix4,
@@ -126,6 +207,7 @@ function overlayFor(
   out: Partial<Record<"l" | "r", THREE.Mesh>>,
   groupOut: THREE.Group,
   accept?: (ids: number[], v: THREE.Vector3[]) => boolean,
+  withUv = false,
 ) {
   const geo = mesh.geometry
   const pos = geo.getAttribute("position")
@@ -134,9 +216,10 @@ function overlayFor(
   const idx = geo.getIndex()
   const m = new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld)
   const nm = new THREE.Matrix3().getNormalMatrix(m)
+  const uvA = withUv ? geo.getAttribute("uv") : null
   const bufs = {
-    l: { p: [] as number[], n: [] as number[] },
-    r: { p: [] as number[], n: [] as number[] },
+    l: { p: [] as number[], n: [] as number[], u: [] as number[] },
+    r: { p: [] as number[], n: [] as number[], u: [] as number[] },
   }
   const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
   const n = new THREE.Vector3()
@@ -155,6 +238,7 @@ function overlayFor(
       if (nor) n.fromBufferAttribute(nor, id).applyMatrix3(nm).normalize()
       else n.set(0, 0, isFront ? -1 : 1)
       b.n.push(n.x, n.y, n.z)
+      if (uvA) b.u.push(uvA.getX(id), uvA.getY(id))
     })
   }
   for (const side of ["l", "r"] as const) {
@@ -163,6 +247,7 @@ function overlayFor(
     const g = new THREE.BufferGeometry()
     g.setAttribute("position", new THREE.Float32BufferAttribute(b.p, 3))
     g.setAttribute("normal", new THREE.Float32BufferAttribute(b.n, 3))
+    if (uvA) g.setAttribute("uv", new THREE.Float32BufferAttribute(b.u, 2))
     const o = new THREE.Mesh(g, (mat as THREE.MeshStandardMaterial).clone())
     o.visible = false
     o.renderOrder = 5
@@ -170,13 +255,18 @@ function overlayFor(
     const prev = out[side]
     if (prev) {
       const merged = new THREE.BufferGeometry()
-      for (const name of ["position", "normal"]) {
+      for (const name of uvA
+        ? ["position", "normal", "uv"]
+        : ["position", "normal"]) {
         const a = prev.geometry.getAttribute(name).array as Float32Array
         const c = g.getAttribute(name).array as Float32Array
         const arr = new Float32Array(a.length + c.length)
         arr.set(a)
         arr.set(c, a.length)
-        merged.setAttribute(name, new THREE.BufferAttribute(arr, 3))
+        merged.setAttribute(
+          name,
+          new THREE.BufferAttribute(arr, name === "uv" ? 2 : 3),
+        )
       }
       prev.geometry.dispose()
       prev.geometry = merged
@@ -308,6 +398,7 @@ export function planIndicators(
         emissive: AMBER,
         emissiveIntensity: 0,
         roughness: 0.5,
+        side: THREE.DoubleSide,
         polygonOffset: true,
         polygonOffsetFactor: -4,
         polygonOffsetUnits: -4,
@@ -348,24 +439,27 @@ export function planIndicators(
         cx,
         0,
         0,
-        new THREE.MeshStandardMaterial({
-          // glow zones copy the model's brakelight material so the colours match
-          color: z.glow
-            ? new THREE.Color().setRGB(
-                0.8,
-                0.8,
-                0.8,
-                THREE.LinearSRGBColorSpace,
-              )
-            : (z.idle ?? 0x1c1004),
-          emissive: z.glow ?? AMBER,
-          emissiveIntensity: z.glow ? 4.373 : 0,
-          roughness: z.glow ? 0.804 : 0.5,
-          transparent: true,
-          polygonOffset: true,
-          polygonOffsetFactor: -4,
-          polygonOffsetUnits: -4,
-        }),
+        z.amber
+          ? amberLampMaterial(m)
+          : new THREE.MeshStandardMaterial({
+              // glow zones copy the model's brakelight material so the colours match
+              color: z.glow
+                ? new THREE.Color().setRGB(
+                    0.8,
+                    0.8,
+                    0.8,
+                    THREE.LinearSRGBColorSpace,
+                  )
+                : (z.idle ?? 0x1c1004),
+              emissive: z.glow ?? AMBER,
+              emissiveIntensity: z.glow ? 4.373 : 0,
+              roughness: z.glow ? 0.804 : 0.5,
+              transparent: true,
+              side: THREE.DoubleSide,
+              polygonOffset: true,
+              polygonOffsetFactor: -4,
+              polygonOffsetUnits: -4,
+            }),
         amberEnds[z.end],
         grp,
         (ids, v) => {
@@ -387,6 +481,7 @@ export function planIndicators(
           if (z.y && (fy < z.y[0] || fy > z.y[1])) return false
           return true
         },
+        !!z.amber,
       )
     }
     if (z.glow) {
@@ -546,6 +641,23 @@ export function updateIndicators(this: CarVisual, dt: number) {
     o.mesh.visible = o.amber || active
     const mat = o.mesh.material as THREE.MeshStandardMaterial
     const flash = on && active
+    if (mat.userData.amberTex) {
+      // only on while flashing; otherwise the lamp's own texture shows
+      if (mat.userData.lensWhite) {
+        const lit = this.headlightsOn && this.power > 0.02
+        mat.emissive.setHex(flash ? AMBER : 0xffffff)
+        o.mesh.visible = flash || (lit && !active)
+        mat.emissiveIntensity = flash
+          ? 4 * this.power
+          : lit
+            ? 8 * this.power * this.headlightDim
+            : 0
+        continue
+      }
+      o.mesh.visible = flash
+      mat.emissiveIntensity = flash ? 4 * this.power : 0
+      continue
+    }
     const glow = mat.userData.glow as number | undefined
     if (glow !== undefined) {
       // indicator running: amber or dark, never the red tail glow

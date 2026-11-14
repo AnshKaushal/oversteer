@@ -18,6 +18,7 @@ export function update(
 ) {
   const W = WORLD_CONFIG
   this.carPos.copy(carPos)
+  this.syncShadowCasters()
   this.puddles?.update(carPos)
   if (Number.isFinite(this.lastCarS)) {
     const delta = carS - this.lastCarS

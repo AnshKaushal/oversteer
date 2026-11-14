@@ -423,7 +423,7 @@ export const astonMartinDb12: CarSpec = {
     maxKmh: 360,
   },
   defaultTint: null,
-  paintMatch: ["^Body_Paint$"],
+  paintMatch: ["^Body_Paint"],
   // Real car: 3.6 s and 325 km/h (Aston Martin). Top speed is set to 335
   // on purpose so 330-340 km/h is reachable. 0-100 is traction-limited in
   // the sim (mu 1.6), so it lands near 4.2 s.

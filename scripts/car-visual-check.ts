@@ -7,14 +7,14 @@
  * The GLB is parsed directly rather than fetched, because three.js's
  * URL loader needs a DOM (ProgressEvent) that Bun does not have.
  *
- * Run: bun scripts/car-visual-check.ts porsche-997-gt2
+ * Run: bun scripts/car-visual-check.ts porsche-911-turbo-s
  */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import { MIN_PIVOT_FRAC, pivotMatches } from "../src/mainview/systems/CarVisual"
 import { getCar } from "../src/mainview/data/cars"
 
-const id = process.argv[2] ?? "porsche-997-gt2"
+const id = process.argv[2] ?? "porsche-911-turbo-s"
 const def = getCar(id)
 const file = def.modelFile.split("/").pop()!
 

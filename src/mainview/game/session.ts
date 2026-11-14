@@ -35,7 +35,11 @@ import {
   isLowLight,
 } from "../constants/timeOfDay"
 
-const MAX_RIVAL_BEAMS = 2
+// Rivals keep emissive lamps only. Their real light comes from the shared
+// npcSpotPool, which already covers the nearest rivals and traffic. Rival
+// spots switching on after the start changed the scene's light count and
+// recompiled every lit material (a 300+ ms hitch).
+const MAX_RIVAL_BEAMS = 0
 
 const SMOKE_LIGHT: Partial<Record<string, number>> = {
   day: 1,
@@ -443,8 +447,11 @@ export function startSession(ctx: SessionCtx): () => void {
       let shadowAcc = 0
       const TRAFFIC_BEHIND = 700
       const TRAFFIC_AHEAD = 1500
-      const DETAIL_FAR = 280
-      const DETAIL_NEAR = 220
+      // Full-detail cars cost 10-25 draw calls each (more in shadow passes),
+      // so with a big AI field only the nearest few get them.
+      const DETAIL_FAR = 200
+      const DETAIL_NEAR = 150
+      const HI_MAX = 14
       let playerDoneT = 0
 
       const smoke = new TireSmoke()
@@ -627,6 +634,11 @@ export function startSession(ctx: SessionCtx): () => void {
           )
         } catch (e) {
           console.warn("warm-up render failed", e)
+        }
+        try {
+          wm.prewarmReflections?.(renderer!, scene, camera)
+        } catch (e) {
+          console.warn("reflection warm-up failed", e)
         }
         for (const o of revealed) o.visible = false
         for (const o of unculled) o.frustumCulled = true
@@ -1117,13 +1129,14 @@ export function startSession(ctx: SessionCtx): () => void {
               )
             }
             let upgrades = 0
-            for (const { i, d } of ranked) {
+            ranked.forEach(({ i, d }, rank) => {
               const r = rivals[i]
-              if (r.hi && d > DETAIL_FAR * DETAIL_FAR) {
+              if (r.hi && (d > DETAIL_FAR * DETAIL_FAR || rank >= HI_MAX + 2)) {
                 r.hi = false
                 r.visual.setDetail(false)
               } else if (
                 !r.hi &&
+                rank < HI_MAX &&
                 d < DETAIL_NEAR * DETAIL_NEAR &&
                 upgrades < 2
               ) {
@@ -1131,7 +1144,7 @@ export function startSession(ctx: SessionCtx): () => void {
                 r.hi = true
                 r.visual.setDetail(true)
               }
-            }
+            })
           }
           raceUiAcc += dt
           if (

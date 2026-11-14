@@ -154,7 +154,7 @@
         ]
       ]
     },
-    "porsche-997-gt2": {
+    "porsche-911-turbo-s": {
       "metrics": {
         "t0to100": 4.933333333333334,
         "topKmh": 332.4206977838588,
@@ -511,7 +511,7 @@
         ]
       ]
     },
-    "mitsubishi-lancer-evo-6": {
+    "mitsubishi-lancer-evo-x": {
       "metrics": {
         "t0to100": 2.4583333333333335,
         "topKmh": 334.1807937890894,

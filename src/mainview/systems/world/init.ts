@@ -234,7 +234,10 @@ export async function init(
             this.cloudVariants.push({ im, category, targetH })
           else {
             const pv: PropVariant = { im, category, targetH }
-            if (category === "tree") this.addFarTwin(pv)
+            if (category === "tree") {
+              this.addFarTwin(pv)
+              this.addShadowProxy(pv)
+            }
             this.propVariants.push(pv)
           }
         }
@@ -259,7 +262,10 @@ export async function init(
             this.cloudVariants.push({ im, category, targetH })
           } else {
             const pv: PropVariant = { im, category, targetH }
-            if (category === "tree") this.addFarTwin(pv)
+            if (category === "tree") {
+              this.addFarTwin(pv)
+              this.addShadowProxy(pv)
+            }
             this.propVariants.push(pv)
           }
         }
@@ -296,7 +302,10 @@ export async function init(
       im.frustumCulled = false
       if (category !== "grass") this.applyShadowFade(im)
       this.group.add(im)
-      this.propVariants.push({ im, category, targetH })
+      const pv: PropVariant = { im, category, targetH }
+      this.propVariants.push(pv)
+      if (shadow && category !== "grass" && category !== "cloud")
+        this.addShadowProxy(pv)
     }
 
     const g111 = bakeNodes(["Object_111"])

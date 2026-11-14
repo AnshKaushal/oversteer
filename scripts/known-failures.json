@@ -14,7 +14,7 @@
       "burnout spins rears (TC off on handbrake)",
       "top gear full throttle pulls hard (kickdown allowed)"
     ],
-    "porsche-997-gt2": [
+    "porsche-911-turbo-s": [
       "donuts possible (sustained rotation)",
       "burnout spins rears (TC off on handbrake)",
       "full lock still meaningful at 250km/h",
@@ -76,7 +76,7 @@
       "FL contact patch sits ~plank height above the others",
       "body rolls in response to single-corner lift"
     ],
-    "porsche-997-gt2": [
+    "porsche-911-turbo-s": [
       "FL contact patch sits ~plank height above the others",
       "body rolls in response to single-corner lift",
       "acceleration squats rear (rear comp > front)"
@@ -126,7 +126,7 @@
       "front wheels receive zero drive torque (RWD)",
       "airborne undriven wheels hold velocity (no fake ground)"
     ],
-    "porsche-997-gt2": [
+    "porsche-911-turbo-s": [
       "rear torque split stays inside the differential cap"
     ],
     "g-wagon": [
@@ -154,7 +154,7 @@
       "reaction = contact force × radius exactly",
       "reaction overwritten per step (never accumulated)"
     ],
-    "porsche-997-gt2": [
+    "porsche-911-turbo-s": [
       "reaction = contact force × radius exactly",
       "reaction overwritten per step (never accumulated)"
     ],
@@ -185,7 +185,7 @@
     ],
     "audi-r8": [],
     "audi-rs7": [],
-    "porsche-997-gt2": [
+    "porsche-911-turbo-s": [
       "donut: the tail steps out past 40 degrees and the car keeps rotating (0.7 turn in 4 s)"
     ],
     "g-wagon": [],

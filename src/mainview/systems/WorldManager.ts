@@ -36,6 +36,7 @@ import {
   applyFarLod,
   syncPropColliders,
 } from "./world/propStreaming"
+import { addShadowProxy, syncShadowCasters } from "./world/shadowCasters"
 import {
   hillSpot,
   placeHill,
@@ -75,6 +76,10 @@ export {
 export class WorldManager {
   init = init
   update = update
+  addShadowProxy = addShadowProxy
+  syncShadowCasters = syncShadowCasters
+  shadowSyncX = Number.NaN
+  shadowSyncZ = Number.NaN
   terrainHeightAt = terrainHeightAt
   createPhysicsGround = createPhysicsGround
   setTimeOfDay = setTimeOfDay
@@ -164,7 +169,7 @@ export class WorldManager {
     this.propShadows = on
     for (const pv of this.propVariants) {
       if (pv.category === "grass" || pv.category === "cloud") continue
-      pv.im.castShadow = on
+      ;(pv.shadowIm ?? pv.im).castShadow = on
     }
   }
 
@@ -190,6 +195,14 @@ export class WorldManager {
 
   surfaceAt(x: number, z: number): SurfaceId {
     return groundSurfaceAt(x, z)
+  }
+
+  prewarmReflections(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ) {
+    this.puddles?.prewarmReflection(renderer, scene, camera)
   }
 
   renderReflections(

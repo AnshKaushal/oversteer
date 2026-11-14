@@ -21,6 +21,8 @@ export interface PropVariant {
   category: PropCategory
   targetH: number
   far?: THREE.InstancedMesh
+  shadowIm?: THREE.InstancedMesh
+  shadowVersion?: number
 }
 
 export interface PropEntry {

@@ -35,41 +35,45 @@ export function buildImposter(
     { x: -0.76, z: 1.31 },
     { x: 0.76, z: 1.31 },
   ]) as readonly { x: number; z: number }[]
-  for (const { x, z } of spots) {
-    const w = new THREE.Mesh(g.wheel, loWheelMat)
-    w.position.set(x, wr, z)
-    lo.add(w)
-  }
+  const wheelParts = spots.map(({ x, z }) =>
+    g.wheel.clone().translate(x, wr, z),
+  )
+  const wheels = new THREE.Mesh(mergeGeometries(wheelParts, false), loWheelMat)
+  for (const w of wheelParts) w.dispose()
+  lo.add(wheels)
 
-  const headGeo = new THREE.PlaneGeometry(0.28, 0.16)
-  headGeo.rotateY(Math.PI)
+  // Each lamp pair is one mesh: an imposter is drawn many times per frame
+  // with a big AI field, so draw calls matter more than vertices here.
   const headMat = new THREE.MeshBasicMaterial({
     color: 0xfff0cc,
     toneMapped: false,
     transparent: true,
     opacity: 0.85,
   })
-  const leftHead = new THREE.Mesh(headGeo, headMat)
-  leftHead.position.set(-0.62, 0.58, -2.36)
-  const rightHead = new THREE.Mesh(headGeo, headMat)
-  rightHead.position.set(0.62, 0.58, -2.36)
-  leftHead.visible = this.headlightsOn
-  rightHead.visible = this.headlightsOn
-
-  const tailGeo = new THREE.PlaneGeometry(0.28, 0.16)
   const tailMat = new THREE.MeshBasicMaterial({
     color: 0xff1505,
     toneMapped: false,
   })
-  const leftTail = new THREE.Mesh(tailGeo, tailMat)
-  leftTail.position.set(-0.62, 0.65, 2.36)
-  const rightTail = new THREE.Mesh(tailGeo, tailMat)
-  rightTail.position.set(0.62, 0.65, 2.36)
-  leftTail.visible = this.headlightsOn
-  rightTail.visible = this.headlightsOn
-
-  lo.add(leftHead, rightHead, leftTail, rightTail)
-  this.loHeadlights = [leftHead, rightHead, leftTail, rightTail]
+  const quad = (
+    mat: THREE.Material,
+    y: number,
+    z: number,
+    flip: boolean,
+  ): THREE.Mesh => {
+    const parts = [-0.62, 0.62].map((x) => {
+      const q = new THREE.PlaneGeometry(0.28, 0.16)
+      if (flip) q.rotateY(Math.PI)
+      return q.translate(x, y, z)
+    })
+    const m = new THREE.Mesh(mergeGeometries(parts, false), mat)
+    for (const q of parts) q.dispose()
+    m.visible = this.headlightsOn
+    return m
+  }
+  const heads = quad(headMat, 0.58, -2.36, true)
+  const tails = quad(tailMat, 0.65, 2.36, false)
+  lo.add(heads, tails)
+  this.loHeadlights = [heads, tails]
 
   lo.visible = false
   this.group.add(lo)

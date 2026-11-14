@@ -43,6 +43,22 @@ interface CarRule {
   ampRColor?: string
   /** palette colour (and test) that must never be paint */
   notPaint?: (hex: string, x: number, y: number, z: number) => boolean
+  /** triangles authored with this source material are indicators (z<0 = rear) */
+  ampMat?: string
+  /** drop indicator candidates further than this (cm) from any lamp vertex */
+  ampNear?: number
+  /** drop indicator candidates with an edge longer than this (cm): stray flaps */
+  ampMaxEdge?: number
+  /** every corner (not just one) must be within `ampNear` of a lamp vertex */
+  ampTight?: boolean
+  /** raise the darkest paint shades so a repaint reads as one colour */
+  shadeFloor?: number
+  /** unpainted-colour triangles that are really body panels: the paint hex to use */
+  extraPaint?: (hex: string, x: number, y: number, z: number) => string | null
+  /** triangles that stay unpainted and get a flat pure-black material */
+  pureBlack?: (hex: string, x: number, y: number, z: number) => boolean
+  /** keep the file's own "Body_Paint" material (single paint) on re-runs */
+  keepPaint?: boolean
 }
 
 const WHITE = "#ffffff"
@@ -50,12 +66,33 @@ const RED = "#ff0000"
 const near = (x: number, y: number, cx: number, cy: number) =>
   Math.hypot(x - cx, y - cy)
 
+/** Porsche: trim that keeps the model's own dark colour (not body paint):
+ *  front/rear bumper openings, diffuser, lowest edge, tail-lamp panel */
+const porscheBlack = (x: number, y: number, z: number) =>
+  (y < 30 && Math.abs(z) > 150) || (z < -185 && y < 52)
+/** the dark tail-lamp panel: only its dark triangles, not the body-colour
+ *  band between it and the lamp strip */
+const porschePanel = (hex: string, x: number, y: number, z: number) =>
+  hex === "#141414" && z < -195 && y >= 70 && y <= 79 && x <= 84
+const porscheBlackTrim = (x: number, y: number, z: number) =>
+  (z > 160 && y < 62 && x <= 77) ||
+  (z < -165 && y < 62) ||
+  (z < -150 && y >= 66 && y <= 90 && x >= 38 && x <= 84)
+
 const RULES: Record<string, CarRule> = {
   "bugatti_chiron_pur_sport.glb": {
     paint: ["#2141a9", "#142e83", "#0a1f62", "#000b1e", "#00112d", "#000713"],
     ref: "#2141a9",
-    lamp: (hex, _x, _y, z) =>
-      hex === WHITE && z > 0 ? "lights" : hex === RED && z < 0 ? "tail" : null,
+    // rear: the two upper lamps are the indicators, the low strip is only a tail lamp
+    ampRColor: "#ff0000",
+    lamp: (hex, _x, y, z) =>
+      hex === WHITE && z > 0
+        ? "lights"
+        : hex === RED && z < 0
+          ? y > 69
+            ? "ampR"
+            : "tail"
+          : null,
   },
   // orange lenses are the indicators, front and rear
   "mercedes_benz_w124.glb": {
@@ -93,6 +130,88 @@ const RULES: Record<string, CarRule> = {
       return null
     },
     notPaint: (hex, _x, y, z) => hex === "#bababa" && y < 50 && z < -195,
+  },
+  // Evo X: white strip = headlight, red strip = tail lamp; the dark (#141414)
+  // housing round each lamp is the indicator, front and rear. Paint is red;
+  // the silver bits (mirrors, exhaust) are not paint.
+  "mitsubishi_lancer_evo_x.glb": {
+    paint: ["#b80000", "#8f0000", "#620000"],
+    ref: "#b80000",
+    ampFColor: "#141414",
+    ampRColor: "#141414",
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414") {
+        if (z > 150 && x >= 41 && x <= 76 && y >= 59 && y <= 75) return "ampF"
+        if (z < -170 && x >= 38 && x <= 75 && y >= 82 && y <= 97) return "ampR"
+      }
+      return null
+    },
+  },
+  // DB12: white = headlight, red = tail lamp (the rear indicator stays the
+  // tail strip); the dark housing right round each headlight is the front
+  // indicator. Keeps the existing single green paint.
+  "aston_martin_db12.glb": {
+    paint: [],
+    ref: "#474747",
+    keepPaint: true,
+    ampFColor: "#141414",
+    ampNear: 3,
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414" && z > 150 && x >= 41 && x <= 81 && y >= 45 && y <= 80)
+        return "ampF"
+      return null
+    },
+  },
+  // 350Z: same scheme as the Evo X. White strip = headlight, red strip = tail
+  // lamp, the dark (#141414) housing round each lamp is the indicator.
+  "nissan_350z.glb": {
+    paint: ["#d65710", "#ff7122", "#ad3e00"],
+    ref: "#d65710",
+    ampFColor: "#141414",
+    ampRColor: "#141414",
+    ampNear: 3,
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414") {
+        if (z > 120 && x >= 47 && x <= 75 && y >= 56 && y <= 79) return "ampF"
+        if (z < -143 && x >= 44 && x <= 74 && y >= 61 && y <= 88) return "ampR"
+      }
+      return null
+    },
+  },
+  // 911 Turbo S: white = headlight, red = tail lamp. The dark housing round
+  // the headlight is the front indicator; the rear indicator is the model's
+  // own "Indicator" material. Paint is the three greys.
+  "porsche_911.glb": {
+    paint: ["#969696", "#747474", "#525252", "#2d2d2d", "#202020"],
+    ref: "#969696",
+    ampFColor: "#141414",
+    ampRColor: "#141414",
+    shadeFloor: 1,
+    // #141414 is both body panels (doors, hood, roof, arches, bumpers) and the
+    // real trim: paint all of it except the trim zones above
+    extraPaint: (hex, x, y, z) =>
+      hex === "#141414" && !porscheBlack(x, y, z) && !porscheBlackTrim(x, y, z)
+        ? "#969696"
+        : null,
+    notPaint: (hex, x, y, z) =>
+      porscheBlack(x, y, z) || porschePanel(hex, x, y, z),
+    ampMat: "Indicator_Amber_Rear", // was "Indicator" in the raw export
+    ampNear: 3,
+    ampMaxEdge: 15,
+    ampTight: true,
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414" && z > 150 && x >= 54 && x <= 81 && y >= 60 && y <= 84)
+        return "ampF"
+      return null
+    },
   },
   // two lamp rings per side: the outer ring is the front indicator; rear: two
   // red bars, the lower one is the indicator
@@ -381,6 +500,16 @@ function prepare(file: string): Buffer {
   }
   const AMBER_F = rule.ampFColor ? flat("Indicator_Amber_Front", rule.ampFColor) : -1
   const AMBER_R = rule.ampRColor ? flat("Indicator_Amber_Rear", rule.ampRColor) : -1
+  const BLACK = rule.pureBlack
+    ? materials.push({
+        name: "Trim_Black",
+        pbrMetallicRoughness: {
+          baseColorFactor: [0, 0, 0, 1],
+          metallicFactor: 0,
+          roughnessFactor: 0.9,
+        },
+      }) - 1
+    : -1
   const paintIndex = new Map<string, number>()
   rule.paint.forEach((hex, k) => {
     paintIndex.set(hex, materials.length)
@@ -391,14 +520,28 @@ function prepare(file: string): Buffer {
         metallicFactor: 0.45,
         roughnessFactor: 0.3,
       },
-      extras: { paintShade: +Math.pow(lum(hex) / lum(rule.ref), 0.4).toFixed(3) },
+      extras: {
+        paintShade: +Math.max(
+          Math.pow(lum(hex) / lum(rule.ref), 0.4),
+          rule.shadeFloor ?? 0,
+        ).toFixed(3),
+      },
     })
   })
+
+  const keepPaint = rule.keepPaint
+    ? materials.push(
+        json.materials.find((m: any) => m.name === "Body_Paint"),
+      ) - 1
+    : -1
 
   // primitives per mesh: the body is split by palette colour, the rest stay
   const bodyMesh = json.nodes.find((n: any) => n.name === "Body").mesh
   const meshPrims: Prim[][] = json.meshes.map((m: any, mi: number) => {
     const prims: Prim[] = m.primitives.map((p: any) => readPrim(json, bin, p))
+    const srcNames: string[] = m.primitives.map(
+      (p: any) => json.materials[p.material]?.name ?? "",
+    )
     if (mi !== bodyMesh) return prims.map((p) => ({ ...p, material: COLOR }))
     // one big primitive first, so each material ends up as a single draw
     const cat = (f: (p: Prim) => ArrayLike<number>) =>
@@ -417,7 +560,13 @@ function prepare(file: string): Buffer {
       ),
       material: COLOR,
     }
+    const triSrc: string[] = prims.flatMap((p, k) =>
+      Array.from({ length: p.idx.length / 3 }, () => srcNames[k]),
+    )
     const groups = new Map<number, number[]>()
+    const parts: (Part | null)[] = []
+    const cents: number[][] = []
+    const tverts: number[][][] = []
     for (let t = 0; t < src.idx.length / 3; t++) {
       let u = 0
       let v = 0
@@ -438,21 +587,109 @@ function prepare(file: string): Buffer {
         const i = src.idx[t * 3 + k]
         return [Math.abs(src.pos[i * 3]), src.pos[i * 3 + 1], src.pos[i * 3 + 2]]
       })
-      const part = rule.lamp(hex, ax, y, z, verts)
+      const part =
+        rule.ampMat && triSrc[t] === rule.ampMat
+          ? z < 0
+            ? "ampR"
+            : "ampF"
+          : rule.lamp(hex, ax, y, z, verts)
+      parts.push(part)
+      cents.push([ax, y, z])
+      tverts.push(verts)
+    }
+    if (rule.ampMaxEdge) {
+      parts.forEach((q, t) => {
+        if (q !== "ampF" && q !== "ampR") return
+        if (rule.ampMat && triSrc[t] === rule.ampMat) return
+        const v = tverts[t]
+        const d = (i: number, j: number) =>
+          Math.hypot(v[i][0] - v[j][0], v[i][1] - v[j][1], v[i][2] - v[j][2])
+        if (Math.max(d(0, 1), d(1, 2), d(0, 2)) > rule.ampMaxEdge!) parts[t] = null
+      })
+    }
+    if (rule.ampNear) {
+      const lampV: number[][] = []
+      parts.forEach((q, t) => {
+        if (q === "lights" || q === "tail") lampV.push(...tverts[t])
+      })
+      const r2 = rule.ampNear * rule.ampNear
+      parts.forEach((q, t) => {
+        if ((q !== "ampF" && q !== "ampR") || (rule.ampMat && triSrc[t] === rule.ampMat))
+          return
+        // a corner within reach is enough: the housing slivers are long and
+        // thin, so their centres sit far from the lens
+        const reach = (c: number[]) =>
+          lampV.some(
+            (v) => (v[0] - c[0]) ** 2 + (v[1] - c[1]) ** 2 + (v[2] - c[2]) ** 2 <= r2,
+          )
+        const ok = rule.ampTight ? tverts[t].every(reach) : tverts[t].some(reach)
+        if (!ok) parts[t] = null
+      })
+    }
+    if (rule.ampNear && process.env.DEBUG_NEAR) {
+      const lampV: number[][] = []
+      parts.forEach((q, t) => {
+        if (q === "lights" || q === "tail") lampV.push(...tverts[t])
+      })
+      const left = new Map<string, number>()
+      const r2 = (rule.ampNear * 2) ** 2
+      for (let t = 0; t < parts.length; t++) {
+        if (parts[t]) continue
+        const near2 = tverts[t].some((c) =>
+          lampV.some((v) => (v[0] - c[0]) ** 2 + (v[1] - c[1]) ** 2 + (v[2] - c[2]) ** 2 <= r2),
+        )
+        if (!near2) continue
+        const h = pal.at(
+          [0, 1, 2].reduce((a, k) => a + src.uv[src.idx[t * 3 + k] * 2] / 3, 0),
+          [0, 1, 2].reduce((a, k) => a + src.uv[src.idx[t * 3 + k] * 2 + 1] / 3, 0),
+        )
+        left.set(h, (left.get(h) ?? 0) + 1)
+      }
+      console.log("not indicator but within 2x reach:", [...left])
+    }
+    for (let t = 0; t < src.idx.length / 3; t++) {
+      const part = parts[t]
+      const [ax, y, z] = cents[t]
+      const hex = pal.at(
+        [0, 1, 2].reduce((a, k) => a + src.uv[src.idx[t * 3 + k] * 2] / 3, 0),
+        [0, 1, 2].reduce((a, k) => a + src.uv[src.idx[t * 3 + k] * 2 + 1] / 3, 0),
+      )
       let mat = COLOR
       if (part === "lights") mat = LIGHTS
       else if (part === "tail") mat = TAIL
       else if (part === "ampF") mat = AMBER_F
       else if (part === "ampR") mat = AMBER_R
+      else if (rule.extraPaint?.(hex, ax, y, z) && paintIndex.has(rule.extraPaint(hex, ax, y, z)!))
+        mat = paintIndex.get(rule.extraPaint(hex, ax, y, z)!)!
+      else if (keepPaint >= 0 && triSrc[t] === "Body_Paint") mat = keepPaint
       else if (paintIndex.has(hex) && !rule.notPaint?.(hex, ax, y, z))
         mat = paintIndex.get(hex)!
+      else if (BLACK >= 0 && rule.pureBlack!(hex, ax, y, z)) mat = BLACK
       const g = groups.get(mat)
       if (g) g.push(t)
       else groups.set(mat, [t])
     }
     return [...groups.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([mat, tris]) => subset(src, tris, mat))
+      .map(([mat, tris]) => {
+        const prim = subset(src, tris, mat)
+        if (mat === LIGHTS) {
+          // every lens vertex samples the middle of the white palette block, so
+          // bilinear/mip filtering can't pull in the yellow/blue cells beside it
+          let su = 0
+          let sv = 0
+          const n = prim.uv.length / 2
+          for (let i = 0; i < n; i++) {
+            su += prim.uv[i * 2]
+            sv += prim.uv[i * 2 + 1]
+          }
+          for (let i = 0; i < n; i++) {
+            prim.uv[i * 2] = su / n
+            prim.uv[i * 2 + 1] = sv / n
+          }
+        }
+        return prim
+      })
   })
 
   // rebuild the buffers from scratch: image first, then every primitive
@@ -523,7 +760,65 @@ function prepare(file: string): Buffer {
   return writeGlb(json, Buffer.concat(chunks))
 }
 
+/** `ANALYZE=<file> bun scripts/prepare-low-poly-cars.ts`: per palette colour,
+ * the triangle count and |x| / y / z extents of the body, to write a rule.
+ * `BOX=xmin,xmax,ymin,ymax,zmin,zmax` (|x|, cm) limits it to a region. */
+function analyze(file: string) {
+  const { json, bin } = readGlb(fs.readFileSync(path.join(SRC, file)))
+  const img = json.images[0]
+  const png = img.uri
+    ? fs.readFileSync(path.join(TEX_DIR, path.basename(img.uri)))
+    : Buffer.from(
+        bin.subarray(
+          json.bufferViews[img.bufferView].byteOffset ?? 0,
+          (json.bufferViews[img.bufferView].byteOffset ?? 0) +
+            json.bufferViews[img.bufferView].byteLength,
+        ),
+      )
+  const pal = decodePng(png)
+  const bodyMesh = json.nodes.find((n: any) => n.name === "Body").mesh
+  const box = process.env.BOX?.split(",").map(Number)
+  const stats = new Map<string, number[]>()
+  for (const p of json.meshes[bodyMesh].primitives) {
+    const pr = readPrim(json, bin, p)
+    for (let t = 0; t < pr.idx.length / 3; t++) {
+      let u = 0, v = 0, x = 0, y = 0, z = 0
+      for (let k = 0; k < 3; k++) {
+        const i = pr.idx[t * 3 + k]
+        u += pr.uv[i * 2] / 3
+        v += pr.uv[i * 2 + 1] / 3
+        x += pr.pos[i * 3] / 3
+        y += pr.pos[i * 3 + 1] / 3
+        z += pr.pos[i * 3 + 2] / 3
+      }
+      const hex = pal.at(u, v)
+      const ax = Math.abs(x)
+      if (box && (ax < box[0] || ax > box[1] || y < box[2] || y > box[3] || z < box[4] || z > box[5])) continue
+      if (process.env.DUMP === hex)
+        console.log(`  tri |x|=${ax.toFixed(1)} y=${y.toFixed(1)} z=${z.toFixed(1)}`)
+      const s = stats.get(hex) ?? [0, 1e9, -1e9, 1e9, -1e9, 1e9, -1e9]
+      s[0]++
+      s[1] = Math.min(s[1], ax); s[2] = Math.max(s[2], ax)
+      s[3] = Math.min(s[3], y); s[4] = Math.max(s[4], y)
+      s[5] = Math.min(s[5], z); s[6] = Math.max(s[6], z)
+      stats.set(hex, s)
+    }
+  }
+  for (const [hex, s] of [...stats.entries()].sort((a, b) => b[1][0] - a[1][0]))
+    console.log(
+      `${hex} n=${s[0]} |x| ${s[1].toFixed(0)}..${s[2].toFixed(0)} y ${s[3].toFixed(0)}..${s[4].toFixed(0)} z ${s[5].toFixed(0)}..${s[6].toFixed(0)}`,
+    )
+}
+
+if (process.env.ANALYZE) {
+  analyze(process.env.ANALYZE)
+  process.exit(0)
+}
+
+// optional file names after the script restrict which models are redone
+const only = process.argv.slice(2).filter((a) => a.endsWith(".glb"))
 for (const f of Object.keys(RULES)) {
+  if (only.length > 0 && !only.includes(f)) continue
   const out = prepare(f)
   for (const d of OUT_DIRS) fs.writeFileSync(path.join(d, f), out)
   console.log(`${f}: ${(out.length / 1024).toFixed(0)} KB`)

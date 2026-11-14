@@ -56,6 +56,11 @@ export interface MapWorld {
     camera: THREE.PerspectiveCamera,
     around?: (on: boolean) => void,
   ): void
+  prewarmReflections?(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ): void
 }
 
 export interface MapFeatures {
