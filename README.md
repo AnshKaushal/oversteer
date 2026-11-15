@@ -148,7 +148,7 @@ scripts/                    # headless checks and model prep (see above)
 
 `.github/workflows/release.yml` runs on every push to `main` and can also be run by hand from the _Actions → Build & Release → Run workflow_ tab. Each run publishes one GitHub Release:
 
-1. **Version** — reads the newest `vX.Y.Z` tag from v2.0.0 up and bumps the patch (`v2.0.3` → `v2.0.4`). Older v1 tags are ignored, so the first run publishes `v2.0.0`.
+1. **Version** — reads the newest `vX.Y` tag from v3.0 up and bumps the minor (`v3.1` → `v3.2`). Older v1 and v2 tags are ignored.
 2. **Build** — a macOS (arm64) job and a Windows (x64) job install Hutch, run `hutch run install`, stamp the new version into `electrobun.config.ts`, and run `hutch run build` (stable channel).
 3. **Release** — both platforms' artifacts are attached to a new tag/release, with auto-generated notes.
 

@@ -1,7 +1,7 @@
 /**
  * Stamps the release version into electrobun.config.ts before a CI build.
  *
- *   node scripts/set-version.mjs 1.0.1
+ *   node scripts/set-version.mjs 3.1
  *
  * The release version lives in git tags (see .github/workflows/release.yml);
  * this only makes the built app and its update metadata report the same
@@ -12,9 +12,9 @@ import { readFileSync, writeFileSync } from "node:fs"
 
 const version = process.argv[2]
 
-if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
+if (!/^\d+\.\d+$/.test(version ?? "")) {
   console.error(
-    `set-version: expected a version like 1.0.1, got "${version ?? ""}"`,
+    `set-version: expected a version like 3.1, got "${version ?? ""}"`,
   )
   process.exit(1)
 }
