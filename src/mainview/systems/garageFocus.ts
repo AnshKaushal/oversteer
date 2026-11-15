@@ -11,16 +11,37 @@ const sub = (f: () => void) => (subs.add(f), () => void subs.delete(f))
 
 export const getFocus = () => focus
 export const getHot = () => hot
+/** Set by the app: runs `apply` once the loading cover has fully landed. */
+let coverHook: ((apply: () => void) => void) | null = null
+export const setDynoCoverHook = (f: typeof coverHook) => void (coverHook = f)
+let covering = false
+
 export function setFocus(id: SurfaceId | null) {
   if (focus === id) return
-  focus = id
-  if (id) hot = id
-  emit()
+  const apply = () => {
+    focus = id
+    if (id) hot = id
+    emit()
+  }
+  // Entering/leaving the dyno raises/lowers it: hide that behind the cover.
+  if (coverHook && !covering && (id === "dyno") !== (focus === "dyno")) {
+    covering = true
+    coverHook(() => {
+      covering = false
+      dynoSnap.pending = true
+      apply()
+    })
+    return
+  }
+  apply()
 }
 export function setHot(id: SurfaceId | null) {
   if (hot === id) return
   hot = id
   emit()
 }
+/** Handshake for hiding the dyno raise/lower behind the loading cover. */
+export const dynoSnap = { pending: false, release: 0 }
+
 export const useFocus = () => useSyncExternalStore(sub, getFocus)
 export const useHot = () => useSyncExternalStore(sub, getHot)

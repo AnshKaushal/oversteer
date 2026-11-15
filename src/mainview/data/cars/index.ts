@@ -9,7 +9,8 @@ import { lamboUrus } from "./lambo-urus"
 import { lamboAventador } from "./lambo-aventador"
 import { dodgeChallengerHellcat } from "./dodge-challenger-hellcat"
 import { f1Car } from "./f1-car"
-import { cheetah84 } from "./cheetah-84"
+import { jaguarFType } from "./jaguar-f-type"
+import { ferrariF12 } from "./ferrari-f12"
 import { fordMustang69 } from "./ford-mustang-69"
 import { mercedesW124 } from "./mercedes-w124"
 import { bugattiChironPurSport } from "./bugatti-chiron-pur-sport"
@@ -27,7 +28,8 @@ const ALL_CARS: CarSpec[] = [
   lamboAventador,
   dodgeChallengerHellcat,
   f1Car,
-  cheetah84,
+  jaguarFType,
+  ferrariF12,
   fordMustang69,
   mercedesW124,
   bugattiChironPurSport,

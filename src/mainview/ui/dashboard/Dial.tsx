@@ -71,7 +71,6 @@ export interface DialProps {
 export function Dial({
   side,
   kind,
-  id,
   maxValue,
   redFrom = Infinity,
   yellowFrom = Infinity,
@@ -107,51 +106,13 @@ export function Dial({
 
   return (
     <svg viewBox={`0 0 ${S} ${S}`} className="block h-auto w-full">
-      <defs>
-        <radialGradient
-          id={`${id}-face`}
-          gradientUnits="userSpaceOnUse"
-          cx={cx}
-          cy={S}
-          r={R_RIM}
-        >
-          <stop offset="0%" stopColor="#1c222c" />
-          <stop offset="55%" stopColor="#10141a" />
-          <stop offset="100%" stopColor="#07090d" />
-        </radialGradient>
-        <radialGradient
-          id={`${id}-hub`}
-          gradientUnits="userSpaceOnUse"
-          cx={cx}
-          cy={S}
-          r={R_HUB}
-        >
-          <stop offset="0%" stopColor="#04060a" />
-          <stop offset="70%" stopColor="#0b0e14" />
-          <stop offset="100%" stopColor="#171c25" />
-        </radialGradient>
-        <linearGradient
-          id={`${id}-chrome`}
-          gradientUnits="userSpaceOnUse"
-          x1="0"
-          y1="0"
-          x2={S}
-          y2={S}
-        >
-          <stop offset="0%" stopColor="#f4f6f9" />
-          <stop offset="25%" stopColor="#9aa1ab" />
-          <stop offset="50%" stopColor="#e8ecf1" />
-          <stop offset="75%" stopColor="#6b7280" />
-          <stop offset="100%" stopColor="#dfe4ea" />
-        </linearGradient>
-      </defs>
 
       {}
       <path
         ref={refs.rim}
         d={arc(side, R_RIM, 0, 90)}
         fill="none"
-        stroke={`url(#${id}-chrome)`}
+        stroke="#efefef"
         strokeWidth="6"
         z={999}
       />
@@ -182,11 +143,11 @@ export function Dial({
       </g>
 
       {}
-      <path d={sector(side, R_HUB)} fill={`url(#${id}-hub)`} />
+      <path d={sector(side, R_HUB)} fill="#0a0a0a" />
       <path
         d={arc(side, R_HUB, 0, 90)}
         fill="none"
-        stroke={`url(#${id}-chrome)`}
+        stroke="#efefef"
         strokeWidth="3.5"
       />
       <path

@@ -484,6 +484,16 @@ export function planIndicators(
         !!z.amber,
       )
     }
+    if (z.paint) {
+      const body = this.tintedMats[0] ?? this.plainPaintMats[0]
+      for (const side of ["l", "r"] as const) {
+        const mat = amberEnds[z.end][side]?.material as
+          THREE.MeshStandardMaterial | undefined
+        if (!mat) continue
+        mat.userData.paintIdle = true
+        if (body) mat.color.copy(body.color)
+      }
+    }
     if (z.glow) {
       for (const side of ["l", "r"] as const) {
         const mat = amberEnds[z.end][side]?.material as

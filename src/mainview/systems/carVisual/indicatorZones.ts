@@ -8,6 +8,8 @@ export interface IndicatorZone {
   /** Only connected pieces whose centre sits in this |x| fraction of body width. */
   cdx?: [number, number]
   idle?: number
+  /** At rest the lamp takes the live body paint colour (follows repaints). */
+  paint?: boolean
   /** Emissive colour while not flashing (e.g. a red tail lamp). */
   glow?: number
   /** The zone is the tail lamp itself: dim at rest, bright while braking. */
@@ -21,9 +23,18 @@ export interface IndicatorZone {
 const AMBER_LENS = 0x6a3300
 
 export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
-  "cheetah_84.glb": [
-    { end: "front", mesh: "Blinkers" },
-    { end: "rear", mesh: "Blinkers" },
+  // F12: the dark housing round the headlight lens is the front indicator; the dark
+  // disc inside each round tail lamp is the rear indicator (both dark at rest)
+  "ferrari_f12.glb": [
+    { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
+    { end: "rear", mesh: "^Indicator_Amber", idle: 0x2d2d2d },
+  ],
+  // F-Type: the white housing round the headlight is the front indicator (white, glowing
+  // with the headlights; amber while flashing, never white while indicating);
+  // rear: the housing beside each tail lamp, body-coloured at rest
+  "jaguar_f_type.glb": [
+    { end: "front", mesh: "^Indicator_Amber", glow: 0xffffff, head: true },
+    { end: "rear", mesh: "^Indicator_Amber", paint: true },
   ],
   // Evo X: the dark housing round each headlight and tail lamp is the
   // indicator (front and rear), like the Mustang's front ring

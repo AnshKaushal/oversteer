@@ -7,11 +7,11 @@ import { MotionBlurPass } from "./motionBlur"
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js"
 
 export type AAMode = "off" | "fxaa" | "smaa" | "msaa"
-export const AA_MODES: { id: AAMode; label: string; hint: string }[] = [
-  { id: "off", label: "Off", hint: "Fastest, jagged edges" },
-  { id: "fxaa", label: "FXAA", hint: "Cheap post-process, slightly soft" },
-  { id: "smaa", label: "SMAA", hint: "Sharper post-process, moderate cost" },
-  { id: "msaa", label: "MSAA 4x", hint: "Best edges, highest GPU cost" },
+export const AA_MODES: { id: AAMode; label: string }[] = [
+  { id: "off", label: "Off" },
+  { id: "fxaa", label: "FXAA" },
+  { id: "smaa", label: "SMAA" },
+  { id: "msaa", label: "MSAA 4x" },
 ]
 
 export class AntiAlias {
@@ -52,7 +52,11 @@ export class AntiAlias {
     c.setPixelRatio(1)
     c.addPass(new RenderPass(this.scene, this.camera))
     if (blur) {
-      this.blurPass = new MotionBlurPass(this.scene, this.camera, target.depthTexture!)
+      this.blurPass = new MotionBlurPass(
+        this.scene,
+        this.camera,
+        target.depthTexture!,
+      )
       c.addPass(this.blurPass)
     }
     c.addPass(new OutputPass())

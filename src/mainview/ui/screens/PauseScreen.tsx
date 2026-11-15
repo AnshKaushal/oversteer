@@ -1,8 +1,7 @@
-import { Play, RotateCcw, LogOut, Settings } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { EASE, Screen } from "../anim"
 import { useRef } from "react"
 import { useMenuGamepadNav } from "../useMenuGamepadNav"
-import { getCar } from "../../data/cars"
 import {
   TRAFFIC_OPTIONS,
   type RaceSnapshot,
@@ -12,7 +11,6 @@ import type { PeerPlayer } from "../../systems/net/types"
 
 export interface PauseScreenProps {
   open: boolean
-  carId: string
   race: RaceSnapshot
   netConnected: boolean
   netPeers: PeerPlayer[]
@@ -24,9 +22,11 @@ export interface PauseScreenProps {
   gamepadNav?: boolean
 }
 
+const ROW =
+  "group flex w-full items-center justify-between gap-6 px-6 py-4 text-left transition-colors duration-150 md:px-8 md:py-5"
+
 export function PauseScreen({
   open,
-  carId,
   race,
   netConnected,
   netPeers,
@@ -39,129 +39,97 @@ export function PauseScreen({
 }: PauseScreenProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   useMenuGamepadNav(open && gamepadNav, rootRef, resumeGame)
+
+  const mode = netConnected
+    ? `Online · ${netPeers.length + 1} player${netPeers.length === 0 ? "" : "s"}`
+    : race.active
+      ? `Race · ${race.total} cars · ${(race.distanceM / 1000).toFixed(1)} km`
+      : `Free roam · ${TRAFFIC_OPTIONS.find((o) => o.id === trafficLevel)?.label} traffic`
+
+  const items: {
+    label: string
+    hint: string
+    onClick: () => void
+    primary?: boolean
+  }[] = [
+    { label: "Resume", hint: "P", onClick: resumeGame, primary: true },
+    { label: "Restart", hint: "", onClick: restart },
+    { label: "Settings", hint: "", onClick: () => setShowSettings(true) },
+    { label: "Quit to start", hint: "", onClick: quitToMenu },
+  ]
+
   return (
     <Screen
       open={open}
-      className="absolute inset-0 overflow-y-auto bg-black/55 backdrop-blur-[2px]"
+      className="absolute inset-0 z-[110] overflow-y-auto bg-[#0a0a0a]/30 text-[#efefef]"
       from={{ autoAlpha: 0 }}
       to={{ duration: 0.3, ease: EASE.out }}
       exit={{ duration: 0.2, ease: EASE.in }}
       stagger={[
         { selector: "[data-pause-head]", from: { autoAlpha: 0 } },
-        { selector: "[data-pause-acts]", from: { autoAlpha: 0 } },
         {
           selector: "[data-pause-row]",
           from: { autoAlpha: 0 },
-          each: 0.035,
-          delay: 0.1,
+          each: 0.06,
+          delay: 0.08,
         },
+        { selector: "[data-pause-foot]", from: { autoAlpha: 0 }, delay: 0.3 },
       ]}
     >
-      <div ref={rootRef} className="flex min-h-full flex-col p-5 md:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-          <div data-pause-head>
-            <div
-              className="mb-2 h-2.5 w-20"
-              style={{
-                backgroundImage:
-                  "repeating-conic-gradient(#51a7d5 0% 25%, #0b0e14 0% 50%)",
-                backgroundSize: "12px 12px",
-              }}
-            />
-            <span className="text-[64px] font-bold leading-[0.9] tracking-tight text-white drop-shadow-[0_8px_30px_rgba(0,0,0,0.6)] md:text-[96px]">
-              Paused
-            </span>
-            <p className="mt-2 text-[13px] tracking-wide text-gray-300">
-              {netConnected
-                ? `${getCar(carId).name} · Online · ${netPeers.length + 1} player${netPeers.length === 0 ? "" : "s"}`
-                : race.active
-                  ? `${getCar(carId).name} · Race · ${race.total} cars · ${(race.distanceM / 1000).toFixed(1)} km`
-                  : `${getCar(carId).name} · Free Roam · ${TRAFFIC_OPTIONS.find((o) => o.id === trafficLevel)?.label} traffic`}
-            </p>
-          </div>
-          <div
-            data-pause-acts
-            className="flex w-full flex-col gap-2 sm:w-[280px]"
+      <div
+        className="pointer-events-none absolute inset-y-0 left-0 w-full md:w-[60%]"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(11,14,20,0.92) 0%, rgba(11,14,20,0.6) 55%, rgba(11,14,20,0) 100%)",
+        }}
+      />
+      <div
+        ref={rootRef}
+        className="relative mx-auto flex min-h-full w-full flex-col justify-center px-6 py-10 md:px-16"
+      >
+        <div data-pause-head className="mb-8 md:mb-10">
+          <h1
+            className="font-black uppercase leading-[0.82] tracking-tighter text-[#efefef]"
+            style={{ fontSize: "clamp(56px, 11vw, 168px)" }}
           >
-            <button
-              onClick={resumeGame}
-              className="w-full bg-[#51a7d5] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#51a7d5]/90 active:scale-[0.98] inline-flex items-center justify-center gap-2"
-            >
-              <Play size={16} />
-              Keep driving
-            </button>
-            <button
-              onClick={() => {
-                restart()
-              }}
-              className="w-full border border-[#51a7d5] bg-[#51a7d5]/15 px-6 py-3 text-[14px] font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/25 active:scale-[0.98] inline-flex items-center justify-center gap-2"
-            >
-              <RotateCcw size={16} />
-              Restart
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="w-full border border-[#51a7d5]/40 bg-[#51a7d5]/10 px-6 py-3 text-[14px] font-medium text-[#6ec2f0] transition hover:bg-[#51a7d5]/20 hover:text-white active:scale-[0.98] inline-flex items-center justify-center gap-2"
-            >
-              <Settings size={16} />
-              Settings
-            </button>
-            <button
-              onClick={quitToMenu}
-              className="w-full border border-white/12 bg-white/5 px-6 py-3 text-[14px] font-medium text-gray-100 transition hover:bg-white/10 active:scale-[0.98] inline-flex items-center justify-center gap-2"
-            >
-              <LogOut size={16} />
-              Back to the start
-            </button>
-          </div>
+            Paused
+          </h1>
         </div>
 
-        {}
-        <div className="no-scrollbar mt-auto border-t border-white/10 max-w-[300px]">
-          {(
-            [
-              ["P", "Pause"],
-              ["Space", "Handbrake (tap to latch)"],
-              ["L", "Launch control"],
-              ["E", "Shift up"],
-              ["Q", "Shift down"],
-              ["M", "Transmission mode"],
-              ["X", "Traction control"],
-              ["G", "Stability control"],
-              ["B", "ABS"],
-              ["N", "Safety aids"],
-              ["V", "Tap: ignition · Hold: start engine"],
-              [";", "Cruise control"],
-              ["[ ]", "Cruise set / resume"],
-              ["H", "Headlights"],
-              ["T", "Time of day"],
-              ["R", "Put car back on road"],
-              ["C", "Camera view"],
-            ] as const
-          ).map(([key, label]) => (
-            <div
-              key={key}
+        <div className="flex w-full flex-col gap-[3px] md:w-[560px]">
+          {items.map((it) => (
+            <button
+              key={it.label}
               data-pause-row
-              className="grid h-9 grid-cols-[52px_1fr] items-center border-b border-white/5 bg-black/30"
+              onClick={it.onClick}
+              className={`${ROW} ${
+                it.primary
+                  ? "bg-[#51a7d5] text-[#0a0a0a] hover:bg-[#efefef]"
+                  : "bg-[#0a0a0a] text-[#efefef] hover:bg-[#efefef] hover:text-[#0a0a0a]"
+              }`}
             >
-              <div
-                className={`grid h-full place-items-center border-r border-white/5 text-[12px] font-bold ${
-                  key === "P"
-                    ? "bg-[#51a7d5] text-[#0b0e14]"
-                    : "bg-white/[0.04] text-gray-400"
-                }`}
-              >
-                {key}
-              </div>
-              <span className="px-3 text-[14px] text-gray-200">{label}</span>
-            </div>
+              <span className="w-full flex items-baseline justify-between gap-5">
+                <span className="text-[26px] font-extrabold uppercase leading-none tracking-tight md:text-[34px]">
+                  {it.label}
+                </span>
+
+                <ArrowRight
+                  size={22}
+                  strokeWidth={2.5}
+                  className="transition-transform duration-150 group-hover:translate-x-1"
+                />
+              </span>
+            </button>
           ))}
-          <div
-            data-pause-row
-            className="py-2 text-center text-[12px] text-gray-500"
-          >
-            press P to keep driving
-          </div>
+        </div>
+
+        <div
+          data-pause-foot
+          className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] font-bold uppercase tracking-[0.18em]"
+        >
+          <span className="bg-[#0a0a0a] px-2.5 py-1 text-[#efefef]">
+            {mode}
+          </span>
         </div>
       </div>
     </Screen>

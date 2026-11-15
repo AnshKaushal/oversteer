@@ -287,6 +287,8 @@ export interface BodyStabilitySpec {
   driftDeadzoneScale?: number
   /** Drift tuning (1 = stock): scales how hard the assist pulls back. */
   driftAuthorityScale?: number
+  /** Drift tuning "off": no slip correction and no slide power cut at all. */
+  disabled?: boolean
 }
 
 export interface Assists {

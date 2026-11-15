@@ -5,111 +5,18 @@ import { enginePeaks } from "../../physics/vehicle/components/Engine"
 import { dyno, useDyno, type DynoPoint } from "../../systems/dyno"
 import { setBoardElement } from "../../systems/garageBoard"
 import { setFocus } from "../../systems/garageFocus"
+import type { CarTelemetry } from "../../physics/vehicle/Vehicle"
+import { SingleDialDashboard } from "../dashboard/SingleDialDashboard"
+import { ACCENT, accentFill, glass } from "./kit"
 
-const AMBER = "#ffb020"
-const BLUE = "#5fb4ff"
+// Power is the blue accent, torque is white: two reads on one glass card.
+const POWER = ACCENT
+const TORQUE = "#ffffff"
+const MUTED = "#8b97ab"
 
 const css = `
 @keyframes dynoIn{from{opacity:0;transform:translate(-50%,18px)}to{opacity:1;transform:translate(-50%,0)}}
 `
-
-function Tach({
-  rpm,
-  redline,
-  boost,
-}: {
-  rpm: number
-  redline: number
-  boost: number
-}) {
-  const max = Math.ceil((redline * 1.06) / 1000) * 1000
-  const R = 70
-  const cx = 90
-  const cy = 88
-  const A0 = 135
-  const SWEEP = 270
-  const pt = (v: number, r: number) => {
-    const a = ((A0 + (v / max) * SWEEP) * Math.PI) / 180
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]
-  }
-  const arc = (v0: number, v1: number, r: number) => {
-    const [x0, y0] = pt(v0, r)
-    const [x1, y1] = pt(v1, r)
-    const large = ((v1 - v0) / max) * SWEEP > 180 ? 1 : 0
-    return `M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1}`
-  }
-  const ticks = []
-  for (let v = 0; v <= max; v += 1000) {
-    const [x0, y0] = pt(v, R - 2)
-    const [x1, y1] = pt(v, R - 9)
-    const [tx, ty] = pt(v, R - 20)
-    ticks.push(
-      <g key={v}>
-        <line
-          x1={x0}
-          y1={y0}
-          x2={x1}
-          y2={y1}
-          stroke="#fff"
-          strokeOpacity=".5"
-        />
-        <text x={tx} y={ty + 3} fontSize="9" textAnchor="middle" fill="#9aa4b2">
-          {v / 1000}
-        </text>
-      </g>,
-    )
-  }
-  const [nx, ny] = pt(Math.min(rpm, max), R - 6)
-  return (
-    <svg width="180" height="150" viewBox="0 0 180 150">
-      <path d={arc(0, max, R)} stroke="#262d38" strokeWidth="6" fill="none" />
-      <path
-        d={arc(0, Math.min(rpm, max), R)}
-        stroke="#51a7d5"
-        strokeWidth="6"
-        fill="none"
-      />
-      <path
-        d={arc(redline, max, R)}
-        stroke="#ef4444"
-        strokeWidth="6"
-        fill="none"
-      />
-      {ticks}
-      <line
-        x1={cx}
-        y1={cy}
-        x2={nx}
-        y2={ny}
-        stroke="#fff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <circle cx={cx} cy={cy} r="5" fill="#fff" />
-      <text
-        x={cx}
-        y={cy + 34}
-        textAnchor="middle"
-        fontSize="24"
-        fontWeight="700"
-        fill="#fff"
-        className="tabular-nums"
-      >
-        {Math.round(rpm).toLocaleString()}
-      </text>
-      <text
-        x={cx}
-        y={cy + 47}
-        textAnchor="middle"
-        fontSize="9"
-        letterSpacing="2"
-        fill="#8f99a8"
-      >
-        RPM{boost > 0.02 ? `  ·  BOOST ${Math.round(boost * 100)}%` : ""}
-      </text>
-    </svg>
-  )
-}
 
 function Graph({
   curve,
@@ -165,7 +72,7 @@ function Graph({
           y={H - 6}
           fontSize="9"
           textAnchor="middle"
-          fill="#8f99a8"
+          fill={MUTED}
         >
           {r / 1000}k
         </text>
@@ -183,18 +90,18 @@ function Graph({
           y1={yHp(hv)}
           y2={yHp(hv)}
           stroke="#fff"
-          strokeOpacity=".05"
+          strokeOpacity=".06"
         />
         <text
           x={L - 5}
           y={yHp(hv) + 3}
           fontSize="9"
           textAnchor="end"
-          fill={AMBER}
+          fill={POWER}
         >
           {Math.round(hv)}
         </text>
-        <text x={W - 33} y={yNm(nv) + 3} fontSize="9" fill={BLUE}>
+        <text x={W - 33} y={yNm(nv) + 3} fontSize="9" fill={MUTED}>
           {Math.round(nv)}
         </text>
       </g>,
@@ -204,22 +111,27 @@ function Graph({
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
       {xt}
       {yt}
-      <text x={L - 5} y="8" fontSize="9" textAnchor="end" fill={AMBER}>
+      <text x={L - 5} y="8" fontSize="9" textAnchor="end" fill={POWER}>
         hp
       </text>
-      <text x={W - 33} y="8" fontSize="9" fill={BLUE}>
+      <text x={W - 33} y="8" fontSize="9" fill={MUTED}>
         Nm
       </text>
       {prev && prev.length > 1 && (
-        <g opacity=".4" strokeDasharray="4 3" fill="none" strokeWidth="1.5">
-          <path d={hpPath(prev)} stroke={AMBER} />
-          <path d={nmPath(prev)} stroke={BLUE} />
+        <g opacity=".35" strokeDasharray="4 3" fill="none" strokeWidth="1.5">
+          <path d={hpPath(prev)} stroke={POWER} />
+          <path d={nmPath(prev)} stroke={TORQUE} />
         </g>
       )}
       {curve.length > 1 && (
         <g fill="none" strokeWidth="2.4" strokeLinejoin="round">
-          <path d={nmPath(curve)} stroke={BLUE} />
-          <path d={hpPath(curve)} stroke={AMBER} />
+          <path
+            d={`${hpPath(curve)} L${x(curve[curve.length - 1].rpm).toFixed(1)},${H - B} L${x(curve[0].rpm).toFixed(1)},${H - B} Z`}
+            fill={POWER} fillOpacity=".12"
+            stroke="none"
+          />
+          <path d={nmPath(curve)} stroke={TORQUE} strokeOpacity=".9" />
+          <path d={hpPath(curve)} stroke={POWER} />
         </g>
       )}
       {live && (
@@ -230,10 +142,10 @@ function Graph({
             y1={10}
             y2={H - B}
             stroke="#fff"
-            strokeOpacity=".35"
+            strokeOpacity=".3"
           />
-          <circle cx={x(rpm)} cy={yHp(hp)} r="3.5" fill={AMBER} />
-          <circle cx={x(rpm)} cy={yNm(nm)} r="3.5" fill={BLUE} />
+          <circle cx={x(rpm)} cy={yHp(hp)} r="4" fill={POWER} />
+          <circle cx={x(rpm)} cy={yNm(nm)} r="4" fill={TORQUE} />
         </g>
       )}
     </svg>
@@ -254,21 +166,19 @@ function Big({
   color?: string
 }) {
   return (
-    <div>
-      <div className="text-[9.5px] font-semibold tracking-[0.2em] text-[#8f99a8]">
-        {label}
-      </div>
+    <div className="bg-black/25 px-3.5 py-2.5">
+      <div className="text-[12px] font-medium text-[#8b97ab]">{label}</div>
       <div className="flex items-baseline gap-1.5">
         <span
-          className="text-[30px] leading-none font-bold tabular-nums"
+          className="text-[30px] leading-tight font-semibold tabular-nums"
           style={{ color }}
         >
           {value}
         </span>
-        <span className="text-[11px] font-semibold text-gray-400">{unit}</span>
+        <span className="text-[12px] font-medium text-[#8b97ab]">{unit}</span>
       </div>
       {sub && (
-        <div className="text-[10px] tabular-nums text-gray-500">{sub}</div>
+        <div className="text-[11px] tabular-nums text-[#697488]">{sub}</div>
       )}
     </div>
   )
@@ -280,7 +190,7 @@ const peakOf = (pts: DynoPoint[] | null, k: "hp" | "nm") =>
 const vs = (v: number, prev: number | null) =>
   prev === null || Math.abs(v - prev) < 1
     ? ""
-    : `  ·  ${v > prev ? "+" : "−"}${Math.abs(Math.round(v - prev))} vs last`
+    : ` · ${v > prev ? "+" : "−"}${Math.abs(Math.round(v - prev))}`
 
 /**
  * Rolling-road readout shown while the camera is on the car. The pull itself
@@ -351,71 +261,96 @@ export function DynoHud({ carName }: { carName: string }) {
     )
     return Math.max(100, Math.ceil((m * 1.08) / 100) * 100)
   }, [pk, s.curve, s.prev])
+  // The in-game single gauge cluster, fed from the dyno's rpm / speed / gear.
+  const tele = {
+    rpm: s.rpm,
+    speedKmh: s.speedKmh,
+    gearLabel: String(s.gear),
+    engineOn: true,
+    autoMode: false,
+    parkingBrake: false,
+    drift: false,
+    tractionControl: false,
+    absOn: false,
+    stabilityControl: false,
+    dash: {
+      maxRpm: Math.ceil((s.redline * 1.06) / 1000) * 1000,
+      redFromRpm: s.redline,
+    },
+  } as unknown as CarTelemetry
   const pulling = s.phase === "pulling"
   const manual = s.phase === "manual"
   const cooling = s.phase === "cooldown"
   const prevHp = peakOf(s.prev, "hp")
   const prevNm = peakOf(s.prev, "nm")
-  const btn =
-    "inline-flex items-center justify-center gap-2 border px-3 py-2 text-[12px] font-semibold transition disabled:opacity-40"
+  const pill =
+    "inline-flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold transition disabled:opacity-40"
+  const ghost = `${pill} border border-white/10 bg-white/[0.06] text-gray-100 hover:bg-white/[0.12]`
+  const step =
+    "flex h-8 w-8 items-center justify-center text-gray-100 transition hover:bg-white/[0.12] disabled:opacity-30"
   return (
     <div
       ref={ref}
-      className="pointer-events-auto absolute bottom-10 left-1/2 z-[95] w-[min(1180px,94vw)] border border-[#51a7d5]/60 bg-[#0b0e14]/90 p-4 text-white shadow-[0_20px_80px_rgba(0,0,0,0.7)] backdrop-blur-md"
-      style={{ animation: "dynoIn .5s .7s both cubic-bezier(.2,.8,.2,1)" }}
+      className="pointer-events-auto absolute bottom-10 left-1/2 z-[95] w-[min(1180px,94vw)] border border-white/10 p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+      style={{
+        animation: "dynoIn .5s .7s both cubic-bezier(.2,.8,.2,1)",
+        background: "rgba(10,10,10,0.94)",
+      }}
     >
       <style>{css}</style>
       <div className="flex items-center justify-between">
-        <div className="flex items-baseline gap-3">
-          <span className="text-[18px] font-bold">Dyno</span>
-          <span className="text-[12px] text-gray-400">
-            {carName} · rolling road · wheel power
-          </span>
+        <div className="text-[24px] leading-none font-semibold tracking-tight">
+          {carName}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold tracking-[0.18em] text-[#8f99a8]">
-              GEAR
-            </span>
+          <div className="flex items-center gap-1 border border-white/[0.06] bg-black/30 p-1">
             <button
               aria-label="Lower gear"
               disabled={pulling || s.gear <= 1}
               onClick={() => dyno.shift(-1)}
-              className={`${btn} border-[#51a7d5] bg-[#51a7d5]/15 hover:bg-[#51a7d5]/30`}
+              className={step}
             >
               <Minus size={14} />
             </button>
-            <span className="w-6 text-center text-[16px] font-bold tabular-nums">
+            <span className="w-8 text-center text-[15px] font-semibold tabular-nums">
               {s.gear}
             </span>
             <button
               aria-label="Higher gear"
               disabled={pulling || s.gear >= s.gears}
               onClick={() => dyno.shift(1)}
-              className={`${btn} border-[#51a7d5] bg-[#51a7d5]/15 hover:bg-[#51a7d5]/30`}
+              className={step}
             >
               <Plus size={14} />
             </button>
           </div>
           <button
+            disabled={pulling}
+            onClick={() => dyno.toggleAuto()}
+            className={`${pill} border text-white transition ${
+              s.auto
+                ? "border-transparent"
+                : "border-white/10 bg-white/[0.06] text-gray-300 hover:bg-white/[0.12]"
+            }`}
+            style={s.auto ? { background: accentFill } : undefined}
+          >
+            Auto
+          </button>
+          <button
             disabled={pulling || manual || cooling}
             onClick={() => dyno.beginManual()}
-            title="Drive the rollers yourself: W throttle, S brake, Q/E gears"
-            className={`${btn} border-[#51a7d5] bg-[#51a7d5]/15 hover:bg-[#51a7d5]/30`}
+            className={ghost}
           >
             Manual
           </button>
-          <button
-            onClick={() => setFocus("tune")}
-            className={`${btn} border-white/15 bg-white/5 text-gray-200 hover:bg-white/10`}
-          >
+          <button onClick={() => setFocus("tune")} className={ghost}>
             <SlidersHorizontal size={14} />
             Tuning
           </button>
           {pulling || manual ? (
             <button
               onClick={() => dyno.abort()}
-              className={`${btn} min-w-[150px] border-rose-400 bg-rose-500/25 hover:bg-rose-500/40`}
+              className={`${pill} min-w-[150px] border border-rose-400/50 bg-rose-500/25 hover:bg-rose-500/40`}
             >
               <Square size={13} fill="currentColor" />
               {manual ? "End run" : "Abort"}
@@ -424,7 +359,8 @@ export function DynoHud({ carName }: { carName: string }) {
             <button
               disabled={cooling}
               onClick={() => dyno.start()}
-              className={`${btn} min-w-[150px] border-[#51a7d5] bg-[#51a7d5] hover:bg-[#51a7d5]/85`}
+              className={`${pill} min-w-[150px] text-white hover:brightness-110`}
+              style={{ background: accentFill }}
             >
               <Play size={13} fill="currentColor" />
               {cooling
@@ -436,9 +372,9 @@ export function DynoHud({ carName }: { carName: string }) {
           )}
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-[180px_1fr_200px] items-center gap-5">
-        <Tach rpm={s.rpm} redline={s.redline} boost={s.boost} />
-        <div className="h-[178px]">
+      <div className="mt-4 grid grid-cols-[220px_1fr_210px] items-center gap-5">
+        <SingleDialDashboard tele={tele} embedded />
+        <div className={`${glass} h-[210px] p-2`}>
           <Graph
             curve={s.curve}
             prev={s.prev}
@@ -451,52 +387,38 @@ export function DynoHud({ carName }: { carName: string }) {
             live={pulling || manual}
           />
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
           {s.peakHp && s.peakNm ? (
             <>
               <Big
-                label="PEAK POWER"
+                label="Peak power"
                 value={Math.round(s.peakHp.v).toLocaleString()}
                 unit="hp"
-                color={AMBER}
-                sub={`@ ${Math.round(s.peakHp.rpm).toLocaleString()} rpm${vs(s.peakHp.v, prevHp)}`}
+                color={POWER}
+                sub={`${Math.round(s.peakHp.rpm).toLocaleString()} rpm${vs(s.peakHp.v, prevHp)}`}
               />
               <Big
-                label="PEAK TORQUE"
+                label="Peak torque"
                 value={Math.round(s.peakNm.v).toLocaleString()}
                 unit="Nm"
-                color={BLUE}
-                sub={`@ ${Math.round(s.peakNm.rpm).toLocaleString()} rpm${vs(s.peakNm.v, prevNm)}`}
+                color={TORQUE}
+                sub={`${Math.round(s.peakNm.rpm).toLocaleString()} rpm${vs(s.peakNm.v, prevNm)}`}
               />
-              <div className="text-[10px] tabular-nums text-gray-400">
-                {s.pullTime ? `Pull ${s.pullTime.toFixed(1)} s · ` : ""}
-                {Math.round(s.topKmh ?? 0)} km/h at redline · crank figures
-                {s.retuned && prevHp !== null && (
-                  <span className="block text-[#ffb020]">
-                    Tuning changed since last pull
-                  </span>
-                )}
-              </div>
             </>
           ) : (
             <>
               <Big
-                label="POWER NOW"
+                label="Power"
                 value={Math.round(s.hp).toLocaleString()}
                 unit="hp"
-                color={AMBER}
+                color={POWER}
               />
               <Big
-                label="TORQUE NOW"
+                label="Torque"
                 value={Math.round(s.nm).toLocaleString()}
                 unit="Nm"
-                color={BLUE}
+                color={TORQUE}
               />
-              <div className="text-[10px] text-gray-500">
-                {pulling || manual
-                  ? `${Math.round(s.speedKmh)} km/h · ${Math.round(s.whp)} hp at the wheels`
-                  : "Start a pull, or hold W to drive the rollers yourself (S brake, Q/E gears)."}
-              </div>
             </>
           )}
         </div>

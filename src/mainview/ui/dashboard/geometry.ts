@@ -20,7 +20,7 @@ export const NEEDLE_HALF_BASE = 7
 export const NEEDLE_HALF_TIP = 0.6
 
 export const SANS =
-  'Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
+  '"Host Grotesk Variable", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
 
 export const BLUE = "#5fb4ff"
 export const AMBER = "#ffb020"

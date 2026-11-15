@@ -1,4 +1,5 @@
 import { useMapSelection } from "./app/useMapSelection"
+import { setDynoCoverHook } from "./systems/garageFocus"
 import { useGarage } from "./app/useGarage"
 import { conditions } from "./physics/core/Conditions"
 import { DEFAULT_WEATHER } from "./data/surfaces"
@@ -30,7 +31,7 @@ import { RaceHud, RaceLiveBoard, RaceResults } from "./ui/RaceOverlay"
 import { LapHud, type LapSnapshot } from "./ui/LapHud"
 import { MapPicker } from "./ui/MapPicker"
 import { RainEffect } from "./systems/RainEffect"
-import { SettingsModal } from "./ui/SettingsModal"
+import { SettingsScreen } from "./ui/screens/SettingsScreen"
 import { currentDisplayId } from "./ui/DisplayPicker"
 import { getDisplays, moveToDisplay } from "./systems/updater"
 import { ControllerToast } from "./ui/ControllerToast"
@@ -249,10 +250,65 @@ export default function App() {
     label: string
     red: boolean
   } | null>(null)
-  const fireWipe = (label: string, red = false) =>
+  // The wipe covers the screen until the rebuilt session reports ready.
+  const [wipeBusy, setWipeBusy] = useState(false)
+  // `fn` (the actual scene/state switch) runs once the cover has landed, so
+  // the old screen never shows the new mode before the bars arrive.
+  const coverFn = useRef<(() => void) | null>(null)
+  // Menu -> play keeps the cover up at least this long, even when the session
+  // is ready sooner (see `minCover` on cover()).
+  const PLAY_COVER_MS = 2000
+  const coverMinMs = useRef(0)
+  const coverUntil = useRef(0)
+  // True from a menu -> play press until its cover releases, so a repeat press
+  // (double click, held key, pad Start) can't stack a second cover, which
+  // would fall through to a full rebuild.
+  const startingPlayRef = useRef(false)
+  const releaseWipe = () => {
+    const done = () => {
+      startingPlayRef.current = false
+      setWipeBusy(false)
+    }
+    const wait = coverUntil.current - performance.now()
+    if (wait > 0) window.setTimeout(done, wait)
+    else done()
+  }
+  const cover = (
+    label: string,
+    red: boolean,
+    fn: () => void,
+    minCover = 0,
+  ) => {
+    if (import.meta.env.DEV)
+      console.debug(`[cover] "${label}" min=${minCover}ms`, new Error().stack)
+    coverFn.current = fn
+    coverMinMs.current = minCover
+    setWipeBusy(true)
     setWipe((w) => ({ token: (w?.token ?? 0) + 1, label, red }))
+  }
+  // Raising/lowering the dyno happens behind the loading cover.
+  const coverRef = useRef(cover)
+  coverRef.current = cover
+  useEffect(() => {
+    setDynoCoverHook((apply) => {
+      if (startedRef.current) return apply()
+      coverRef.current("", false, apply)
+    })
+    return () => setDynoCoverHook(null)
+  }, [])
+  const onCovered = () => {
+    const fn = coverFn.current
+    coverFn.current = null
+    coverUntil.current = performance.now() + coverMinMs.current
+    fn?.()
+  }
   const sessionTimer = useRef(0)
+  // True while a race is underway (running or paused, not yet finished).
+  const raceLiveRef = useRef(false)
+  raceLiveRef.current = race.active && !race.finished
   const rebuildSession = (delay = 300) => {
+    // Passive rebuilds (map/option changes) must never tear down a live race.
+    if (delay > 0 && raceLiveRef.current) return
     window.clearTimeout(sessionTimer.current)
     sessionTimer.current = window.setTimeout(() => {
       setSession((n) => n + 1)
@@ -306,6 +362,10 @@ export default function App() {
         setNetConnected(false)
       },
       onRaceStartSignal: (startTimeMs, distanceM, rivals = 0, mapSpec) => {
+        // A late start signal must not drop the loading cover onto a race
+        // that is already being driven.
+        if (raceLiveRef.current || startingPlayRef.current) return
+        startingPlayRef.current = true
         if (mapSpec && getMap(mapSpec.id).features.multiplayer) {
           mapIdRef.current = mapSpec.id
           setMapId(mapSpec.id)
@@ -328,17 +388,18 @@ export default function App() {
           distanceM,
           seed: Math.floor(startTimeMs),
         }
-        lastRaceRef.current = next
-        raceSetupRef.current = next
-        startedRef.current = true
-        pausedRef.current = false
-        setStarted(true)
-        setPaused(false)
-        setShowMultiplayerLobby(false)
-        setRace(emptyRace)
-        fireWipe("ON THE GRID", true)
         lockCanvas()
-        rebuildSession()
+        cover("ON THE GRID", true, () => {
+          lastRaceRef.current = next
+          raceSetupRef.current = next
+          startedRef.current = true
+          pausedRef.current = false
+          setStarted(true)
+          setPaused(false)
+          setShowMultiplayerLobby(false)
+          setRace(emptyRace)
+          rebuildSession(0)
+        }, PLAY_COVER_MS)
       },
     })
   }, [])
@@ -408,36 +469,93 @@ export default function App() {
   }
 
   const startGame = () => {
-    rerollTrack()
-    raceSetupRef.current = null
-    startedRef.current = true
-    pausedRef.current = false
-    setStarted(true)
-    setPaused(false)
-    setLockHint(false)
-    setRace(emptyRace)
-    fireWipe("FREE ROAM")
+    if (startingPlayRef.current || startedRef.current) return
+    startingPlayRef.current = true
     lockCanvas()
-    rebuildSession()
+    cover("FREE ROAM", false, () => {
+      // Same map the menu already loaded: no rebuild. The session drops the
+      // garage and starts traffic itself; the cover is held for PLAY_COVER_MS.
+      if (!startedRef.current && !loadingRef.current && !error) {
+        startedRef.current = true
+        if (garageApiRef.current?.enterFreeRoam(mapIdRef.current)) {
+          raceSetupRef.current = null
+          pausedRef.current = false
+          setStarted(true)
+          setPaused(false)
+          setLockHint(false)
+          setRace(emptyRace)
+          releaseWipe()
+          return
+        }
+        startedRef.current = false
+      }
+      rerollTrack()
+      raceSetupRef.current = null
+      startedRef.current = true
+      pausedRef.current = false
+      setStarted(true)
+      setPaused(false)
+      setLockHint(false)
+      setRace(emptyRace)
+      rebuildSession(0)
+    }, PLAY_COVER_MS)
   }
 
+  const racePendingRef = useRef(false)
+  // Highway menu -> race: the session builds the grid behind the garage it is
+  // still showing, then flips to the race in place (no rebuild, no cover).
+  // Anything it can't do that way falls back to the covered rebuild.
   const startRace = () => {
-    rerollTrack()
-    const next = {
-      rivals,
-      distanceM: distanceKm * 1000,
-    }
-    lastRaceRef.current = next
-    raceSetupRef.current = next
-    startedRef.current = true
-    pausedRef.current = false
-    setStarted(true)
-    setPaused(false)
-    setLockHint(false)
-    setRace(emptyRace)
-    fireWipe("ON THE GRID", true)
+    if (racePendingRef.current || startingPlayRef.current || startedRef.current)
+      return
+    startingPlayRef.current = true
     lockCanvas()
-    rebuildSession()
+    cover(
+      "ON THE GRID",
+      true,
+      () => {
+        const next = { rivals, distanceM: distanceKm * 1000 }
+        const rebuild = () => {
+          rerollTrack()
+          lastRaceRef.current = next
+          raceSetupRef.current = next
+          startedRef.current = true
+          pausedRef.current = false
+          setStarted(true)
+          setPaused(false)
+          setLockHint(false)
+          setRace(emptyRace)
+          rebuildSession(0)
+        }
+        if (
+          startedRef.current ||
+          loadingRef.current ||
+          error ||
+          mapIdRef.current !== "highway" ||
+          !garageApiRef.current
+        )
+          return rebuild()
+        const prev = raceSetupRef.current
+        raceSetupRef.current = next
+        racePendingRef.current = true
+        void garageApiRef.current.enterRace(mapIdRef.current).then((ok) => {
+          racePendingRef.current = false
+          if (ok) {
+            lastRaceRef.current = next
+            pausedRef.current = false
+            setStarted(true)
+            setPaused(false)
+            setLockHint(false)
+            setRace(emptyRace)
+            releaseWipe()
+            return
+          }
+          raceSetupRef.current = prev
+          rebuild()
+        })
+      },
+      PLAY_COVER_MS,
+    )
   }
 
   const pauseGame = () => {
@@ -462,58 +580,65 @@ export default function App() {
 
   const raceAgain = () => {
     const last = lastRaceRef.current
-    if (!last) return
+    if (!last || startingPlayRef.current) return
+    startingPlayRef.current = true
     const net = multiplayerRef.current
     if (net && net.roomId) {
       net.setLocalReady(true, last.distanceM)
     }
-    pausedRef.current = false
-    startedRef.current = true
-    setPaused(false)
-    setRace(emptyRace)
-    inputRef.current?.clear()
-    document.documentElement.style.cursor = ""
-    document.body.style.cursor = ""
-    if (document.pointerLockElement) document.exitPointerLock?.()
-    raceSetupRef.current = last
-    fireWipe("ON THE GRID", true)
-    rebuildSession()
-  }
-
-  const restart = () => {
-    if (raceSetupRef.current && lastRaceRef.current) {
-      raceAgain()
-    } else {
+    cover("ON THE GRID", true, () => {
       pausedRef.current = false
       startedRef.current = true
       setPaused(false)
       setRace(emptyRace)
       inputRef.current?.clear()
-      fireWipe("FREE ROAM")
-      rebuildSession()
+      document.documentElement.style.cursor = ""
+      document.body.style.cursor = ""
+      if (document.pointerLockElement) document.exitPointerLock?.()
+      raceSetupRef.current = last
+      rebuildSession(0)
+    })
+  }
+
+  const restart = () => {
+    if (raceSetupRef.current && lastRaceRef.current) {
+      raceAgain()
+    } else if (!startingPlayRef.current) {
+      startingPlayRef.current = true
+      cover("FREE ROAM", false, () => {
+        pausedRef.current = false
+        startedRef.current = true
+        setPaused(false)
+        setRace(emptyRace)
+        inputRef.current?.clear()
+        rebuildSession(0)
+      })
     }
     lockCanvas()
   }
 
   const quitToMenu = () => {
+    if (startingPlayRef.current) return
+    startingPlayRef.current = true
     const net = multiplayerRef.current
     if (net && net.roomId && net.localReady) net.setLocalReady(false)
-    pausedRef.current = false
-    startedRef.current = false
-    raceSetupRef.current = null
-    freeCamRef.current = false
-    setFreeCam(false)
-    setPaused(false)
-    setStarted(false)
-    setLockHint(false)
-    setRace(emptyRace)
-    inputRef.current?.clear()
-    unlockEscapeKey()
-    document.documentElement.style.cursor = ""
-    document.body.style.cursor = ""
-    if (document.pointerLockElement) document.exitPointerLock?.()
-    fireWipe("GARAGE")
-    rebuildSession()
+    cover("GARAGE", false, () => {
+      pausedRef.current = false
+      startedRef.current = false
+      raceSetupRef.current = null
+      freeCamRef.current = false
+      setFreeCam(false)
+      setPaused(false)
+      setStarted(false)
+      setLockHint(false)
+      setRace(emptyRace)
+      inputRef.current?.clear()
+      unlockEscapeKey()
+      document.documentElement.style.cursor = ""
+      document.body.style.cursor = ""
+      if (document.pointerLockElement) document.exitPointerLock?.()
+      rebuildSession(0)
+    })
   }
 
   pauseFnRef.current = pauseGame
@@ -562,7 +687,11 @@ export default function App() {
     setError,
     setFreeCam,
     setLap,
-    setLoading,
+    setLoading: (v) => {
+      if (import.meta.env.DEV) console.debug(`[loading] set ${v}`)
+      setLoading(v)
+      if (v === false) releaseWipe()
+    },
     setLockHint,
     setPadNotice,
     setRace,
@@ -581,11 +710,17 @@ export default function App() {
   useEffect(() => startSession(sessionCtx()), [session])
 
   const menuOn =
-    !loading && !error && !started && !showMultiplayerLobby && !showIntro
+    !loading &&
+    !error &&
+    !started &&
+    !showMultiplayerLobby &&
+    !showIntro &&
+    !showSettings
   const pauseOn =
     !loading && !error && started && paused && !race.finished && !showSettings
-  const introOn = showIntro && !started
-  const resultsOn = !loading && !error && started && race.finished
+  const introOn = showIntro && !started && !showSettings
+  const resultsOn =
+    !loading && !error && started && race.finished && !showSettings
   const dashOn = !loading && !error && started && !race.finished
   const hudOn = !loading && !error && started && !paused && !race.finished
   const badgeOn = netConnected && started && !race.finished
@@ -593,7 +728,8 @@ export default function App() {
   const pauseVisible = usePresence(pauseOn, 240)
   const introVisible = usePresence(introOn, 480)
   const loadingVisible = usePresence(loading, 320)
-  const lobbyVisible = usePresence(showMultiplayerLobby, 300)
+  const lobbyOn = showMultiplayerLobby && !showSettings
+  const lobbyVisible = usePresence(lobbyOn, 300)
   const resultsVisible = usePresence(resultsOn, 340)
   const dashVisible = usePresence(dashOn, 260)
   const hudVisible = usePresence(hudOn, 260)
@@ -621,7 +757,7 @@ export default function App() {
       <SpeedLines ref={speedLinesRef} />
       {showNetDiag && <NetDiagPanel />}
       {freeCam && started && !paused && !race.finished && (
-        <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/70 px-4 py-1.5 text-[12px] tracking-wide text-white backdrop-blur">
+        <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 border border-white/20 bg-black/70 px-4 py-1.5 text-[12px] tracking-wide text-white backdrop-blur">
           FREE CAMERA · WASD move · mouse look · Q/E up/down · Shift sprint · U
           hide UI · F exit
         </div>
@@ -672,7 +808,7 @@ export default function App() {
         !race.finished &&
         lockHint && (
           <Screen open from={{ autoAlpha: 0 }} to={{ duration: 0.3 }}>
-            <div className="pointer-events-none absolute bottom-32 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/70 px-5 py-2 text-[12px] tracking-wide text-gray-200 backdrop-blur">
+            <div className="pointer-events-none absolute bottom-32 left-1/2 -translate-x-1/2 border border-white/15 bg-black/70 px-5 py-2 text-[12px] tracking-wide text-gray-200 backdrop-blur">
               Click anywhere to get the mouse back
             </div>
           </Screen>
@@ -732,7 +868,7 @@ export default function App() {
         />
       )}
       <ControllerToast message={padNotice} />
-      <SettingsModal
+      <SettingsScreen
         open={showSettings}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
@@ -740,7 +876,7 @@ export default function App() {
       />
       {lobbyVisible && (
         <MultiplayerLobby
-          open={showMultiplayerLobby}
+          open={lobbyOn}
           playerName={driverName}
           carColor={driverColor}
           roomId={netRoomId}
@@ -815,7 +951,6 @@ export default function App() {
         <PauseScreen
           open={pauseOn}
           gamepadNav={!showSettings}
-          carId={carId}
           race={race}
           netConnected={netConnected}
           netPeers={netPeers}
@@ -838,6 +973,8 @@ export default function App() {
       )}
       <Wipe
         token={wipe?.token ?? 0}
+        busy={wipeBusy}
+        onCovered={onCovered}
         label={wipe?.label ?? ""}
         tone={wipe?.red ? "red" : "blue"}
       />

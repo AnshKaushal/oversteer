@@ -8,7 +8,7 @@ export function ErrorScreen({ error }: { error: string }) {
       style={{ cursor: "auto" }}
       from={{ autoAlpha: 0 }}
     >
-      <div className="max-w-lg rounded-2xl bg-red-950/80 border border-red-500/40 p-5">
+      <div className="max-w-lg bg-red-950/80 border border-red-500/40 p-5">
         <div className="font-bold text-lg mb-2">Something went wrong</div>
         <div className="text-sm whitespace-pre-wrap">{error}</div>
         <div className="text-xs mt-3 text-gray-300">
@@ -18,7 +18,7 @@ export function ErrorScreen({ error }: { error: string }) {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="mt-4 w-full rounded-2xl bg-[#e30613] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#f01422] active:scale-[0.98]"
+          className="mt-4 w-full bg-[#e30613] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#f01422] active:scale-[0.98]"
         >
           Reload world
         </button>

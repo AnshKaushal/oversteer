@@ -368,6 +368,10 @@ export class CarVisual {
     for (const m of this.tintedMats) m.color.copy(c)
     for (const m of this.plainPaintMats) m.color.copy(c)
     this.loPaint?.color.copy(c)
+    for (const o of this.indicatorOverlays) {
+      const m = o.mesh.material as THREE.MeshStandardMaterial
+      if (m.userData?.paintIdle) m.color.copy(c)
+    }
   }
 
   hasTint(): boolean {

@@ -3,6 +3,7 @@ import { LampSet } from "./AirportLamps"
 import { makeBloomTexture } from "./GlowTexture"
 import type { FlightPath, TerrainAt } from "./AirplaneFlyby"
 import { roadCenterX } from "./WorldManager"
+import { paintAsphalt } from "./world/asphalt"
 import {
   AirportStructures,
   FENCE_OFFSET,
@@ -331,14 +332,6 @@ export function airportBlocked(
   return false
 }
 
-function noise(g: CanvasRenderingContext2D, w: number, h: number, n: number) {
-  for (let i = 0; i < n; i++) {
-    const v = 38 + Math.random() * 26
-    g.fillStyle = `rgb(${v},${v},${v + 4})`
-    g.fillRect(Math.random() * w, Math.random() * h, 2, 2)
-  }
-}
-
 const shared = new Map<string, { tex: THREE.Texture; refs: number }>()
 const SPARE_RUNWAYS = 3
 
@@ -419,9 +412,7 @@ function makeRunwayTexture(): THREE.CanvasTexture {
   const mx = W / RUNWAY_LENGTH
   const my = H / RUNWAY_WIDTH
 
-  g.fillStyle = "#2f3237"
-  g.fillRect(0, 0, W, H)
-  noise(g, W, H, 40000)
+  paintAsphalt(g, W, H)
 
   g.fillStyle = "rgba(0,0,0,0.22)"
   for (const end of [0, 1]) {
@@ -486,9 +477,7 @@ function makeConnectorTexture(): THREE.CanvasTexture {
   c.width = W
   c.height = H
   const g = c.getContext("2d")!
-  g.fillStyle = "#33363b"
-  g.fillRect(0, 0, W, H)
-  noise(g, W, H, 500)
+  paintAsphalt(g, W, H)
   g.fillStyle = "#e8e8e8"
   g.fillRect(0, 3, W, 2)
   g.fillRect(0, H - 5, W, 2)

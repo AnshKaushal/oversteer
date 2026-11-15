@@ -77,9 +77,48 @@ const porschePanel = (hex: string, x: number, y: number, z: number) =>
 const porscheBlackTrim = (x: number, y: number, z: number) =>
   (z > 160 && y < 62 && x <= 77) ||
   (z < -165 && y < 62) ||
-  (z < -150 && y >= 66 && y <= 90 && x >= 38 && x <= 84)
+  // rear lamp band: black across the whole width, including between the two
+  // lamp housings (x from the centreline)
+  (z < -150 && y >= 66 && y <= 90 && x <= 84)
 
 const RULES: Record<string, CarRule> = {
+  // F-Type SVR: the round centre lens is the headlight, the rest of the white
+  // housing is the front indicator; rear: red = tail lamp, and the dark-green housing
+  // just inboard of each tail lamp is the indicator. Paint is the three greens.
+  "jaguar_f_type.glb": {
+    paint: ["#6dc71b", "#98ff39", "#45830c"],
+    ref: "#6dc71b",
+    ampFColor: "#ffffff",
+    ampRColor: "#45830c",
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) {
+        // the round lens at the centre (|x|~62, y~68, z~169) is the headlight
+        if (z >= 168.5 && near(x, y, 62.3, 68.4) <= 4.5) return "lights"
+        return "ampF"
+      }
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#45830c" && z < -158 && x >= 38 && x <= 86 && y >= 70 && y <= 81)
+        return "ampR"
+      return null
+    },
+  },
+  // F12: blue body. White lens on the outer headlight = headlight, the dark housing
+  // round it = front indicator. Rear: red ring = tail lamp, the dark disc inside the
+  // round lamp (not the ring or the body round it) = indicator. White stripes stay.
+  "ferrari_f12.glb": {
+    paint: ["#0063c3", "#0f89ff", "#004383"],
+    ref: "#0063c3",
+    ampFColor: "#141414",
+    ampRColor: "#2d2d2d",
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 160 && x >= 50 && y >= 50) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414" && z > 165 && x >= 54 && x <= 75 && y >= 50 && y <= 68)
+        return "ampF"
+      if (hex === "#2d2d2d" && z < -192 && near(x, y, 59.5, 81.7) <= 7) return "ampR"
+      return null
+    },
+  },
   "bugatti_chiron_pur_sport.glb": {
     paint: ["#2141a9", "#142e83", "#0a1f62", "#000b1e", "#00112d", "#000713"],
     ref: "#2141a9",

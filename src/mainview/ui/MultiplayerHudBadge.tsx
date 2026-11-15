@@ -8,8 +8,8 @@ export function MultiplayerHudBadge({
   onLeave: () => void
 }) {
   return (
-    <div className="pointer-events-auto absolute top-5 right-5 flex items-center gap-2.5 rounded-full border border-white/15 bg-black/60 px-3.5 py-1.5 text-xs text-white backdrop-blur shadow-md">
-      <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+    <div className="pointer-events-auto absolute top-5 right-5 flex items-center gap-2.5 border border-white/15 bg-black/60 px-3.5 py-1.5 text-xs text-white backdrop-blur shadow-md">
+      <span className="h-2 w-2 bg-green-400 animate-pulse" />
       <span className="font-semibold text-gray-200">
         Online · {playerCount} player{playerCount === 1 ? "" : "s"}
       </span>

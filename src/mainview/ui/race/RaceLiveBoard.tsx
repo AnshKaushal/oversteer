@@ -51,41 +51,40 @@ export function RaceLiveBoard({
   return (
     <div
       ref={rootRef}
-      className="pointer-events-none absolute top-20 right-4 w-[212px]"
+      className="pointer-events-none absolute top-20 right-5 w-[220px] md:right-8"
     >
-      <div className="mb-1.5 text-right text-[10px] font-semibold tracking-[0.3em] text-white/60">
-        LIVE · {snap.length}
+      <div className="mb-[3px] flex items-center justify-between bg-[#efefef] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#0a0a0a]">
+        <span>Live</span>
+        <span className="tabular-nums">{snap.length}</span>
       </div>
       <div
         ref={scrollRef}
-        className="pointer-events-auto max-h-[46vh] overflow-y-auto rounded-xl pr-0.5 no-scrollbar"
+        className="pointer-events-auto max-h-[46vh] overflow-y-auto no-scrollbar"
       >
         <div className="relative" style={{ height: snap.length * BOARD_ROW_H }}>
           {snap.map((s, i) => (
             <div
               key={s.id}
-              className={`absolute right-0 left-0 flex items-center gap-2 rounded-lg px-2 backdrop-blur transition-[top] duration-500 ease-out ${
+              className={`absolute right-0 left-0 flex items-center gap-2 px-2.5 transition-[top] duration-500 ease-out ${
                 s.isPlayer
-                  ? "border border-white/25 bg-white/15"
-                  : "border border-transparent bg-black/45"
+                  ? "bg-[#51a7d5] text-[#0a0a0a]"
+                  : "bg-[#0a0a0a] text-[#efefef]"
               }`}
               style={{ top: i * BOARD_ROW_H, height: BOARD_ROW_H - 4 }}
             >
               <span
-                className={`w-4 text-[12px] font-bold tabular-nums ${
-                  i === 0 ? "text-amber-300" : "text-white/80"
-                }`}
+                className="w-4 text-[12px] font-black tabular-nums"
               >
                 {i + 1}
               </span>
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                className="h-2.5 w-2.5 shrink-0"
                 style={{ background: s.color }}
               />
-              <span className="flex-1 truncate text-[12px] font-medium text-white">
+              <span className="flex-1 truncate text-[12px] font-bold">
                 {s.name}
               </span>
-              <span className="text-[11px] tabular-nums text-gray-300">
+              <span className="text-[11px] font-bold tabular-nums opacity-70">
                 {gapText(s, playerS, gapM)}
               </span>
             </div>

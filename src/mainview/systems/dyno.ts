@@ -1,6 +1,13 @@
 import { useSyncExternalStore } from "react"
 import { curveLookup } from "../physics/math"
 import { Engine } from "../physics/vehicle/components/Engine"
+import { Gearbox } from "../physics/vehicle/components/Gearbox"
+import { ShiftLogic } from "../physics/vehicle/components/ShiftLogic"
+import { Aggression } from "../physics/vehicle/components/Aggression"
+import { TorqueConverter } from "../physics/vehicle/components/TorqueConverter"
+import { Driveline } from "../physics/vehicle/components/Driveline"
+import { CreepForces } from "../physics/vehicle/components/CreepForces"
+import type { Gear } from "../physics/vehicle/types"
 import { getCar } from "../data/cars"
 import { applyTuning, gearSpeeds, loadTuning, STOCK_TUNING } from "../data/tuning"
 import type { CarSpec } from "../data/schema"
@@ -8,8 +15,9 @@ import type { CarSpec } from "../data/schema"
 const RAD_TO_RPM = 60 / (2 * Math.PI)
 const HP = 745.7
 const STEP = 1 / 240
+/** Same threshold normal driving uses to decide the clutch/converter can slip. */
+const SLIP_MIN_RATIO_FRACTION = 0.5
 const TARGET_PULL_S = 9
-const SHIFT_CUT_S = 0.22
 
 export interface DynoPoint {
   rpm: number
@@ -27,6 +35,8 @@ export interface DynoState {
   phase: DynoPhase
   gear: number
   gears: number
+  /** Gearbox in automatic (the car's own shift logic) or manual. */
+  auto: boolean
   rpm: number
   redline: number
   /** Crank torque (Nm) and crank power (hp) right now. */
@@ -53,6 +63,7 @@ const blank = (): DynoState => ({
   phase: "idle",
   gear: 1,
   gears: 1,
+  auto: true,
   rpm: 0,
   redline: 7000,
   nm: 0,
@@ -78,7 +89,14 @@ let eng: Engine | null = null
 let omega = 0 // roller / wheel speed, rad/s
 let inertia = 100
 let throttle = 0
-let shiftT = 0
+// The car's own drivetrain parts, exactly as normal driving builds them.
+let gb: Gearbox | null = null
+let shiftLogic: ShiftLogic | null = null
+let aggression: Aggression | null = null
+let converter: TorqueConverter | null = null
+let driveline: Driveline | null = null
+let creep: CreepForces | null = null
+let autoMode = true
 let simT = 0
 let acc = 0
 let sampleAcc = 0
@@ -154,8 +172,22 @@ function calibrate(stock: CarSpec): number {
 
 function resetEngine() {
   if (!car) return
-  eng = new Engine(car.physics.engine)
-  eng.rpm = car.physics.engine.idleRPM
+  const P = car.physics
+  eng = new Engine(P.engine)
+  eng.rpm = P.engine.idleRPM
+  const gear = gb?.gear ?? 1
+  gb = new Gearbox(P.transmission, P.shiftLogic, P.engine.redlineRPM)
+  gb.gear = gear as Gear
+  shiftLogic = new ShiftLogic(
+    P.shiftLogic,
+    P.engine,
+    P.transmission.autoUpshiftRPM,
+    P.transmission.gearRatios,
+  )
+  aggression = new Aggression(P.shiftLogic)
+  converter = new TorqueConverter(P.transmission.torqueConverter)
+  driveline = new Driveline(P.drivetrain)
+  creep = new CreepForces(P.creep)
 }
 
 const effThrottle = () => Math.max(pedals.kThr, pedals.pThr)
@@ -195,9 +227,11 @@ export const dyno = {
     active = true
     omega = 0
     throttle = 0
-    shiftT = 0
+    autoMode = true
     pedals.kThr = pedals.kBrk = pedals.pThr = pedals.pBrk = 0
+    gb = null
     resetEngine()
+    gb!.gear = referenceGear(car) as Gear
     const prev = prevByCar.get(carId)
     state = {
       ...blank(),
@@ -220,14 +254,32 @@ export const dyno = {
     emit(true)
   },
 
-  /** Change gear. Allowed any time except mid auto-pull; cuts torque briefly. */
+  /**
+   * Manual gear change through the car's own gearbox: it refuses a downshift
+   * that would over-rev at road speed, takes the car's shift time and cuts
+   * torque while it happens. Taking over the gears turns auto off.
+   */
   shift(dir: 1 | -1) {
-    if (!active || !car || state.phase === "pulling") return
-    const g = Math.min(state.gears, Math.max(1, state.gear + dir))
-    if (g === state.gear) return
-    state.gear = g
-    if (state.phase === "manual" || state.phase === "cooldown")
-      shiftT = SHIFT_CUT_S
+    if (!active || !car || !gb || !eng || state.phase === "pulling") return
+    if (gb.gear + dir < 1 || gb.gear + dir > gb.count) return
+    const prev = gb.manualShift(
+      dir,
+      omega * car.physics.wheels.radius,
+      omega,
+    )
+    if (prev === null) return
+    autoMode = false
+    eng.settleAfterShift(gb.coupledRpm(omega))
+    state.gear = gb.gear
+    state.auto = false
+    emit(true)
+  },
+
+  /** Automatic gearbox on/off, the same toggle as in normal driving. */
+  toggleAuto() {
+    if (!active || state.phase === "pulling") return
+    autoMode = !autoMode
+    state.auto = autoMode
     emit(true)
   },
 
@@ -253,7 +305,7 @@ export const dyno = {
     omega = startRpm / RAD_TO_RPM / ratioOf(car, state.gear)
     eng!.rpm = startRpm
     throttle = 0
-    shiftT = 0
+    gb!.shiftTimer = 0
     simT = 0
     acc = 0
     sampleAcc = 0
@@ -282,13 +334,19 @@ export const dyno = {
     if (state.phase === "cooldown") return
     reload()
     startRpm = startRpmOf(car)
-    if (omega < 0.5) omega = startRpm / RAD_TO_RPM / ratioOf(car, state.gear)
+    // A gear the converter/clutch can slip in starts from rest and creeps like
+    // the car does; a tall gear has no slip, so the rollers start turning.
+    const g = gb!
+    const slips =
+      Math.abs(g.ratio(g.gear)) >= SLIP_MIN_RATIO_FRACTION * g.ratio(1)
+    if (omega < 0.5 && !slips)
+      omega = startRpm / RAD_TO_RPM / ratioOf(car, state.gear)
     eng!.rpm = Math.max(
       car.physics.engine.idleRPM,
       omega * ratioOf(car, state.gear) * RAD_TO_RPM,
     )
     throttle = 0
-    shiftT = 0
+    g.shiftTimer = 0
     simT = 0
     acc = 0
     manualAcc = 0
@@ -347,6 +405,7 @@ export const dyno = {
       dyno.beginManual()
     if (state.phase === "idle" || state.phase === "done") {
       // Roller coasts to a stop; engine ticks over.
+      gb?.tick(dtReal)
       omega *= Math.exp(-dtReal * 3.5)
       const idle = car.physics.engine.idleRPM
       state.rpm += (idle - state.rpm) * Math.min(1, dtReal * 4)
@@ -357,11 +416,11 @@ export const dyno = {
     }
     const p = car.physics
     const eff = effOf(car)
+    const g = gb!
     acc += Math.min(dtReal, 0.05)
     while (acc >= STEP) {
       acc -= STEP
       simT += STEP
-      const ratio = ratioOf(car, state.gear)
       const phase = state.phase
       const want =
         phase === "pulling" ? 1 : phase === "manual" ? effThrottle() : 0
@@ -369,12 +428,112 @@ export const dyno = {
       throttle +=
         Math.sign(want - throttle) *
         Math.min(Math.abs(want - throttle), rate * STEP)
-      if (shiftT > 0) shiftT -= STEP
-      const shifting = shiftT > 0
-      const nm = eng.torque(throttle, state.gear, shifting)
-      const brakeTq = phase === "manual" ? effBrake() * inertia * 25 : 0
-      const wheelTq = nm * ratio * eff
+      const brakeIn = phase === "manual" ? effBrake() : 0
       const v = omega * p.wheels.radius
+      const speedKmh = v * 3.6
+
+      // From here on this is the same drivetrain sequence as Vehicle.update:
+      // gearbox timers, engine rpm (clutch/converter slip), shift logic,
+      // engine torque, torque converter, driveline, creep.
+      g.tick(STEP)
+      shiftLogic!.cancelIfRelaxed(throttle, brakeIn)
+      const ratio = g.ratio(g.gear)
+      const coupled = Math.abs(omega * ratio * RAD_TO_RPM)
+      const canSlip =
+        Math.abs(ratio) >= SLIP_MIN_RATIO_FRACTION * g.ratio(1)
+      eng.stepRpm({
+        dt: STEP,
+        simTime: simT,
+        gear: g.gear,
+        throttle,
+        fwdSpeed: v,
+        shifting: g.shifting,
+        flareRpm: p.engine.dynamics.launchFlareRPM,
+        coupledRpm: coupled,
+        launchArmed: false,
+        launching: false,
+        launchBog: 0,
+        launchRpm: 0,
+        launchWobble: 0,
+        clutchDumping: false,
+        kickdownTimer: shiftLogic!.kickdownTimer,
+        airborne: false,
+        canSlip,
+      })
+      const driven = aggression!.step(
+        STEP,
+        throttle,
+        brakeIn,
+        driveline!.prevThrottle,
+      )
+      g.tickChangeDelay(STEP)
+      // Only a hands-on session shifts by itself; a pull holds its gear.
+      if (phase === "manual" && autoMode) {
+        const delta = shiftLogic!.decide({
+          dt: STEP,
+          gear: g.gear,
+          gearCount: g.count,
+          rpm: eng.slipping ? coupled : eng.rpm,
+          throttle,
+          aggressionCoef: driven,
+          speedKmh,
+          autoMode: true,
+          shifting: g.shifting,
+          changeDelayActive: g.changeDelayActive,
+          launchArmed: false,
+          limiterCut: eng.onLimiter,
+          assistCutting: false,
+          slipRatioAvg: 0,
+          lateralVelocity: 0,
+          predictedRpm: (gear) => g.predictedRpm(gear, omega),
+          groundRpm: (gear) =>
+            gear > 0
+              ? Math.abs((v / p.wheels.radius) * g.ratio(gear) * RAD_TO_RPM)
+              : 0,
+        })
+        if (delta !== 0 && g.autoShift(delta, omega))
+          eng.settleAfterShift(g.coupledRpm(omega))
+      }
+      const shifting = g.shifting
+      const nm = eng.torque(throttle, g.gear, shifting)
+      const driveTq = Math.min(
+        Math.max(0, nm, eng.governorTorque),
+        eng.clutchCapacity,
+      )
+      const drive = driveline!.prepare({
+        dt: STEP,
+        gear: g.gear,
+        gearRatio: ratio,
+        engineTorque: driveTq,
+        converterMultiplier: converter!.multiplier(
+          g.gear !== 0 && canSlip,
+          speedKmh,
+        ),
+        throttle,
+        speedKmh,
+        launchArmed: false,
+        launching: false,
+        clutchDumping: false,
+        rawPower: true,
+      })
+      const wheelTq = drive.total * drive.feed
+      const creepF = creep!.force({
+        gear: g.gear,
+        driven: true,
+        drivenCount: driveline!.drivenCount,
+        throttle,
+        brake: brakeIn,
+        fwdSpeed: v,
+        slipSpeed: v,
+        speedKmh,
+        engineFriction: eng.frictionTorque(),
+        engineOn: true,
+        gearRatio: ratio,
+        efficiency: p.drivetrain.efficiency,
+        wheelRadius: p.wheels.radius,
+      })
+      const creepTorque = creepF * p.wheels.radius * driveline!.drivenCount
+      const brakeTq = brakeIn * inertia * 25
       // Aero drag torque at the wheels.
       const aero = p.aero
       let aeroDragF = 0
@@ -395,27 +554,9 @@ export const dyno = {
         rollingResist * p.wheels.radius * Math.tanh(v / Math.max(0.1, rollingV0))
       const load = 12 + omega * 0.04 + brakeTq + aeroTorque + rollingTorque
       const I = inertia + p.engine.engineInertia * ratio * ratio
-      omega = Math.max(0, omega + ((wheelTq - load) / I) * STEP)
-      eng.stepRpm({
-        dt: STEP,
-        simTime: simT,
-        gear: state.gear,
-        throttle,
-        fwdSpeed: omega * p.wheels.radius,
-        shifting,
-        flareRpm: p.engine.idleRPM,
-        coupledRpm: omega * ratio * RAD_TO_RPM,
-        launchArmed: false,
-        launching: false,
-        launchBog: 0,
-        launchRpm: 0,
-        launchWobble: 0,
-        clutchDumping: false,
-        kickdownTimer: 0,
-        airborne: false,
-        canSlip: false,
-      })
+      omega = Math.max(0, omega + ((wheelTq + creepTorque - load) / I) * STEP)
       const rpm = eng.rpm
+      state.gear = g.gear
       // Crank figures: add back the internal friction the engine model
       // subtracts, so peaks equal the spec-sheet power and torque.
       const crank =

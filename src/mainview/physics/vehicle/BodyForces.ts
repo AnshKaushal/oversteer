@@ -66,6 +66,10 @@ export class BodyForces {
     groundedWheels: number,
   ): number {
     const b = this.stability
+    if (b.disabled) {
+      this.slideCut = 0
+      return 1
+    }
     const speed = Math.hypot(k.linvel.x, k.linvel.z)
     const active =
       Math.abs(input.steer) < b.steeringThreshold &&
@@ -177,6 +181,7 @@ export class BodyForces {
 
     const b = this.stability
     if (
+      !b.disabled &&
       Math.abs(k.fwdSpeed) > b.minSpeed &&
       groundedWheels >= b.minGrounded &&
       !input.handbrake

@@ -59,6 +59,8 @@ export interface SessionCtx {
   garageApiRef: Ref<{
     showCar: (id: string, tint?: number) => void
     paint: (color: number | null) => void
+    enterFreeRoam: (mapId: string) => boolean
+    enterRace: (mapId: string) => Promise<boolean>
   } | null>
   pauseFnRef: Ref<() => void>
   resumeFnRef: Ref<() => void>

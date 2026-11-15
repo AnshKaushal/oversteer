@@ -1,28 +1,23 @@
-import { Loader2 } from "lucide-react"
 import { Screen } from "../anim"
 
-export function LoadingScreen({
-  open,
-  loadPct,
-}: {
-  open: boolean
-  loadPct: number
-}) {
+export function LoadingScreen({ open }: { open: boolean; loadPct?: number }) {
   return (
     <Screen
       open={open}
-      className="absolute inset-0 flex items-center justify-center bg-[#0b0e14] text-white"
+      className="absolute inset-0 z-[300] flex flex-col items-center justify-center gap-6 bg-black"
       from={{ autoAlpha: 0 }}
-      stagger={[{ selector: "[data-load]", from: { autoAlpha: 0, y: 16 } }]}
     >
-      <div data-load className="flex flex-col items-center gap-3">
-        <Loader2 size={24} />
-        <div className="h-1 w-48 overflow-hidden rounded bg-white/10">
-          <div
-            className="h-full bg-[#51a7d5] transition-[width]"
-            style={{ width: `${Math.round(loadPct * 100)}%` }}
-          />
-        </div>
+      <img
+        src={`${import.meta.env.BASE_URL || "./"}icon.png`}
+        alt=""
+        draggable={false}
+        className="h-[min(48vh,460px)] w-auto mix-blend-screen"
+      />
+      <div className="flex items-baseline gap-1 text-[26px] font-extrabold uppercase italic tracking-[0.14em] text-white md:text-[38px]">
+        Loading
+        <span className="os-dot">.</span>
+        <span className="os-dot">.</span>
+        <span className="os-dot">.</span>
       </div>
     </Screen>
   )

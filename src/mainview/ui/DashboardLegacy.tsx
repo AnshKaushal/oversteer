@@ -12,7 +12,8 @@ const BLUE = "#5fb4ff"
 const AMBER = "#ffb020"
 const OFF = "#3a4350"
 
-const SANS = 'Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
+const SANS =
+  '"Host Grotesk Variable", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
 
 function angleFor(frac: number) {
   return -120 + Math.max(0, Math.min(1, frac)) * 240
@@ -151,7 +152,6 @@ function Dial({
   redRpm,
   yellowRpm,
   refs,
-  id,
   modeLabel,
 }: {
   title: string
@@ -245,20 +245,6 @@ function Dial({
 
   return (
     <svg viewBox="0 0 200 200" className="h-auto w-full">
-      <defs>
-        <radialGradient id={`${id}-face`} cx="50%" cy="38%" r="75%">
-          <stop offset="0%" stopColor="#1b2029" />
-          <stop offset="55%" stopColor="#101319" />
-          <stop offset="100%" stopColor="#07090c" />
-        </radialGradient>
-        <linearGradient id={`${id}-chrome`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f4f6f9" />
-          <stop offset="25%" stopColor="#9aa1ab" />
-          <stop offset="50%" stopColor="#e8ecf1" />
-          <stop offset="75%" stopColor="#6b7280" />
-          <stop offset="100%" stopColor="#dfe4ea" />
-        </linearGradient>
-      </defs>
 
       <circle
         ref={refs.rimRef}
@@ -266,7 +252,7 @@ function Dial({
         cy={CY}
         r={CR + 9}
         fill="none"
-        stroke={`url(#${id}-chrome)`}
+        stroke="#efefef"
         strokeWidth="6"
       />
       <circle
@@ -282,7 +268,7 @@ function Dial({
         cx={CX}
         cy={CY}
         r={CR + 4}
-        fill={`url(#${id}-face)`}
+        fill="#0a0a0a"
         stroke="#232a35"
         strokeWidth="1"
       />
@@ -485,7 +471,7 @@ export default function DashboardLegacy({ tele }: { tele: CarTelemetry }) {
 
         rpmRim.current.setAttribute(
           "stroke",
-          limiter ? `rgba(227,6,19,${flash})` : "url(#dial-rpm-chrome)",
+          limiter ? `rgba(227,6,19,${flash})` : "#efefef",
         )
 
         rpmRim.current.setAttribute(

@@ -10,7 +10,7 @@ function Row({ r }: { r: RunView }) {
     <div className="flex items-baseline justify-between gap-4">
       <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-[#8f99a8]">
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
+          className={`h-1.5 w-1.5 ${
             r.state === "armed"
               ? "bg-emerald-400"
               : running
@@ -51,7 +51,7 @@ export function SpeedTimerHud() {
   if (!runs.length) return null
   return (
     <div
-      className="pointer-events-none absolute right-4 flex min-w-[210px] flex-col gap-1 rounded-lg border border-white/10 bg-black/45 px-3.5 py-2 backdrop-blur-sm select-none"
+      className="pointer-events-none absolute right-4 flex min-w-[210px] flex-col gap-1 border border-white/10 bg-black/45 px-3.5 py-2 backdrop-blur-sm select-none"
       style={{ bottom: "calc(clamp(190px, 25vw, 340px) + 32px)" }}
     >
       {runs.map((r) => (

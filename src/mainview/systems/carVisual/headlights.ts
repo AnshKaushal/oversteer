@@ -150,15 +150,12 @@ export function setupHeadlights(
           meshName.startsWith("psphere1_gray_4") ||
           meshName.startsWith("psphere1_orange_1")
 
-        const isCheetahHeadlight = meshName.includes("cheetah84_headlights")
-
         const isChargerHeadlight = meshName.includes("duke69_headlight")
 
         const isSpecificHeadlight =
           isGWagonHeadlight ||
           isAventadorHeadlight ||
           isDodgeHeadlight ||
-          isCheetahHeadlight ||
           isChargerHeadlight
 
         if (isSpecificHeadlight) {

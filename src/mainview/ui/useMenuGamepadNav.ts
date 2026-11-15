@@ -19,7 +19,9 @@ interface Pt {
 
 function clearPadFocus(root?: HTMLElement | null) {
   const scope = root ?? document
-  scope.querySelectorAll(`[${PAD_ATTR}]`).forEach((n) => n.removeAttribute(PAD_ATTR))
+  scope
+    .querySelectorAll(`[${PAD_ATTR}]`)
+    .forEach((n) => n.removeAttribute(PAD_ATTR))
 }
 
 function pick(from: Pt | null, pts: Pt[], dir: Dir) {
@@ -64,6 +66,7 @@ export function useMenuGamepadNav(
   open: boolean,
   containerRef: RefObject<HTMLElement | null>,
   onBack?: () => void,
+  onShoulder?: (dir: -1 | 1) => void,
 ) {
   useEffect(() => {
     if (!open) return
@@ -91,6 +94,8 @@ export function useMenuGamepadNav(
       const eRight = edge(15)
       const eA = edge(0)
       const eB = edge(1)
+      const eLB = edge(4)
+      const eRB = edge(5)
       let dir: Dir | null = eUp
         ? "up"
         : eDown
@@ -128,13 +133,12 @@ export function useMenuGamepadNav(
       if (!root) return
 
       if (dir) {
-        const els = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-          visible,
-        )
+        const els = Array.from(
+          root.querySelectorAll<HTMLElement>(FOCUSABLE),
+        ).filter(visible)
         if (els.length) {
           const active = document.activeElement as HTMLElement | null
-          const cur =
-            active && root.contains(active) ? active : null
+          const cur = active && root.contains(active) ? active : null
           // slider handling
           if (
             cur instanceof HTMLInputElement &&
@@ -142,8 +146,7 @@ export function useMenuGamepadNav(
             (dir === "left" || dir === "right")
           ) {
             const step = Number(cur.step) || 1
-            const v =
-              Number(cur.value) + (dir === "right" ? step : -step) * 2
+            const v = Number(cur.value) + (dir === "right" ? step : -step) * 2
             const setter = Object.getOwnPropertyDescriptor(
               HTMLInputElement.prototype,
               "value",
@@ -153,10 +156,24 @@ export function useMenuGamepadNav(
               String(Math.min(Number(cur.max), Math.max(Number(cur.min), v))),
             )
             cur.dispatchEvent(new Event("input", { bubbles: true }))
+          } else if (
+            cur?.hasAttribute("data-pad-step") &&
+            (dir === "left" || dir === "right")
+          ) {
+            // choice rows / carousels step through their options in place
+            cur.dispatchEvent(
+              new CustomEvent("padstep", {
+                detail: dir === "right" ? 1 : -1,
+              }),
+            )
           } else {
             const pts: Pt[] = els.map((e) => {
               const r = e.getBoundingClientRect()
-              return { key: e, x: r.left + r.width / 2, y: r.top + r.height / 2 }
+              return {
+                key: e,
+                x: r.left + r.width / 2,
+                y: r.top + r.height / 2,
+              }
             })
             let next: Pt | null
             if (!cur) {
@@ -198,6 +215,8 @@ export function useMenuGamepadNav(
         }
       }
       if (eB && onBack) onBack()
+      if (eLB && onShoulder) onShoulder(-1)
+      if (eRB && onShoulder) onShoulder(1)
     }
 
     raf = requestAnimationFrame(loop)
@@ -205,5 +224,5 @@ export function useMenuGamepadNav(
       cancelAnimationFrame(raf)
       clearPadFocus(containerRef.current)
     }
-  }, [open, containerRef, onBack])
+  }, [open, containerRef, onBack, onShoulder])
 }

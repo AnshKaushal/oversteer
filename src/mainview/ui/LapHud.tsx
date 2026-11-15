@@ -27,7 +27,7 @@ export function LapHud({ lap }: { lap: LapSnapshot }) {
       </div>
       <div className="mt-1 flex justify-between text-[12px] tabular-nums text-gray-300">
         <span>LAST {fmt(lap.lastS)}</span>
-        <span className="text-[#6ec2f0]">BEST {fmt(lap.bestS)}</span>
+        <span className="text-[#51a7d5]">BEST {fmt(lap.bestS)}</span>
       </div>
       <div className="mt-1.5 h-1 bg-white/10">
         <div

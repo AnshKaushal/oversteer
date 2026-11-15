@@ -23,7 +23,7 @@ const CSS = `
   contain:strict;opacity:0;will-change:opacity;}
 .sl-ray{position:absolute;left:50%;top:50%;height:${TRAVEL_TO + 8}vh;
   margin-left:calc(var(--w) / -2);width:var(--w);transform-origin:50% 0;
-  background:linear-gradient(to bottom,rgba(255,255,255,0) 0%,rgba(255,255,255,.42) 42%,rgba(255,255,255,0) 100%);
+  background:rgba(255,255,255,.4);
   will-change:transform,opacity;backface-visibility:hidden;
   animation-name:sl-fade;animation-duration:var(--dur);animation-delay:var(--delay);
   animation-iteration-count:infinite;animation-timing-function:linear;}

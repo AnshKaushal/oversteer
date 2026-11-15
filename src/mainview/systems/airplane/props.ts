@@ -110,8 +110,6 @@ export function extractFans(
     if (zc >= fan.zMin && zc <= fan.zMax) sides[xc < 0 ? "l" : "r"].push(...ids)
     else keep.push(...ids)
   }
-  const bladesOf = (ids: number[]) => ids
-  void bladesOf
   const byCentre: { ids: number[]; c: THREE.Vector3 }[] = []
   for (const ids of [sides.l, sides.r]) {
     if (ids.length === 0) continue

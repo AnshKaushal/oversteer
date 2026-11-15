@@ -40,8 +40,7 @@ const WIDTHS = [
   { label: "Wide", value: 18 },
 ]
 
-const heading =
-  "mt-4 text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]"
+const heading = "mt-3 text-[12px] font-medium tracking-wide text-[#8b97ab]"
 
 function Choice({
   on,
@@ -55,10 +54,10 @@ function Choice({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 border border-[#51a7d5] py-2 text-[13px] font-semibold transition ${
+      className={`min-w-0 flex-1 px-2 py-1.5 text-[13px] font-semibold whitespace-nowrap transition-all ${
         on
-          ? "bg-white text-[#0b0e14]"
-          : "bg-[#51a7d5]/15 text-gray-300 hover:bg-[#51a7d5]/25"
+          ? "bg-[#51a7d5] text-[#0a0a0a]"
+          : "text-[#8b97ab] hover:bg-white/[0.06] hover:text-white"
       }`}
     >
       {children}
@@ -83,11 +82,11 @@ export function MapPicker({
 }) {
   const current = maps.find((m) => m.id === mapId) ?? maps[0]
   return (
-    <div className="mt-5 text-left">
-      <div className="text-[11px] font-semibold tracking-[0.22em] text-[#8f99a8]">
-        MAP
+    <div className="mt-1 text-left">
+      <div className="text-[12px] font-medium tracking-wide text-[#8b97ab]">
+        Map
       </div>
-      <div className="mt-2 flex gap-1.5">
+      <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
         {maps.map((m) => (
           <Choice key={m.id} on={m.id === mapId} onClick={() => onMap(m.id)}>
             {m.name}
@@ -100,8 +99,8 @@ export function MapPicker({
 
       {mapId === "circuit" && (
         <>
-          <div className={heading}>TRACK LENGTH</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className={heading}>Track length</div>
+          <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
             {LENGTHS_KM.map((km) => (
               <Choice
                 key={km}
@@ -112,8 +111,8 @@ export function MapPicker({
               </Choice>
             ))}
           </div>
-          <div className={heading}>CHARACTER</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className={heading}>Character</div>
+          <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
             {CHARACTER.map((c) => (
               <Choice
                 key={c.label}
@@ -124,8 +123,8 @@ export function MapPicker({
               </Choice>
             ))}
           </div>
-          <div className={heading}>TRACK WIDTH</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className={heading}>Track width</div>
+          <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
             {WIDTHS.map((w) => (
               <Choice
                 key={w.label}
@@ -136,8 +135,8 @@ export function MapPicker({
               </Choice>
             ))}
           </div>
-          <div className={heading}>BARRIERS</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className={heading}>Barriers</div>
+          <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
             <Choice
               on={circuit.barriers}
               onClick={() => onCircuit({ barriers: true })}
@@ -151,8 +150,8 @@ export function MapPicker({
               Off
             </Choice>
           </div>
-          <div className={heading}>LAYOUT</div>
-          <div className="mt-2 flex gap-1.5">
+          <div className={heading}>Layout</div>
+          <div className="mt-1.5 flex gap-1 border border-white/[0.06] bg-black/30 p-1">
             <Choice
               on={!circuit.lockSeed}
               onClick={() => onCircuit({ lockSeed: false })}
@@ -167,7 +166,7 @@ export function MapPicker({
             </Choice>
             <button
               onClick={onReroll}
-              className="border border-[#51a7d5] bg-[#51a7d5]/15 px-3 py-2 text-[13px] font-semibold text-[#6ec2f0] transition hover:bg-[#51a7d5]/25"
+              className="px-3 py-1.5 text-[13px] font-semibold text-[#51a7d5] transition hover:bg-white/[0.06]"
             >
               Re-roll
             </button>

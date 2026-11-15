@@ -104,6 +104,7 @@ export class Garage {
   // Lift the current rig was built for (world units).
   private liftFor = 0
   private lift = 0
+  private snapLift = false
   private shake = 0
 
   static async load(baseUrl: string): Promise<Garage> {
@@ -258,6 +259,10 @@ export class Garage {
     const wheels = visual.wheels
     const ok = wheels.length === 4
     const target = d.active && ok ? dynoLift(wheels) : 0
+    if (this.snapLift) {
+      this.snapLift = false
+      this.lift = target
+    }
     this.lift += (target - this.lift) * (1 - Math.exp(-dt * 2.4))
     if (Math.abs(this.lift - target) < 0.001) this.lift = target
     this.shake = d.active && this.lift > target * 0.9 ? d.rpm01 : 0
@@ -278,6 +283,11 @@ export class Garage {
         dt,
       )
     }
+  }
+
+  /** Jump the dyno lift straight to its end state on the next update. */
+  snapDynoLift() {
+    this.snapLift = true
   }
 
   private buildDyno(visual: CarVisual, tyreW: number) {

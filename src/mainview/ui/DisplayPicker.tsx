@@ -40,13 +40,13 @@ export function DisplayList({
           <button
             key={d.id}
             onClick={() => onPick(d.id)}
-            className={`flex items-center gap-3 rounded border p-3 text-left transition-all ${
+            className={`flex items-center gap-3 border p-3 text-left transition-all ${
               sel
                 ? "border-[#51a7d5] bg-[#51a7d5]/25 ring-1 ring-[#51a7d5]"
                 : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.06]"
             }`}
           >
-            <Monitor size={22} className="text-[#6ec2f0]" />
+            <Monitor size={22} className="text-[#51a7d5]" />
             <div className="flex-1">
               <div className="text-sm font-bold text-white">
                 Monitor {i + 1}
@@ -57,7 +57,7 @@ export function DisplayList({
                 {Math.round(d.height * d.scaleFactor)}
               </div>
             </div>
-            {sel && <Check size={16} className="text-[#6ec2f0]" />}
+            {sel && <Check size={16} className="text-[#51a7d5]" />}
           </button>
         )
       })}

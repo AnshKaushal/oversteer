@@ -95,7 +95,7 @@ export function TwinDialDashboard({ tele }: { tele: CarTelemetry }) {
       if (rim) {
         rim.setAttribute(
           "stroke",
-          limiter ? `rgba(227,6,19,${flash})` : "url(#dial-rpm-chrome)",
+          limiter ? `rgba(227,6,19,${flash})` : "#efefef",
         )
         rim.setAttribute(
           "stroke-width",

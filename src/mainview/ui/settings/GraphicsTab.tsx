@@ -1,18 +1,14 @@
-import { RenderTargetCard } from "./graphics/RenderTargetCard"
-import { MonitorCard } from "./graphics/MonitorCard"
-import { ResolutionCard } from "./graphics/ResolutionCard"
-import { RenderScaleCard } from "./graphics/RenderScaleCard"
-import { PresetCard } from "./graphics/PresetCard"
-import { ShadowsCard } from "./graphics/ShadowsCard"
-import { ShadowQualityCard } from "./graphics/ShadowQualityCard"
-import { MotionBlurCard } from "./graphics/MotionBlurCard"
-import { UpscalingFaqCard } from "./graphics/UpscalingFaqCard"
 import {
   type ResolutionId,
   getResolutionPresets,
   calculateResolution,
 } from "../../systems/settings"
-import { useDisplays } from "../DisplayPicker"
+import { AA_MODES } from "../../systems/antialias"
+import { QUALITY_PRESETS, applyPreset } from "../../systems/quality"
+import { moveToDisplay } from "../../systems/updater"
+import { currentDisplayId, useDisplays } from "../DisplayPicker"
+import { Choice, Section, Slider, Toggle } from "./controls"
+import { ResolutionCarousel } from "./ResolutionCarousel"
 import type { TabProps } from "./types"
 import { useViewport } from "./useViewport"
 
@@ -28,52 +24,119 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
     viewport.h,
     settings.renderScale,
   )
-  const currentPixels = currentDims.width * currentDims.height
   const reductionPct = Math.round(
-    Math.max(0, (1 - currentPixels / nativePixels) * 100),
+    Math.max(
+      0,
+      (1 - (currentDims.width * currentDims.height) / nativePixels) * 100,
+    ),
   )
-  const handleSelectPreset = (id: ResolutionId) =>
-    onUpdateSettings({ ...settings, resolution: id })
-  const handleScaleChange = (scale: number) =>
-    onUpdateSettings({ ...settings, renderScale: scale })
-  const handleToggleShadows = () =>
-    onUpdateSettings({ ...settings, shadows: !settings.shadows })
-  const handleShadowQuality = (q: number) =>
-    onUpdateSettings({ ...settings, shadowQuality: q })
+  const set = (patch: Partial<typeof settings>) =>
+    onUpdateSettings({ ...settings, ...patch })
+  const aa = settings.antiAliasing ?? "fxaa"
+
   return (
     <>
-      <RenderTargetCard
-        settings={settings}
-        currentDims={currentDims}
-        reductionPct={reductionPct}
-      />
-      <MonitorCard
-        settings={settings}
-        onUpdateSettings={onUpdateSettings}
-        displays={displays}
-      />
-      <ResolutionCard
-        settings={settings}
-        viewport={viewport}
-        presets={presets}
-        nativePixels={nativePixels}
-        handleSelectPreset={handleSelectPreset}
-      />
-      <RenderScaleCard
-        settings={settings}
-        handleScaleChange={handleScaleChange}
-      />
-      <PresetCard settings={settings} onUpdateSettings={onUpdateSettings} />
-      <ShadowsCard
-        settings={settings}
-        handleToggleShadows={handleToggleShadows}
-      />
-      <ShadowQualityCard
-        settings={settings}
-        handleShadowQuality={handleShadowQuality}
-      />
-      <MotionBlurCard settings={settings} onUpdateSettings={onUpdateSettings} />
-      <UpscalingFaqCard />
+      <div
+        data-set-row
+        className="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-2 px-4"
+      >
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40">
+            Render target
+          </div>
+          <div className="text-[28px] font-extrabold italic leading-tight tabular-nums text-white">
+            {currentDims.label}
+            {settings.renderScale < 100 && (
+              <span className="ml-3 text-[13px] font-bold not-italic text-amber-300">
+                {settings.renderScale}% scale
+              </span>
+            )}
+          </div>
+        </div>
+        <div
+          className={`text-[12px] font-semibold ${
+            reductionPct > 0 ? "text-emerald-400" : "text-white/40"
+          }`}
+        >
+          {reductionPct > 0
+            ? `~${reductionPct}% fewer pixels than native`
+            : "Full native load"}
+        </div>
+      </div>
+
+      <Section title="Display">
+        {displays.length > 1 && (
+          <Choice
+            label="Monitor"
+            options={displays.map((d, i) => ({
+              id: d.id,
+              label: `${i + 1}${d.isPrimary ? " · Primary" : ""}`,
+            }))}
+            value={settings.displayId ?? currentDisplayId(displays) ?? -1}
+            onChange={(id) => {
+              set({ displayId: id })
+              void moveToDisplay(id)
+            }}
+          />
+        )}
+        <ResolutionCarousel
+          presets={presets}
+          selectedId={settings.resolution}
+          viewport={viewport}
+          onSelect={(id: ResolutionId) => set({ resolution: id })}
+        />
+        <Slider
+          label="Render scale"
+          value={settings.renderScale}
+          min={50}
+          max={100}
+          step={5}
+          onChange={(v) => set({ renderScale: v })}
+        />
+      </Section>
+
+      <Section title="Quality">
+        <Choice
+          label="Preset"
+          options={QUALITY_PRESETS.map((p) => ({ id: p, label: p }))}
+          value={settings.qualityPreset ?? QUALITY_PRESETS[0]}
+          onChange={(p) => onUpdateSettings(applyPreset(settings, p))}
+        />
+        <Choice
+          label="Anti-aliasing"
+          options={AA_MODES.map((m) => ({ id: m.id, label: m.label }))}
+          value={aa}
+          onChange={(id) => set({ antiAliasing: id })}
+        />
+        <Toggle
+          label="Dynamic shadows"
+          checked={settings.shadows}
+          onChange={(v) => set({ shadows: v })}
+        />
+        <Slider
+          label="Shadow quality"
+          value={settings.shadowQuality ?? 100}
+          min={25}
+          max={100}
+          step={5}
+          disabled={!settings.shadows}
+          onChange={(v) => set({ shadowQuality: v })}
+        />
+        <Slider
+          label="Motion blur"
+          value={settings.motionBlur ?? 0}
+          min={0}
+          max={100}
+          format={(v) => (v === 0 ? "Off" : String(v))}
+          onChange={(v) => set({ motionBlur: v })}
+        />
+        <Toggle
+          label="Auto-adjust scale"
+          hint="Lowers the resolution scale to hold ~55 FPS"
+          checked={!!settings.autoQuality}
+          onChange={(v) => set({ autoQuality: v })}
+        />
+      </Section>
     </>
   )
 }

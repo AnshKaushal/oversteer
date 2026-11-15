@@ -1,13 +1,25 @@
 @import "tailwindcss";
 
-/* Gamepad navigation highlight for menu buttons. */
+@theme {
+  --font-sans:
+    "Host Grotesk Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
 [data-pad-focus] {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
 }
 
-/* Scrollable panels (race tower, results, paddock roster): keep scrolling,
-   never show a scrollbar — Windows draws chunky always-visible bars. */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -16,8 +28,72 @@
   display: none;
 }
 
-/* Custom-paint popout entrance (stylesheet keyframes — no dependency on
-   runtime-injected <style> tags or transition class state). */
+/* App, not a webpage: no text selection or image dragging, except in inputs.
+   -webkit- prefix is required for WebKit webviews (macOS WKWebView). */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img,
+svg,
+canvas {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* Settings screen: rows show focus via the row highlight, not the white ring */
+.os-row [data-pad-focus] {
+  outline: none;
+}
+
+.os-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  outline: none;
+  background-color: rgba(255, 255, 255, 0.18);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1' fill='%2351a7d5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: var(--p, 0%) 100%;
+}
+.os-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 22px;
+  border: 0;
+  background: #fff;
+  transform: skewX(-12deg);
+  transition: background 0.15s;
+}
+.os-range:hover::-webkit-slider-thumb,
+.os-range:focus-visible::-webkit-slider-thumb {
+  background: #51a7d5;
+}
+.os-range::-moz-range-thumb {
+  width: 12px;
+  height: 22px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+.os-range:disabled {
+  cursor: default;
+}
+
 @keyframes paint-pop-in {
   from {
     opacity: 0;
@@ -30,16 +106,12 @@
 }
 .paint-pop-in {
   animation: paint-pop-in 180ms ease-out;
-  /* Explicit box so the picker is usable even if a third-party stylesheet
-     fails to apply (strict CSP webviews can drop injected <style> tags). */
   width: 224px;
 }
 .paint-pop-in .react-colorful {
   width: 200px;
   height: 172px;
 }
-
-/* src/mainview/globals.css */
 
 .instrument-hud {
   position: fixed;
@@ -80,7 +152,6 @@
     color 120ms ease;
 }
 
-/* Toggle this class from your existing drift state. */
 .cluster-drift-indicator.is-active {
   color: #ffc928;
   opacity: 1;
@@ -133,4 +204,51 @@
     animation: none;
     opacity: 1;
   }
+}
+
+/* Resolution carousel (Swiper): the centred slide is larger than its neighbours */
+.os-swiper {
+  height: 112px;
+  padding: 0;
+}
+.os-swiper .swiper-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.os-swiper .os-face {
+  transform: scale(0.72);
+  opacity: 0.35;
+  transition:
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.45s ease;
+}
+.os-swiper .swiper-slide-active .os-face {
+  transform: scale(1.35);
+  opacity: 1;
+}
+
+/* "Loading..." dots on the transition cover */
+@keyframes os-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.15;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-6px);
+  }
+}
+.os-dot {
+  display: inline-block;
+  animation: os-dot 1.2s ease-in-out infinite;
+}
+.os-dot:nth-of-type(2) {
+  animation-delay: 0.15s;
+}
+.os-dot:nth-of-type(3) {
+  animation-delay: 0.3s;
 }

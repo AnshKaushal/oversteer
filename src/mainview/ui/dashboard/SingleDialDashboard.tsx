@@ -73,7 +73,14 @@ interface Refs {
   esc: SVGGElement | null
 }
 
-export function SingleDialDashboard({ tele }: { tele: CarTelemetry }) {
+export function SingleDialDashboard({
+  tele,
+  embedded = false,
+}: {
+  tele: CarTelemetry
+  /** Fill its parent instead of pinning to the screen corner; no caption. */
+  embedded?: boolean
+}) {
   const teleRef = useRef(tele)
   teleRef.current = tele
 
@@ -220,7 +227,7 @@ export function SingleDialDashboard({ tele }: { tele: CarTelemetry }) {
       if (rim) {
         rim.setAttribute(
           "stroke",
-          limiter ? `rgba(227,6,19,${flash})` : "url(#sd-chrome)",
+          limiter ? `rgba(227,6,19,${flash})` : "#efefef",
         )
         rim.style.filter = limiter
           ? flash > 0.5
@@ -310,47 +317,27 @@ export function SingleDialDashboard({ tele }: { tele: CarTelemetry }) {
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 select-none"
+      className={`pointer-events-none select-none ${embedded ? "" : "absolute inset-0"}`}
       style={{ fontFamily: SANS }}
     >
-      <div className="absolute inset-x-0 bottom-0 flex justify-end px-4 pb-4 sm:px-6 sm:pb-5">
-        <div className="w-[clamp(200px,24vw,320px)]">
+      <div
+        className={
+          embedded
+            ? ""
+            : "absolute inset-x-0 bottom-0 flex justify-end px-4 pb-4 sm:px-6 sm:pb-5"
+        }
+      >
+        <div className={embedded ? "w-full" : "w-[clamp(200px,24vw,320px)]"}>
           <svg viewBox="0 0 400 400" className="block h-auto w-full">
-            <defs>
-              <radialGradient id="sd-face" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#1c222c" />
-                <stop offset="55%" stopColor="#10141a" />
-                <stop offset="100%" stopColor="#07090d" />
-              </radialGradient>
-              <radialGradient id="sd-hub" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#04060a" />
-                <stop offset="70%" stopColor="#0b0e14" />
-                <stop offset="100%" stopColor="#171c25" />
-              </radialGradient>
-              <linearGradient
-                id="sd-chrome"
-                gradientUnits="userSpaceOnUse"
-                x1="0"
-                y1="0"
-                x2="400"
-                y2="400"
-              >
-                <stop offset="0%" stopColor="#f4f6f9" />
-                <stop offset="25%" stopColor="#9aa1ab" />
-                <stop offset="50%" stopColor="#e8ecf1" />
-                <stop offset="75%" stopColor="#6b7280" />
-                <stop offset="100%" stopColor="#dfe4ea" />
-              </linearGradient>
-            </defs>
 
-            <circle cx={C} cy={C} r={R_RIM} fill="url(#sd-face)" />
+            <circle cx={C} cy={C} r={R_RIM} fill="#0a0a0a" />
             <circle
               ref={(el) => void (r.current.rim = el)}
               cx={C}
               cy={C}
               r={R_RIM}
               fill="none"
-              stroke="url(#sd-chrome)"
+              stroke="#efefef"
               strokeWidth="6"
             />
             {scale}
@@ -375,13 +362,13 @@ export function SingleDialDashboard({ tele }: { tele: CarTelemetry }) {
               />
             </g>
 
-            <circle cx={C} cy={C} r={R_HUB} fill="url(#sd-hub)" />
+            <circle cx={C} cy={C} r={R_HUB} fill="#0a0a0a" />
             <circle
               cx={C}
               cy={C}
               r={R_HUB}
               fill="none"
-              stroke="url(#sd-chrome)"
+              stroke="#efefef"
               strokeWidth="3.5"
             />
             <circle
@@ -438,7 +425,7 @@ export function SingleDialDashboard({ tele }: { tele: CarTelemetry }) {
               fill={captionColor}
               fontFamily={SANS}
             >
-              {caption}
+              {embedded ? "" : caption}
             </text>
 
             {icons.map(([key, icon], i) => (

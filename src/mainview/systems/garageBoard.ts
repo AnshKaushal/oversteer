@@ -138,10 +138,20 @@ export function placeSurface(
   }
   px = Math.max(MARGIN, Math.min(width - MARGIN, px))
   py = Math.max(MARGIN, Math.min(height - MARGIN, py))
+  px = Math.round(px)
+  py = Math.round(py)
   pillPositions.set(id, { id, x: px, y: py })
   if (e.pill) {
     e.pill.style.transform = `translate3d(${px}px,${py}px,0) translate(-50%,-50%)`
     e.pill.style.visibility = showPill ? "visible" : "hidden"
+    // The label opens toward the screen centre so it never leaves the window.
+    // Hysteresis band so it doesn't flip back and forth near the centre.
+    const cur = e.pill.dataset.side
+    const band = 24
+    if (cur !== "left" && px > width * 0.5 + band) e.pill.dataset.side = "left"
+    else if (cur !== "right" && px < width * 0.5 - band)
+      e.pill.dataset.side = "right"
+    else if (!cur) e.pill.dataset.side = px > width * 0.5 ? "left" : "right"
   }
   return !!h && !def.hud
 }
@@ -190,8 +200,8 @@ export function resolvePills(width: number, height: number) {
       }
     }
     for (const { p, hw, hh } of items) {
-      p.x = Math.max(hw, Math.min(width - hw, p.x))
-      p.y = Math.max(hh, Math.min(height - hh, p.y))
+      p.x = Math.round(Math.max(hw, Math.min(width - hw, p.x)))
+      p.y = Math.round(Math.max(hh, Math.min(height - hh, p.y)))
     }
     if (!moved) break
   }

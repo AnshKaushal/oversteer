@@ -76,7 +76,7 @@ import { getCar } from "../data/cars"
 import { Garage } from "../systems/Garage"
 import { placeSurface, resolvePills, pointerOverOpenBoard } from "../systems/garageBoard"
 import { SURFACES } from "../systems/garageSurfaces"
-import { getFocus } from "../systems/garageFocus"
+import { dynoSnap, getFocus } from "../systems/garageFocus"
 import { dyno } from "../systems/dyno"
 
 import {
@@ -270,7 +270,9 @@ export function startSession(ctx: SessionCtx): () => void {
         loadTuning(carIdRef.current),
       )
 
-      const {
+      // rivalCount/raceDistance/gridCount are reassigned when a race starts in
+      // place (enterRace below).
+      let {
         setup,
         rivalCount,
         raceDistance,
@@ -425,6 +427,13 @@ export function startSession(ctx: SessionCtx): () => void {
           garage = null
         }
       }
+      // Take the garage out of the live scene (menu -> play without a rebuild).
+      const leaveGarage = () => {
+        garage?.dispose()
+        garage = null
+        rig.garage = null
+        rain.setShelter(null)
+      }
       {
         let showToken = 0
         garageApiRef.current = {
@@ -471,6 +480,108 @@ export function startSession(ctx: SessionCtx): () => void {
             } catch (e) {
               console.warn("garage paint failed", e)
             }
+          },
+          // Menu -> free roam without tearing the world down: the map, car
+          // and physics are already the ones free roam needs (the menu session
+          // always builds the "highway" map with no race), so only the garage
+          // goes away and traffic starts. The caller has set startedRef.
+          enterFreeRoam: (mapId: string) => {
+            if (disposed || !garage || !startedRef.current) return false
+            if (mapId !== "highway" || raceActive || isNetRace) return false
+            if (dyno.active || getFocus() === "dyno") return false
+            leaveGarage()
+            void spawnTrafficLater?.()
+            return true
+          },
+          // Menu -> race without rebuilding: the rivals are built and settled
+          // while the garage is still on screen, then everything flips at once
+          // (startedRef is set here, not by the caller, so the player car
+          // stays held until the grid is ready). raceSetupRef must already
+          // hold the setup.
+          enterRace: async (mapId: string) => {
+            if (disposed || !garage || startedRef.current) return false
+            if (mapId !== "highway" || !map.map.features.races) return false
+            if (raceActive || isNetRace || net?.roomId) return false
+            if (dyno.active || getFocus() === "dyno") return false
+            if (!raceSetupRef.current) return false
+            // buildRaceSetup also makes a player body at the grid slot. We keep
+            // our own player; take the slot from the new one and drop it.
+            const rb = buildRaceSetup({
+              R,
+              lin,
+              map,
+              net,
+              playerDef,
+              prevOrderRef,
+              raceSetupRef,
+              scene,
+              world,
+            })
+            const slotQ = rb.body.rotation()
+            const slotYaw = new THREE.Euler().setFromQuaternion(
+              new THREE.Quaternion(slotQ.x, slotQ.y, slotQ.z, slotQ.w),
+              "YXZ",
+            ).y
+            world.removeRigidBody(rb.body)
+            const field = await spawnField({
+              deferTraffic: true,
+              isDisposed: () => disposed,
+              onTraffic: (r) => allBodies.push(r.car.body),
+              setup: rb.setup,
+              R,
+              activeRivalsRef,
+              activeTrafficRef,
+              aiSlotOf: rb.aiSlotOf,
+              baseUrl,
+              gridCount: rb.gridCount,
+              gridSlot: rb.gridSlot,
+              isNetRace: rb.isNetRace,
+              lin,
+              map,
+              placeAt: rb.placeAt,
+              poolRef,
+              raceActiveInit: rb.raceActiveInit,
+              rivalCount: rb.rivalCount,
+              scene,
+              startedRef,
+              timeOfDayRef,
+              trafficRef,
+              world,
+            })
+            if (disposed || startedRef.current) return false
+            // spawnField pointed the shared refs at its own arrays: keep this
+            // session's (the loop closes over them).
+            for (const r of field.rivals) {
+              rivals.push(r)
+              allBodies.push(r.car.body)
+            }
+            activeRivalsRef.current = rivals
+            activeTrafficRef.current = trafficCars
+            car.reset(new THREE.Vector3(rb.playerX, 0.72, rb.playerZ), slotYaw)
+            // settle the suspensions on the grid, like the initial build does
+            const hold = holdInput()
+            for (let i = 0; i < 120; i++) {
+              car.update(FIXED_DT, hold)
+              for (const r of rivals) r.car.update(FIXED_DT, hold)
+              world.step()
+            }
+            rivalCount = rb.rivalCount
+            raceDistance = rb.raceDistance
+            gridCount = rb.gridCount
+            raceActive = true
+            raceFinished = false
+            raceElapsed = 0
+            headsUp = 2.6
+            countdown = 3.0
+            released = true
+            staged = false
+            playerFinished = false
+            playerFinishTime = null
+            playerProgress = 0
+            playerDoneT = 0
+            leaveGarage()
+            startedRef.current = true
+            return true
           },
         }
       }
@@ -1061,6 +1172,15 @@ export function startSession(ctx: SessionCtx): () => void {
         syncVisual(visual, car, dt, gridLocked)
         if (garage && !startedRef.current) {
           dyno.tick(dt)
+          if (
+            dynoSnap.pending &&
+            dyno.active === (getFocus() === "dyno")
+          ) {
+            dynoSnap.pending = false
+            garage.snapDynoLift()
+            rig.snapGarageCamera()
+            dynoSnap.release = 3
+          }
           garage.updateDyno(visual, dyno.visual(), dt)
           garage.holdCar(visual)
         }
@@ -1418,6 +1538,8 @@ export function startSession(ctx: SessionCtx): () => void {
         const fwd = _fw.set(0, 0, -1).applyQuaternion(quat)
         rig.smoothFwd.lerp(fwd, 1 - Math.exp(-dt * 10)).normalize()
         rig.update({ dt, nowS, carPos, quat, car, raceActive, headsUp })
+        // The dyno is fully raised/lowered and framed: lift the cover.
+        if (dynoSnap.release > 0 && --dynoSnap.release === 0) setLoading(false)
 
         if (garage && !startedRef.current) {
           const focused = getFocus()

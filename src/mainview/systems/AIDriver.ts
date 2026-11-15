@@ -106,8 +106,8 @@ export function makeTrafficProfile(
       : roll < 0.8
         ? 95 + rng() * 30
         : 135 + rng() * 30
-  const outer = dir === 1 ? 6.0 : -6.0
-  const inner = dir === 1 ? 2.0 : -2.0
+  const outer = dir === 1 ? 5.4 : -5.4
+  const inner = dir === 1 ? 1.8 : -1.8
   const lane = cruiseKmh < 105 ? outer : inner
   return {
     aggression: 0.3 + rng() * 0.3,

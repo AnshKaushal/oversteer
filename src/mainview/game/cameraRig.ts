@@ -97,6 +97,12 @@ export class CameraRig {
       Math.max(0, d.playerDef.physics.dimensions.height - 1.43) * 1.65
   }
 
+  /** Jump the garage camera to its current target view (no sweep). */
+  snapGarageCamera() {
+    this.garageSnap = true
+    this.trans = null
+  }
+
   update(f: CameraFrame) {
     const { camera, input, wm, playerDef, e0 } = this.d
     const { startedRef, setSpeedLines, settingsRef } = this.d.ctx

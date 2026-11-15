@@ -66,8 +66,11 @@ export const TUNING_LIMITS: Record<keyof Tuning, [number, number]> = {
   camberRear: [0.5, 1.5],
   toeFront: [0.5, 1.5],
   toeRear: [0.5, 1.5],
-  driftAssist: [0.4, 1.2],
+  driftAssist: [0, 1.2],
 }
+
+/** Drift-assist slider at or below this value turns the assist fully off. */
+export const DRIFT_ASSIST_OFF = 0.02
 
 const KEY = "oversteer_tuning"
 
@@ -149,6 +152,7 @@ export function applyTuning(car: CarSpec, tuning: Tuning): CarSpec {
   const bs = p.assists.bodyStability
   bs.driftDeadzoneScale = 1 + (1 - t.driftAssist) * 1.4
   bs.driftAuthorityScale = t.driftAssist
+  bs.disabled = t.driftAssist <= DRIFT_ASSIST_OFF
   const al = p.wheels.alignment
   al.front.camberDeg += (t.camberFront - 1) * ALIGN_DEG.camber
   al.rear.camberDeg += (t.camberRear - 1) * ALIGN_DEG.camber

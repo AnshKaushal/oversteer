@@ -57,7 +57,7 @@ export const AIRCRAFT: AircraftSpec[] = [
       mesh: "Engines_Material001_0",
       zMin: 240,
       zMax: 320,
-      radius: 225,
+      radius: 175,
     },
     gearNodes: /^(FRONT_LG|REAR_(LEFT|RIGHT)_LG_strut|Wheel_)/,
   },

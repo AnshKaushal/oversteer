@@ -92,7 +92,7 @@ export function PaintPicker({
                 p.value === null
                   ? {
                       background:
-                        "conic-gradient(#e30613,#f5c518,#1f8a4c,#1f6feb,#000)",
+                        "#efefef",
                     }
                   : {
                       background: numberToHex(p.value),
@@ -137,11 +137,11 @@ export function PaintPicker({
               transformOrigin: pos.above ? "50% 100%" : "50% 0%",
             }}
           >
-            <div className="rounded-2xl border border-white/15 bg-[#0b0e14]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-md">
+            <div className="border border-white/15 bg-[#0b0e14]/95 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.7)] backdrop-blur-md">
               <HexColorPicker color={shown} onChange={setDraft} />
               <div className="mt-2 flex items-center gap-2">
                 <div
-                  className="h-6 w-6 shrink-0 rounded-full border border-white/25"
+                  className="h-6 w-6 shrink-0 border border-white/25"
                   style={{ background: shown }}
                 />
                 <div className="font-mono text-[12px] text-gray-200">

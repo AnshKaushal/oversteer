@@ -16,7 +16,7 @@ import { trafficCountFor } from "../systems/RaceTypes"
 import { CARS } from "../data/cars"
 
 // Heavy models (high texture memory / draw calls) stay out of the traffic pool.
-const NO_TRAFFIC = new Set(["cheetah-84", "f1-car"])
+const NO_TRAFFIC = new Set(["f1-car"])
 const TRAFFIC_CARS = CARS.filter((c) => !NO_TRAFFIC.has(c.id))
 
 export interface Rival {
@@ -188,7 +188,9 @@ export async function spawnField(env: SpawnEnv) {
   }
   activeRivalsRef.current = rivals
   const trafficCars: Rival[] = []
-  const trafficTarget =
+  // Read when traffic is actually spawned, not at build time: the garage
+  // session spawns it later, once free roam starts in place.
+  const trafficTarget = () =>
     startedRef.current && !raceActiveInit && map.map.features.traffic
       ? trafficCountFor(trafficRef.current)
       : 0
@@ -197,7 +199,8 @@ export async function spawnField(env: SpawnEnv) {
     { s: 0, half: -1 },
   ]
   const spawnTraffic = async () => {
-  for (let i = 0; i < trafficTarget; i++) {
+  const target = trafficTarget()
+  for (let i = trafficCars.length; i < target; i++) {
     if (env.deferTraffic) await new Promise((r) => setTimeout(r, 40))
     if (env.isDisposed?.()) return
     const def = TRAFFIC_CARS[(Math.random() * TRAFFIC_CARS.length) | 0]
