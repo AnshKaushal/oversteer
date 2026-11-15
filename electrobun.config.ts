@@ -17,7 +17,7 @@ export default {
     copy: {
       "dist/index.html": "views/mainview/index.html",
       "dist/assets": "views/mainview/assets",
-      "dist/icon.png": "views/mainview/icon.png",
+      "dist/icon-new.png": "views/mainview/icon-new.png",
       "dist/models": "views/mainview/models",
     },
     watchIgnore: ["dist/**"],

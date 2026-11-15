@@ -8,7 +8,7 @@ export function LoadingScreen({ open }: { open: boolean; loadPct?: number }) {
       from={{ autoAlpha: 0 }}
     >
       <img
-        src={`${import.meta.env.BASE_URL || "./"}icon.png`}
+        src={`${import.meta.env.BASE_URL || "./"}icon-new.png`}
         alt=""
         draggable={false}
         className="h-[min(48vh,460px)] w-auto mix-blend-screen"

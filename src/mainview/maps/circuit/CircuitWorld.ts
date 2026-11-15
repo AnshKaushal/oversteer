@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { chunkGeometry, freezeStatic } from "./chunking"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { SurfaceId } from "../../data/surfaces"
@@ -232,12 +233,21 @@ export class CircuitWorld implements MapWorld {
     return g
   }
 
-  private add(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
-    const m = new THREE.Mesh(geo, mat)
-    m.receiveShadow = true
-    m.frustumCulled = false
-    this.group.add(m)
-    return m
+  /** Adds a static mesh split into spatial chunks so culling can reject it. */
+  private add(
+    geo: THREE.BufferGeometry,
+    mat: THREE.Material,
+    castShadow = false,
+  ) {
+    const holder = new THREE.Group()
+    for (const g of chunkGeometry(geo)) {
+      const m = new THREE.Mesh(g, mat)
+      m.receiveShadow = true
+      m.castShadow = castShadow
+      holder.add(m)
+    }
+    this.group.add(holder)
+    freezeStatic(holder)
   }
 
   private buildRoad() {
@@ -375,7 +385,7 @@ export class CircuitWorld implements MapWorld {
       roughness: 0.85,
       side: THREE.DoubleSide,
     })
-    this.add(g, mat).castShadow = true
+    this.add(g, mat, true)
   }
 
   private buildStartLine() {
@@ -616,6 +626,8 @@ export class CircuitWorld implements MapWorld {
     this.hills = hills.hills
     this.hillDress = hills.dress
     if (this.kit) buildClouds(this.group, this.track, this.kit, 28)
+    for (const c of this.chunks) freezeStatic(c.mesh)
+    for (const h of this.hills) freezeStatic(h.mesh)
     this.setVegetation(this.vegetation * 100)
   }
 

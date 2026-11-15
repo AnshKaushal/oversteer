@@ -32,7 +32,7 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
   )
   const set = (patch: Partial<typeof settings>) =>
     onUpdateSettings({ ...settings, ...patch })
-  const aa = settings.antiAliasing ?? "fxaa"
+  const aa = settings.antiAliasing ?? "smaa"
 
   return (
     <>

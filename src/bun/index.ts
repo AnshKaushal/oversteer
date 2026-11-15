@@ -8,7 +8,7 @@ import {
   Utils,
 } from "electrobun/main"
 import os from "os"
-import { appendFileSync, writeFileSync } from "fs"
+import { appendFileSync, mkdirSync, writeFileSync } from "fs"
 import path from "path"
 
 const PERF_LOG =
@@ -410,6 +410,21 @@ function createWindow(winUrl: string, windowed = isWindowed) {
             return true
           } catch {
             return false
+          }
+        },
+        savePhoto: (p?: any) => {
+          try {
+            const b64 = String(p?.dataUrl ?? "").split(",")[1]
+            if (!b64) return null
+            const dir = path.join(os.homedir(), "Pictures", "OverSteer")
+            mkdirSync(dir, { recursive: true })
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+            const file = path.join(dir, `oversteer-${stamp}.png`)
+            writeFileSync(file, Buffer.from(b64, "base64"))
+            return file
+          } catch (e) {
+            console.warn("[photo] save failed:", e)
+            return null
           }
         },
         quitApp: () => {

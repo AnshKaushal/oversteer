@@ -1,3 +1,4 @@
+import { photoState, setPhotoFov, requestPhoto } from "./game/photoMode"
 import { useMapSelection } from "./app/useMapSelection"
 import { setDynoCoverHook } from "./systems/garageFocus"
 import { useGarage } from "./app/useGarage"
@@ -74,19 +75,50 @@ export default function App() {
   const [freeCam, setFreeCam] = useState(false)
   const freeCamRef = useRef(false)
   const [hideUi, setHideUi] = useState(false)
+  const [fov, setFov] = useState(photoState.fov)
+  const [flash, setFlash] = useState(false)
+  const [photoMsg, setPhotoMsg] = useState<string | null>(null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyU" || e.repeat || e.metaKey || e.ctrlKey || e.altKey)
-        return
+      if (e.repeat && e.code !== "KeyZ") return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return
+      if (e.code === "KeyU") setHideUi((h) => !h)
       if (!freeCamRef.current) return
-      setHideUi((h) => !h)
+      if (e.code === "KeyZ")
+        setPhotoFov(photoState.fov + (e.shiftKey ? 2 : -2))
+      else if (e.code === "Space") {
+        e.preventDefault()
+        requestPhoto()
+        setFlash(true)
+        setTimeout(() => setFlash(false), 140)
+      }
     }
+    const onWheel = (e: WheelEvent) => {
+      if (!freeCamRef.current) return
+      setPhotoFov(photoState.fov + Math.sign(e.deltaY) * 3)
+    }
+    let msgT: ReturnType<typeof setTimeout> | undefined
+    const onSaved = (e: Event) => {
+      const d = (e as CustomEvent<{ ok: boolean; where: string }>).detail
+      setPhotoMsg(d.ok ? `Photo saved · ${d.where}` : "Could not save photo")
+      clearTimeout(msgT)
+      msgT = setTimeout(() => setPhotoMsg(null), 3500)
+    }
+    const onFov = (e: Event) => setFov((e as CustomEvent<number>).detail)
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    window.addEventListener("wheel", onWheel, { passive: true })
+    window.addEventListener("photo-saved", onSaved)
+    window.addEventListener("freecam-fov", onFov)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("wheel", onWheel)
+      window.removeEventListener("photo-saved", onSaved)
+      window.removeEventListener("freecam-fov", onFov)
+      clearTimeout(msgT)
+    }
   }, [])
-  useEffect(() => {
-    if (!freeCam) setHideUi(false)
-  }, [freeCam])
   const [paused, setPaused] = useState(false)
   const [lockHint, setLockHint] = useState(false)
   const speedLinesRef = useRef<HTMLDivElement | null>(null)
@@ -741,7 +773,7 @@ export default function App() {
 
   return (
     <div
-      className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""} ${hideUi && freeCam ? "[&>*:not([data-game-mount])]:!hidden" : ""}`}
+      className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""} ${hideUi && started && !paused ? "[&>*:not([data-game-mount])]:!hidden" : ""}`}
     >
       {/* In-world garage screens live under the (partly transparent) canvas. */}
       <div
@@ -758,8 +790,16 @@ export default function App() {
       {showNetDiag && <NetDiagPanel />}
       {freeCam && started && !paused && !race.finished && (
         <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 border border-white/20 bg-black/70 px-4 py-1.5 text-[12px] tracking-wide text-white backdrop-blur">
-          FREE CAMERA · WASD move · mouse look · Q/E up/down · Shift sprint · U
-          hide UI · F exit
+          FREE CAMERA · WASD move · mouse look · Q/E up/down · Shift sprint ·
+          wheel / Z FOV ({Math.round(fov)}°) · Space photo · U hide UI · F exit
+        </div>
+      )}
+      {flash && (
+        <div className="pointer-events-none absolute inset-0 z-50 bg-white/80" />
+      )}
+      {photoMsg && (
+        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 border border-white/20 bg-black/75 px-4 py-1.5 text-[12px] text-white backdrop-blur">
+          {photoMsg}
         </div>
       )}
       {dashVisible && (

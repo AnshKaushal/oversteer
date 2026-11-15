@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js"
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js"
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js"
+import { FinalPass } from "./finalPass"
 import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js"
 import { MotionBlurPass } from "./motionBlur"
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js"
@@ -11,7 +11,7 @@ export const AA_MODES: { id: AAMode; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "fxaa", label: "FXAA" },
   { id: "smaa", label: "SMAA" },
-  { id: "msaa", label: "MSAA 4x" },
+  { id: "msaa", label: "MSAA" },
 ]
 
 export class AntiAlias {
@@ -19,6 +19,7 @@ export class AntiAlias {
   private blurOn = false
   private blurPass: MotionBlurPass | null = null
   private composer: EffectComposer | null = null
+  private finalPass: FinalPass | null = null
   private w = 0
   private h = 0
   private v = new THREE.Vector2()
@@ -34,6 +35,7 @@ export class AntiAlias {
   private build(mode: AAMode, blur: boolean) {
     this.composer?.dispose()
     this.blurPass?.dispose()
+    this.finalPass = null
     this.composer = null
     this.blurPass = null
     this.mode = mode
@@ -42,7 +44,7 @@ export class AntiAlias {
     this.renderer.getDrawingBufferSize(this.v)
     const target = new THREE.WebGLRenderTarget(this.v.x, this.v.y, {
       type: THREE.HalfFloatType,
-      samples: mode === "msaa" ? 4 : 0,
+      samples: mode === "msaa" ? 2 : 0,
     })
     if (blur) {
       target.depthTexture = new THREE.DepthTexture(this.v.x, this.v.y)
@@ -59,7 +61,8 @@ export class AntiAlias {
       )
       c.addPass(this.blurPass)
     }
-    c.addPass(new OutputPass())
+    this.finalPass = new FinalPass()
+    c.addPass(this.finalPass)
     if (mode === "fxaa") c.addPass(new FXAAPass())
     else if (mode === "smaa") c.addPass(new SMAAPass())
     this.composer = c
@@ -106,6 +109,12 @@ export class AntiAlias {
       this.w = this.v.x
       this.h = this.v.y
       this.composer.setSize(this.w, this.h)
+    }
+    if (this.finalPass) {
+      // Canvas is CSS-stretched when render scale < 100%: sharpen to compensate.
+      const ratio = this.renderer.domElement.clientWidth / this.v.x
+      this.finalPass.sharpness =
+        ratio > 1.02 ? Math.min(1, 0.25 + (ratio - 1) * 1.5) : 0.15
     }
     this.composer.render()
   }

@@ -284,7 +284,7 @@ export function buildClouds(
     const im = new THREE.InstancedMesh(p.geometry, p.material, ms.length)
     ms.forEach((m, k) => im.setMatrixAt(k, m))
     im.instanceMatrix.needsUpdate = true
-    im.frustumCulled = false
+    im.computeBoundingSphere()
     group.add(im)
     out.push(im)
   })

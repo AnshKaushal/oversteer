@@ -22,6 +22,20 @@ export async function setNativeCursorLock(locked: boolean): Promise<boolean> {
   }
 }
 
+/** Saves a PNG data URL to ~/Pictures/OverSteer; resolves the file path. */
+export async function savePhoto(dataUrl: string): Promise<string | null> {
+  try {
+    return await getBridge().request.savePhoto({ dataUrl })
+  } catch {
+    // Browser/dev fallback: normal download.
+    const a = document.createElement("a")
+    a.href = dataUrl
+    a.download = `oversteer-${Date.now()}.png`
+    a.click()
+    return "Downloads"
+  }
+}
+
 export async function quitApp(): Promise<void> {
   try {
     if (await getBridge().request.quitApp()) return

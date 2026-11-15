@@ -155,7 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   vegetation: 100,
   drawDistance: 100,
   autoQuality: false,
-  antiAliasing: "fxaa",
+  antiAliasing: "smaa",
   rumble: true,
   cameraSpeed: 1,
   motionBlur: 0,

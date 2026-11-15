@@ -80,7 +80,11 @@ export class MotionBlurPass extends Pass {
       (this.camera as THREE.PerspectiveCamera).projectionMatrix,
       this.camera.matrixWorldInverse,
     );
-    this.renderMask(renderer, readBuffer.width, readBuffer.height);
+    this.renderMask(
+      renderer,
+      Math.max(1, readBuffer.width >> 1),
+      Math.max(1, readBuffer.height >> 1),
+    );
     const u = this.mat.uniforms;
     u.tMask.value = this.maskTarget.texture;
     u.tDiffuse.value = readBuffer.texture;

@@ -1,3 +1,4 @@
+import { photoState } from "./photoMode"
 import * as THREE from "three"
 import type { InputManager } from "../systems/InputManager"
 import type { SessionCtx } from "./sessionCtx"
@@ -252,18 +253,26 @@ export class CameraRig {
         const mx = Math.max(-MAXD, Math.min(MAXD, e0.lastMovementX))
         const my = Math.max(-MAXD, Math.min(MAXD, e0.lastMovementY))
         if (this.freeCamActive) {
+          // Look speed follows FOV so a pixel of mouse travel moves the same
+          // screen distance whether wide-angle or zoomed in.
+          const fovK =
+            Math.tan(THREE.MathUtils.degToRad(photoState.fov / 2)) /
+            Math.tan(THREE.MathUtils.degToRad(75 / 2))
           if (mx !== 0 || my !== 0) {
-            this.freeCamYaw += mx * 0.0024
+            this.freeCamYaw += mx * 0.0024 * fovK
             this.freeCamPitch = Math.max(
               -1.45,
-              Math.min(1.45, this.freeCamPitch - my * 0.0024),
+              Math.min(1.45, this.freeCamPitch - my * 0.0024 * fovK),
             )
           }
           if (input.lookX !== 0 || input.lookY !== 0) {
-            this.freeCamYaw += input.lookX * 1.3 * dt * camSpeed
+            this.freeCamYaw += input.lookX * 1.3 * dt * camSpeed * fovK
             this.freeCamPitch = Math.max(
               -1.45,
-              Math.min(1.45, this.freeCamPitch - input.lookY * 0.6 * dt * camSpeed),
+              Math.min(
+                1.45,
+                this.freeCamPitch - input.lookY * 0.6 * dt * camSpeed * fovK,
+              ),
             )
           }
         } else {
@@ -328,8 +337,8 @@ export class CameraRig {
         this.freeCamLook.lerp(look, k)
         camera.position.copy(this.freeCamCamPos)
         camera.lookAt(this.freeCamLook)
-        if (Math.abs(camera.fov - 75) > 0.05) {
-          camera.fov += (75 - camera.fov) * Math.min(1, dt * 4)
+        if (Math.abs(camera.fov - photoState.fov) > 0.02) {
+          camera.fov += (photoState.fov - camera.fov) * Math.min(1, dt * 8)
           camera.updateProjectionMatrix()
         }
         setSpeedLines(0, 0)

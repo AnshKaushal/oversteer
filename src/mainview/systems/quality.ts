@@ -67,7 +67,7 @@ export class AutoQuality {
   private fast = 0
   static readonly MIN_SCALE = 50
   static readonly TARGET_MS = 1000 / 55
-  static readonly UP_MS = 1000 / 100
+  static readonly UP_MS = 1000 / 90
 
   tick(frameMs: number, scale: number, ceiling: number): number | null {
     if (frameMs <= 0) return null
@@ -80,13 +80,13 @@ export class AutoQuality {
     } else {
       this.slow = this.fast = 0
     }
-    if (this.slow >= 3 && scale > AutoQuality.MIN_SCALE) {
+    if (this.slow >= 4 && scale > AutoQuality.MIN_SCALE) {
       this.slow = 0
-      return Math.max(AutoQuality.MIN_SCALE, scale - 10)
+      return Math.max(AutoQuality.MIN_SCALE, scale - 5)
     }
-    if (this.fast >= 8 && scale < ceiling) {
+    if (this.fast >= 24 && scale < ceiling) {
       this.fast = 0
-      return Math.min(ceiling, scale + 10)
+      return Math.min(ceiling, scale + 5)
     }
     return null
   }

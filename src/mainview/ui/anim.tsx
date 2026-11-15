@@ -387,7 +387,7 @@ export function Wipe({
         className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black opacity-0 will-change-[opacity]"
       >
         <img
-          src={`${import.meta.env.BASE_URL || "./"}icon.png`}
+          src={`${import.meta.env.BASE_URL || "./"}icon-new.png`}
           alt=""
           draggable={false}
           className="h-[min(48vh,460px)] w-auto mix-blend-screen"

@@ -1,3 +1,5 @@
+import { photoState, photoSaved } from "./photoMode"
+import { savePhoto } from "../systems/updater"
 import { SkyEnvironment } from "../systems/SkyEnvironment"
 import { prefetchModels } from "../systems/gltf"
 import { AIRCRAFT } from "../systems/airplane/types"
@@ -67,7 +69,7 @@ import { DEFAULT_PLAYER_COLOR, colorHex } from "../systems/carTint"
 import { type RaceStanding } from "../systems/RaceTypes"
 import { circuitOptionsFor } from "../ui/MapPicker"
 import { RainEffect } from "../systems/RainEffect"
-import { applyRendererResolution } from "../systems/settings"
+import { applyRendererResolution, nativeDisplaySize } from "../systems/settings"
 import { netDiagPhysicsTick } from "../systems/net/NetDiagnostics"
 import type {} from "../systems/net/types"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
@@ -789,7 +791,7 @@ export function startSession(ctx: SessionCtx): () => void {
           aa = new AntiAlias(renderer!, scene, camera)
           mark("AA created")
           aa.render(
-            settingsRef.current.antiAliasing ?? "fxaa",
+            settingsRef.current.antiAliasing ?? "smaa",
             settingsRef.current.motionBlur ?? 0,
             sharpRoots(),
           )
@@ -936,7 +938,7 @@ export function startSession(ctx: SessionCtx): () => void {
           pausedTick = (pausedTick + 1) % 3
           if (pausedTick !== 0) return
           ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
-            settingsRef.current.antiAliasing ?? "fxaa",
+            settingsRef.current.antiAliasing ?? "smaa",
             settingsRef.current.motionBlur ?? 0,
             sharpRoots(),
           )
@@ -1582,10 +1584,45 @@ export function startSession(ctx: SessionCtx): () => void {
           rain.setReflectionPass(on),
         )
         ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
-          settingsRef.current.antiAliasing ?? "fxaa",
+          settingsRef.current.antiAliasing ?? "smaa",
           settingsRef.current.motionBlur ?? 0,
           sharpRoots(),
         )
+        if (photoState.pending) {
+          photoState.pending = false
+          // Photos are always high-res: re-render this frame at 4K (or the
+          // panel's native size if larger), then restore the play resolution.
+          const r = renderer!
+          const el = r.domElement
+          try {
+            const gl = r.getContext()
+            const cap = Math.min(
+              8192,
+              gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+            )
+            const native = nativeDisplaySize()
+            const longSide = Math.min(
+              cap,
+              Math.max(3840, native.width, native.height),
+            )
+            const aspect = el.clientWidth / Math.max(1, el.clientHeight)
+            const w = aspect >= 1 ? longSide : Math.round(longSide * aspect)
+            const h = aspect >= 1 ? Math.round(longSide / aspect) : longSide
+            r.setPixelRatio(1)
+            r.setSize(w, h, false)
+            aa!.render(
+              settingsRef.current.antiAliasing ?? "smaa",
+              settingsRef.current.motionBlur ?? 0,
+              sharpRoots(),
+            )
+            const url = el.toDataURL("image/png")
+            void savePhoto(url).then((f) => photoSaved(!!f, f ?? ""))
+          } catch {
+            photoSaved(false, "")
+          } finally {
+            applyRendererResolution(r, camera, mount, settingsRef.current)
+          }
+        }
         const renderT1 = performance.now()
         spike.ph("render")
         hud.frame(
