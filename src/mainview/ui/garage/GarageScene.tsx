@@ -256,6 +256,7 @@ export function GarageScene(p: GarageSceneProps) {
       </div>
       {focusDef && (
         <button
+          data-pad-extra
           onClick={() => setFocus(null)}
           className={`${hudBtn} !absolute top-4 left-1/2 -translate-x-1/2`}
         >

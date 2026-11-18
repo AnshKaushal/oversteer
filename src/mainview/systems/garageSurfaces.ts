@@ -33,12 +33,11 @@ export const SURFACES: SurfaceDef[] = [
     w: 6.09,
     h: 3.7,
     px: [600, 364],
-    real: true,
   },
   {
     id: "drive",
     label: "Drive",
-    center: [8.76, 4.4, 0.5],
+    center: [8.76, 4.4, 3.6],
     normal: [-1, 0, 0],
     w: 2.1,
     h: 2.65,
@@ -119,8 +118,8 @@ const steel = () =>
   })
 
 /**
- * A wall-mounted monitor frame for a surface: steel bezel on a bracket, four
- * bolts and an overhead work-light bar. The DOM screen is warped over its face.
+ * A wall-mounted monitor frame for a surface: steel bezel on a bracket and an
+ * overhead work-light bar. The DOM screen is warped over its face.
  */
 export function buildFrame(
   def: SurfaceDef,
@@ -130,13 +129,6 @@ export function buildFrame(
   const mats: THREE.Material[] = []
   const mat = (m: THREE.Material) => (mats.push(m), m)
   const body = mat(steel())
-  const bolt = mat(
-    new THREE.MeshStandardMaterial({
-      color: 0x8a9099,
-      roughness: 0.4,
-      metalness: 0.9,
-    }),
-  )
   const glow = mat(
     new THREE.MeshStandardMaterial({
       color: 0x111111,
@@ -147,48 +139,95 @@ export function buildFrame(
   const screenBase = mat(
     new THREE.MeshStandardMaterial({ color: 0x0c0f14, roughness: 0.3 }),
   )
-  const depth = 0.14
-  const pad = 0.16
+  const pad = 0.24
+  const depth = 0.2
+  const plate = mat(
+    new THREE.MeshStandardMaterial({
+      color: 0x15181d,
+      roughness: 0.8,
+      metalness: 0.4,
+    }),
+  )
+  const trim = mat(
+    new THREE.MeshStandardMaterial({
+      color: 0x4a515b,
+      roughness: 0.35,
+      metalness: 0.85,
+    }),
+  )
+  const led = mat(
+    new THREE.MeshStandardMaterial({
+      color: 0x0a1a24,
+      emissive: 0x51a7d5,
+      emissiveIntensity: 2.6,
+    }),
+  )
+  const box = (
+    w: number,
+    h: number,
+    d: number,
+    x: number,
+    y: number,
+    z: number,
+    m: THREE.Material,
+  ) => {
+    const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
+    o.position.set(x, y, z)
+    g.add(o)
+    return o
+  }
+  const W = def.w
+  const H = def.h
   // Dark glass behind the DOM screen so it still reads as a monitor when the
   // DOM is hidden (edge-on or off-screen).
-  const face = new THREE.Mesh(
-    new THREE.BoxGeometry(def.w, def.h, 0.02),
-    screenBase,
-  )
-  face.position.z = -0.01
-  g.add(face)
-  const bezel = new THREE.Mesh(
-    new THREE.BoxGeometry(def.w + pad * 2, def.h + pad * 2, depth),
-    body,
-  )
-  bezel.position.z = -0.02 - depth / 2
-  g.add(bezel)
-  // Raised lip around the screen.
-  const lipT = 0.07
-  const lips: [number, number, number, number][] = [
-    [def.w + pad * 2, lipT, 0, def.h / 2 + lipT / 2],
-    [def.w + pad * 2, lipT, 0, -def.h / 2 - lipT / 2],
-    [lipT, def.h, def.w / 2 + lipT / 2, 0],
-    [lipT, def.h, -def.w / 2 - lipT / 2, 0],
-  ]
-  for (const [w, h, x, y] of lips) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05), body)
-    m.position.set(x, y, 0.005)
-    g.add(m)
-  }
-  const boltGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.05, 10)
-  boltGeo.rotateX(Math.PI / 2)
-  for (const sx of [-1, 1]) {
+  box(W, H, 0.02, 0, 0, -0.01, screenBase)
+  // Wall plate, standing off the wall on four posts.
+  const plateW = W + pad * 2 + 0.3
+  const plateH = H + pad * 2 + 0.3
+  box(plateW, plateH, 0.05, 0, 0, -depth - 0.12, plate)
+  const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.14, 10)
+  postGeo.rotateX(Math.PI / 2)
+  for (const sx of [-1, 1])
     for (const sy of [-1, 1]) {
-      const b = new THREE.Mesh(boltGeo, bolt)
-      b.position.set(
-        sx * (def.w / 2 + pad * 0.62),
-        sy * (def.h / 2 + pad * 0.62),
-        0.012,
+      const post = new THREE.Mesh(postGeo, trim)
+      post.position.set(
+        sx * (plateW / 2 - 0.09),
+        sy * (plateH / 2 - 0.09),
+        -depth - 0.04,
       )
-      g.add(b)
+      g.add(post)
     }
-  }
+  // Main housing behind the bezel.
+  box(W + pad * 2, H + pad * 2, depth, 0, 0, -0.02 - depth / 2, body)
+  // Front bezel: four steel bars framing the screen, standing proud of it.
+  const fz = 0.045
+  const fd = 0.1
+  box(W + pad * 2, pad, fd, 0, H / 2 + pad / 2, fz, body)
+  box(W + pad * 2, pad, fd, 0, -H / 2 - pad / 2, fz, body)
+  box(pad, H, fd, W / 2 + pad / 2, 0, fz, body)
+  box(pad, H, fd, -W / 2 - pad / 2, 0, fz, body)
+  // Inner chamfer: a thin bright step between the bezel and the screen.
+  const it = 0.035
+  box(W + it * 2, it, fd + 0.03, 0, H / 2 + it / 2, fz, trim)
+  box(W + it * 2, it, fd + 0.03, 0, -H / 2 - it / 2, fz, trim)
+  box(it, H, fd + 0.03, W / 2 + it / 2, 0, fz, trim)
+  box(it, H, fd + 0.03, -W / 2 - it / 2, 0, fz, trim)
+  // Accent LED line running round the outside of the bezel.
+  const lt = 0.03
+  const lo = pad - lt * 1.5
+  const lz = fz + fd / 2 + 0.004
+  box(W + pad * 2 - 0.08, lt, 0.012, 0, H / 2 + lo, lz, led)
+  box(W + pad * 2 - 0.08, lt, 0.012, 0, -H / 2 - lo, lz, led)
+  box(lt, H + 0.08, 0.012, W / 2 + lo, 0, lz, led)
+  box(lt, H + 0.08, 0.012, -W / 2 - lo, 0, lz, led)
+  // Corner brackets.
+  const cb = pad * 1.5
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) {
+      const cx = sx * (W / 2 + pad - cb / 2 + 0.03)
+      const cy = sy * (H / 2 + pad - cb / 2 + 0.03)
+      box(cb, cb, 0.05, cx, cy, fz + fd / 2 + 0.02, trim)
+    }
   // Work light on a short arm above the screen.
   const lightW = Math.min(def.w * 0.6, 2.2)
   const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.34), body)

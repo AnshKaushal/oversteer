@@ -3,7 +3,7 @@ import * as THREE from "three"
 const CAP = 800
 const SPRAY_CAP = 420
 const TURF_CAP = 360
-const WET_SMOKE_LEFT = 0.15
+const WET_SMOKE_LEFT = 0.05
 const GRAVITY = 9.8
 
 export type WetnessFn = (x: number, z: number) => number
@@ -231,7 +231,8 @@ export class TireSmoke {
       ? Math.max(0, Math.min(1, this.wetnessAt(p.x, p.z)))
       : 0
     if (wet > 0) this.spray.spawn(p, strength, wet)
-    const smokeShare = 1 - wet * (1 - WET_SMOKE_LEFT)
+    const smokeShare =
+      WET_SMOKE_LEFT + (1 - WET_SMOKE_LEFT) * (1 - wet) * (1 - wet)
     if (wet > 0 && Math.random() > smokeShare) return
     if (carVel && Math.hypot(carVel.x, carVel.z) < 5) this.stillSpawn = true
     this.emit(p, strength, carVel, false)
@@ -341,33 +342,39 @@ function getTurfTexture(): THREE.Texture {
     } else if (v === 1) {
       blade(cx, cy + 20, 44, (rnd() - 0.5) * 0.5, 4.5)
     } else if (v === 2) {
-      g.beginPath()
-      const pts = 9
-      for (let k = 0; k < pts; k++) {
-        const a = (k / pts) * Math.PI * 2
-        const r = 14 + rnd() * 9
-        g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
-      }
-      g.closePath()
-      g.fill()
-      for (let k = 0; k < 5; k++)
+      for (let k = 0; k < 6; k++)
         blade(
-          cx + (rnd() - 0.5) * 20,
-          cy + 6,
-          14 + rnd() * 8,
-          (rnd() - 0.5) * 2.4,
-          2,
+          cx + (rnd() - 0.5) * 22,
+          cy + 8 + rnd() * 6,
+          12 + rnd() * 10,
+          (rnd() - 0.5) * 2.6,
+          1.6 + rnd() * 1.2,
+        )
+      for (let k = 0; k < 4; k++)
+        blade(
+          cx + (rnd() - 0.5) * 14,
+          cy + 4,
+          8 + rnd() * 6,
+          (rnd() - 0.5) * 3,
+          1.2,
         )
     } else {
-      g.beginPath()
-      const pts = 6
-      for (let k = 0; k < pts; k++) {
-        const a = (k / pts) * Math.PI * 2 + rnd() * 0.4
-        const r = 9 + rnd() * 8
-        g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.8)
-      }
-      g.closePath()
-      g.fill()
+      for (let k = 0; k < 5; k++)
+        blade(
+          cx + (rnd() - 0.5) * 18,
+          cy + 6 + rnd() * 4,
+          10 + rnd() * 8,
+          (rnd() - 0.5) * 2.4,
+          1.4 + rnd() * 0.8,
+        )
+      for (let k = 0; k < 3; k++)
+        blade(
+          cx + (rnd() - 0.5) * 10,
+          cy + 2,
+          6 + rnd() * 5,
+          (rnd() - 0.5) * 3.2,
+          1,
+        )
     }
     g.restore()
   }
@@ -375,6 +382,100 @@ function getTurfTexture(): THREE.Texture {
   t.colorSpace = THREE.NoColorSpace
   t.needsUpdate = true
   turfTex = t
+  return t
+}
+
+let sprayTex: THREE.Texture | null = null
+export function getSprayTexture(): THREE.Texture {
+  if (sprayTex) return sprayTex
+  const cell = 64
+  const c = document.createElement("canvas")
+  c.width = c.height = cell * 2
+  const g = c.getContext("2d")!
+  let seed = 9001
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
+  g.fillStyle = "#fff"
+  for (let v = 0; v < 4; v++) {
+    const ox = (v % 2) * cell
+    const oy = Math.floor(v / 2) * cell
+    const cx = ox + cell / 2
+    const cy = oy + cell / 2
+    g.save()
+    g.beginPath()
+    g.rect(ox, oy, cell, cell)
+    g.clip()
+    if (v === 0) {
+      // fine mist: many tiny crisp dots
+      for (let k = 0; k < 50; k++) {
+        const x = ox + rnd() * cell
+        const y = oy + rnd() * cell
+        const r = 0.5 + rnd() * 1.3
+        g.beginPath()
+        g.arc(x, y, r, 0, Math.PI * 2)
+        g.fill()
+      }
+    } else if (v === 1) {
+      // a few larger round droplets
+      for (let k = 0; k < 8; k++) {
+        const x = ox + rnd() * cell
+        const y = oy + rnd() * cell
+        const r = 1.0 + rnd() * 1.2
+        g.beginPath()
+        g.arc(x, y, r, 0, Math.PI * 2)
+        g.fill()
+      }
+      // satellite mist around them
+      for (let k = 0; k < 20; k++) {
+        const x = ox + rnd() * cell
+        const y = oy + rnd() * cell
+        const r = 0.4 + rnd() * 0.9
+        g.beginPath()
+        g.arc(x, y, r, 0, Math.PI * 2)
+        g.fill()
+      }
+    } else if (v === 2) {
+      // medium droplets
+      for (let k = 0; k < 14; k++) {
+        const x = ox + rnd() * cell
+        const y = oy + rnd() * cell
+        const r = 1.2 + rnd() * 1.8
+        g.beginPath()
+        g.arc(x, y, r, 0, Math.PI * 2)
+        g.fill()
+      }
+    } else {
+      // medium droplets, varied sizes
+      for (let k = 0; k < 18; k++) {
+        const x = ox + rnd() * cell
+        const y = oy + rnd() * cell
+        const r = 0.9 + rnd() * 1.3
+        g.beginPath()
+        g.arc(x, y, r, 0, Math.PI * 2)
+        g.fill()
+      }
+    }
+    g.globalCompositeOperation = "destination-in"
+    const mask = g.createRadialGradient(
+      cx,
+      cy,
+      cell * 0.05,
+      cx,
+      cy,
+      cell * 0.48,
+    )
+    mask.addColorStop(0, "rgba(255,255,255,1)")
+    mask.addColorStop(1, "rgba(255,255,255,0)")
+    g.fillStyle = mask
+    g.fillRect(ox, oy, cell, cell)
+    g.restore()
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.NoColorSpace
+  t.needsUpdate = true
+  sprayTex = t
   return t
 }
 
@@ -386,41 +487,65 @@ class Spray {
   private span = new Float32Array(SPRAY_CAP)
   private size = new Float32Array(SPRAY_CAP)
   private alpha = new Float32Array(SPRAY_CAP)
+  private rot = new Float32Array(SPRAY_CAP)
+  private rotSpd = new Float32Array(SPRAY_CAP)
+  private variant = new Float32Array(SPRAY_CAP)
   private posAttr = new THREE.BufferAttribute(this.pos, 3)
   private sizeAttr = new THREE.BufferAttribute(this.size, 1)
   private alphaAttr = new THREE.BufferAttribute(this.alpha, 1)
+  private rotAttr = new THREE.BufferAttribute(this.rot, 1)
+  private varAttr = new THREE.BufferAttribute(this.variant, 1)
   private cursor = 0
 
   constructor() {
     for (let i = 0; i < SPRAY_CAP; i++) this.pos[i * 3 + 1] = -100
-    this.posAttr.setUsage(THREE.DynamicDrawUsage)
-    this.sizeAttr.setUsage(THREE.DynamicDrawUsage)
-    this.alphaAttr.setUsage(THREE.DynamicDrawUsage)
+    for (const a of [
+      this.posAttr,
+      this.sizeAttr,
+      this.alphaAttr,
+      this.rotAttr,
+      this.varAttr,
+    ])
+      a.setUsage(THREE.DynamicDrawUsage)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute("position", this.posAttr)
     geo.setAttribute("aSize", this.sizeAttr)
     geo.setAttribute("aAlpha", this.alphaAttr)
+    geo.setAttribute("aRot", this.rotAttr)
+    geo.setAttribute("aVar", this.varAttr)
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: {},
+      uniforms: { uMap: { value: getSprayTexture() } },
       vertexShader: `
         attribute float aSize;
         attribute float aAlpha;
+        attribute float aRot;
+        attribute float aVar;
         varying float vAlpha;
+        varying float vRot;
+        varying float vVar;
         void main() {
           vAlpha = aAlpha;
+          vRot = aRot;
+          vVar = aVar;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = aSize * (240.0 / max(1.0, -mv.z));
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
+        uniform sampler2D uMap;
         varying float vAlpha;
+        varying float vRot;
+        varying float vVar;
         void main() {
-          vec2 uv = gl_PointCoord - 0.5;
-          float d = length(uv);
-          float soft = smoothstep(0.5, 0.08, d);
-          gl_FragColor = vec4(vec3(0.82, 0.9, 0.98), soft * vAlpha);
+          vec2 p = gl_PointCoord - 0.5;
+          float c = cos(vRot), s = sin(vRot);
+          vec2 q = vec2(c * p.x - s * p.y, s * p.x + c * p.y) + 0.5;
+          if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) discard;
+          vec2 cell = vec2(mod(vVar, 2.0), floor(vVar / 2.0));
+          float a = texture2D(uMap, (cell + q) * 0.5).a * vAlpha;
+          gl_FragColor = vec4(vec3(0.82, 0.9, 0.98), a);
         }`,
     })
     this.points = new THREE.Points(geo, mat)
@@ -446,6 +571,9 @@ class Spray {
       this.span[i] = 0.45 + Math.random() * 0.5
       this.life[i] = this.span[i]
       this.size[i] = 0.22 + Math.random() * 0.2
+      this.rot[i] = Math.random() * Math.PI * 2
+      this.rotSpd[i] = (Math.random() - 0.5) * 4
+      this.variant[i] = Math.floor(Math.random() * 4)
     }
   }
 
@@ -469,11 +597,14 @@ class Spray {
         this.pos[i3 + 1] + this.vel[i3 + 1] * dt,
       )
       this.pos[i3 + 2] += this.vel[i3 + 2] * dt
+      this.rot[i] += this.rotSpd[i] * dt
       this.alpha[i] = 0.8 * Math.min(1, (this.life[i] / this.span[i]) * 1.6)
     }
     this.posAttr.needsUpdate = true
     this.sizeAttr.needsUpdate = true
     this.alphaAttr.needsUpdate = true
+    this.rotAttr.needsUpdate = true
+    this.varAttr.needsUpdate = true
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { SURFACES, type SurfaceId } from "../../systems/garageSurfaces"
 import { getBoardElement, getPillElement, pillPositions } from "../../systems/garageBoard"
 import { getFocus, getHot, setFocus, setHot } from "../../systems/garageFocus"
@@ -114,15 +114,22 @@ function navigateOrbit(dir: Dir) {
 function navigateBoard(id: SurfaceId, dir: Dir) {
   const root = getBoardElement(id)
   if (!root) return
-  const els = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (e) => {
-      const r = e.getBoundingClientRect()
-      return r.width > 1 && r.height > 1
-    },
-  )
+  const shown = (e: HTMLElement) => {
+    const r = e.getBoundingClientRect()
+    return r.width > 1 && r.height > 1
+  }
+  // The "Garage /" back button lives outside the board but must be reachable.
+  const extras = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-pad-extra]"),
+  ).filter(shown)
+  const els = [
+    ...Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(shown),
+    ...extras,
+  ]
   if (!els.length) return
   const active = document.activeElement as HTMLElement | null
-  const cur = active && root.contains(active) ? active : null
+  const cur =
+    active && (root.contains(active) || extras.includes(active)) ? active : null
   // Sliders: left/right adjust the value, up/down move between rows.
   if (cur instanceof HTMLInputElement && cur.type === "range") {
     if (dir === "left" || dir === "right") {
@@ -183,7 +190,7 @@ function activate() {
   }
   const a = document.activeElement as HTMLElement | null
   const root = getBoardElement(f)
-  if (a && root?.contains(a)) {
+  if (a && (root?.contains(a) || a.hasAttribute("data-pad-extra"))) {
     if (a instanceof HTMLInputElement && a.type === "range") return
     a.click()
   }
@@ -205,6 +212,8 @@ function back() {
  * bumpers cycle cars.
  */
 export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
+  const onCarRef = useRef(onCar)
+  onCarRef.current = onCar
   useEffect(() => {
     if (!open) return
     let raf = 0
@@ -277,8 +286,8 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
         if (eRB) dyno.shift(1)
       } else {
         if (getFocus() === null) {
-          if (eLB) onCar(-1)
-          if (eRB) onCar(1)
+          if (eLB) onCarRef.current(-1)
+          if (eRB) onCarRef.current(1)
         }
       }
     }
@@ -287,5 +296,5 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
       cancelAnimationFrame(raf)
       dyno.setPad(0, 0)
     }
-  }, [open, onCar])
+  }, [open])
 }

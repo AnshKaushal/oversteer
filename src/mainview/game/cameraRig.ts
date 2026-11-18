@@ -159,7 +159,7 @@ export class CameraRig {
         const h = _fc[0].distanceTo(_fc[3])
         const tanV = Math.tan(THREE.MathUtils.degToRad(58 / 2))
         const dist =
-          Math.max(h / 2 / tanV, w / 2 / (tanV * camera.aspect)) * 1.08
+          Math.max(h / 2 / tanV, w / 2 / (tanV * camera.aspect)) * 1.4
         this.showDesired.copy(_fCenter).addScaledVector(n, dist)
         _fLook.copy(_fCenter)
       } else if (g) {

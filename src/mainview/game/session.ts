@@ -272,6 +272,13 @@ export function startSession(ctx: SessionCtx): () => void {
         loadTuning(carIdRef.current),
       )
 
+      // The physics car is fixed for this session. The garage only swaps the
+      // visual, so in-place starts must bail if car or tuning changed since.
+      const builtKey = `${carIdRef.current}|${JSON.stringify(loadTuning(carIdRef.current))}`
+      const carStale = () =>
+        builtKey !==
+        `${carIdRef.current}|${JSON.stringify(loadTuning(carIdRef.current))}`
+
       // rivalCount/raceDistance/gridCount are reassigned when a race starts in
       // place (enterRace below).
       let {
@@ -431,6 +438,8 @@ export function startSession(ctx: SessionCtx): () => void {
       }
       // Take the garage out of the live scene (menu -> play without a rebuild).
       const leaveGarage = () => {
+        // The garage shows the car 1.15x; every car on the road is 1x.
+        visual.group.scale.setScalar(1)
         garage?.dispose()
         garage = null
         rig.garage = null
@@ -489,6 +498,7 @@ export function startSession(ctx: SessionCtx): () => void {
           // goes away and traffic starts. The caller has set startedRef.
           enterFreeRoam: (mapId: string) => {
             if (disposed || !garage || !startedRef.current) return false
+            if (carStale()) return false
             if (mapId !== "highway" || raceActive || isNetRace) return false
             if (dyno.active || getFocus() === "dyno") return false
             leaveGarage()
@@ -502,6 +512,7 @@ export function startSession(ctx: SessionCtx): () => void {
           // hold the setup.
           enterRace: async (mapId: string) => {
             if (disposed || !garage || startedRef.current) return false
+            if (carStale()) return false
             if (mapId !== "highway" || !map.map.features.races) return false
             if (raceActive || isNetRace || net?.roomId) return false
             if (dyno.active || getFocus() === "dyno") return false

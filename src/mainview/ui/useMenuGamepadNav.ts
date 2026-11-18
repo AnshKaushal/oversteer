@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react"
+import { useEffect, useRef, type RefObject } from "react"
 
 type Dir = "up" | "down" | "left" | "right"
 const VEC: Record<Dir, [number, number]> = {
@@ -9,7 +9,7 @@ const VEC: Record<Dir, [number, number]> = {
 }
 const PAD_ATTR = "data-pad-focus"
 const FOCUSABLE =
-  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]'
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, a[href], [role="button"], [tabindex="0"]'
 
 interface Pt {
   key: HTMLElement
@@ -68,6 +68,14 @@ export function useMenuGamepadNav(
   onBack?: () => void,
   onShoulder?: (dir: -1 | 1) => void,
 ) {
+  // Callers pass fresh closures every render. Keeping them in refs lets the
+  // poll loop (and its held-button memory) survive re-renders: restarting it
+  // made a held button look like a new press after every state update.
+  const backRef = useRef(onBack)
+  const shoulderRef = useRef(onShoulder)
+  backRef.current = onBack
+  shoulderRef.current = onShoulder
+
   useEffect(() => {
     if (!open) return
     let raf = 0
@@ -214,9 +222,9 @@ export function useMenuGamepadNav(
           }
         }
       }
-      if (eB && onBack) onBack()
-      if (eLB && onShoulder) onShoulder(-1)
-      if (eRB && onShoulder) onShoulder(1)
+      if (eB) backRef.current?.()
+      if (eLB) shoulderRef.current?.(-1)
+      if (eRB) shoulderRef.current?.(1)
     }
 
     raf = requestAnimationFrame(loop)
@@ -224,5 +232,5 @@ export function useMenuGamepadNav(
       cancelAnimationFrame(raf)
       clearPadFocus(containerRef.current)
     }
-  }, [open, containerRef, onBack, onShoulder])
+  }, [open, containerRef])
 }

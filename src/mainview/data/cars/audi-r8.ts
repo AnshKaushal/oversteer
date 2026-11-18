@@ -441,7 +441,7 @@ export const audiR8: CarSpec = {
     },
   ],
   pivots: {
-    names: ["Plane003", "Plane006", "Plane009", "Plane012"],
+    pattern: "^Wheel_[FR][LR]$",
   },
   dash: {
     maxRpm: 9000,
@@ -449,7 +449,7 @@ export const audiR8: CarSpec = {
     maxKmh: 360,
   },
   defaultTint: null,
-  paintMatch: ["^body$"],
+  paintMatch: ["^Body_Paint"],
   tested: {
     zeroToHundredS: 3.8,
     topSpeedKmh: 338,

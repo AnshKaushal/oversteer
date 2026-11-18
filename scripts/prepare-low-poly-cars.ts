@@ -59,6 +59,10 @@ interface CarRule {
   pureBlack?: (hex: string, x: number, y: number, z: number) => boolean
   /** keep the file's own "Body_Paint" material (single paint) on re-runs */
   keepPaint?: boolean
+  /** after classifying, swap the roles: lens <-> indicator (lights/ampF, tail/ampR) */
+  swapAmp?: boolean
+  /** with swapAmp: lens triangles that stay in the interior (not the frame) */
+  pod?: (verts: number[][], z: number) => boolean
 }
 
 const WHITE = "#ffffff"
@@ -249,6 +253,36 @@ const RULES: Record<string, CarRule> = {
       if (hex === RED && z < 0) return "tail"
       if (hex === "#141414" && z > 150 && x >= 54 && x <= 81 && y >= 60 && y <= 84)
         return "ampF"
+      return null
+    },
+  },
+  // R8 (2008): the white / red outer frame of each lamp is the indicator; the
+  // dark interior (pods + housing, found as the dark triangles right beside
+  // the frame) is the headlight / tail lamp. Paint is the three oranges.
+  "audi_r8.glb": {
+    paint: ["#f09500", "#ffb626", "#cb7d00"],
+    ref: "#f09500",
+    ampFColor: "#ffffff",
+    ampRColor: "#ff0000",
+    ampNear: 3,
+    swapAmp: true,
+    // roles are swapped afterwards (see swapAmp): "lights"/"tail" here is the
+    // indicator frame, "ampF"/"ampR" the lamp interior; `pod` pulls the lens
+    // pods back into the interior
+    pod: (verts, z) => {
+      const inBox = (b: number[]) =>
+        verts.every((v) => v[0] >= b[0] && v[0] <= b[1] && v[1] >= b[2] && v[1] <= b[3])
+      return z > 0
+        ? inBox([50.5, 80.6, 52.2, 59.7])
+        : inBox([45, 62.7, 74, 80.2]) || inBox([64.5, 79.6, 72.2, 78.2])
+    },
+    lamp: (hex, x, y, z) => {
+      if (hex === WHITE && z > 0) return "lights"
+      if (hex === RED && z < 0) return "tail"
+      if (hex === "#141414" || hex === "#2d2d2d") {
+        if (z > 150 && x >= 43 && x <= 85 && y >= 49 && y <= 64) return "ampF"
+        if (z < -150 && x >= 38 && x <= 86 && y >= 62 && y <= 84) return "ampR"
+      }
       return null
     },
   },
@@ -602,6 +636,7 @@ function prepare(file: string): Buffer {
     const triSrc: string[] = prims.flatMap((p, k) =>
       Array.from({ length: p.idx.length / 3 }, () => srcNames[k]),
     )
+    let whiteUv: number[] | null = null
     const groups = new Map<number, number[]>()
     const parts: (Part | null)[] = []
     const cents: number[][] = []
@@ -621,6 +656,7 @@ function prepare(file: string): Buffer {
         z += src.pos[i * 3 + 2] / 3
       }
       const hex = pal.at(u, v)
+      if (hex === WHITE && !whiteUv) whiteUv = [u, v]
       const ax = Math.abs(x)
       const verts = [0, 1, 2].map((k) => {
         const i = src.idx[t * 3 + k]
@@ -663,6 +699,21 @@ function prepare(file: string): Buffer {
           )
         const ok = rule.ampTight ? tverts[t].every(reach) : tverts[t].some(reach)
         if (!ok) parts[t] = null
+      })
+    }
+    if (rule.swapAmp) {
+      const swap: Record<string, Part> = {
+        lights: "ampF",
+        ampF: "lights",
+        tail: "ampR",
+        ampR: "tail",
+      }
+      parts.forEach((q, t) => {
+        if (!q) return
+        const pod =
+          (q === "lights" || q === "tail") &&
+          rule.pod?.(tverts[t], cents[t][2])
+        parts[t] = pod ? q : swap[q]
       })
     }
     if (rule.ampNear && process.env.DEBUG_NEAR) {
@@ -722,9 +773,13 @@ function prepare(file: string): Buffer {
             su += prim.uv[i * 2]
             sv += prim.uv[i * 2 + 1]
           }
+          // the white cell itself when a lens is not made of white triangles
+          // (swapped roles), else the mean of the lens's own cells
+          const wu = whiteUv ? whiteUv[0] : su / n
+          const wv = whiteUv ? whiteUv[1] : sv / n
           for (let i = 0; i < n; i++) {
-            prim.uv[i * 2] = su / n
-            prim.uv[i * 2 + 1] = sv / n
+            prim.uv[i * 2] = rule.swapAmp ? wu : su / n
+            prim.uv[i * 2 + 1] = rule.swapAmp ? wv : sv / n
           }
         }
         return prim

@@ -111,7 +111,7 @@ export const ferrariF12: CarSpec = {
       },
     },
     transmission: {
-      gearRatios: [4.64, 3.09, 2.26, 1.76, 1.42, 1.16, 1.04, 0.92],
+      gearRatios: [4.64, 3.09, 2.26, 1.76, 1.3, 1.04, 0.82, 0.654],
       finalDriveRatio: 3.5,
       reverseRatio: 3.2,
       shiftTimeAuto: 0.1,

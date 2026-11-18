@@ -88,10 +88,12 @@ export const INDICATOR_ZONES: Record<string, IndicatorZone[]> = {
     { end: "front", mesh: "^Indicator_Amber", idle: 0x141414 },
     { end: "rear", mesh: "^Indicator_Amber", idle: 0x141414 },
   ],
-  // R8 rear: the thin lines are the indicator and glow red like the brake boxes
+  // R8 (2008): the outer frame of each lamp is the indicator (light grey at
+  // rest, amber when flashing; the rear frame glows red like the tail lamp).
+  // The interior is the headlight / tail lamp proper (not a zone)
   "audi_r8.glb": [
-    { end: "front", mesh: "headlightGlass", dx: [0, 0.3] },
-    { end: "rear", mesh: "rearlight", glow: 0xff0000 },
+    { end: "front", mesh: "^Indicator_Amber", idle: 0xb4b8c0 },
+    { end: "rear", mesh: "^Indicator_Amber", glow: 0xff0000, brake: true },
   ],
 
   // Aventador: the amber lens in each headlight (front, flashes amber) and the
