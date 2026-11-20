@@ -1,4 +1,4 @@
-import * as RAPIER from "@dimforge/rapier3d-compat"
+import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { CarPhysicsConfig } from "../../data/schema"
 import { FIXED_DT, WORLD } from "../../data/world"
 
@@ -8,7 +8,12 @@ let initP: Promise<typeof RAPIER> | null = null
 export function initPhysics(): Promise<typeof RAPIER> {
   if (R) return Promise.resolve(R)
   if (!initP) {
-    initP = RAPIER.init().then(() => RAPIER)
+    // Dynamic import keeps Rapier's inlined WASM (~4 MB) out of the entry
+    // chunk so the UI can render while it downloads and compiles.
+    initP = import("@dimforge/rapier3d-compat").then(async (mod) => {
+      await mod.init()
+      return mod
+    })
   }
   return initP.then((mod) => {
     R = mod
