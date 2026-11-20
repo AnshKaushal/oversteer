@@ -84,7 +84,7 @@ export function IntroScreen({
         }}
       />
       <div ref={rootRef} className="absolute inset-0">
-        {/* corner brackets */}
+        {}
         <span className="pointer-events-none absolute left-5 top-5 h-5 w-5 border-l-2 border-t-2 border-white/30 md:left-8 md:top-8" />
         <span className="pointer-events-none absolute bottom-5 right-5 h-5 w-5 border-b-2 border-r-2 border-white/30 md:bottom-8 md:right-8" />
         <span className="pointer-events-none absolute left-5 bottom-5 h-5 w-5 border-l-2 border-b-2 border-white/30 md:left-8 md:bottom-8" />

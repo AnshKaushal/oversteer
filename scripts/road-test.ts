@@ -1,8 +1,6 @@
 import * as THREE from "three"
 import { roadCenterX } from "../src/mainview/systems/WorldManager"
 
-// Mirror of the ribbon maths in WorldManager (kept in sync deliberately: this
-// asserts the ALGORITHM, not the private implementation).
 const RIB_DIV = 16
 const SEG = 50
 const WIDTH = 12
@@ -33,15 +31,11 @@ const check = (name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-// 1. Adjacent segments must share their boundary cross-sections EXACTLY.
-//    The old flat-tile road rotated each tile to the tangent at its MIDPOINT,
-//    so the seam between two tiles opened by several metres.
 let worstSeam = 0,
   worstAt = 0
 for (let i = 1; i < 400; i++) {
   const a = ribbonVerts(i * SEG)
   const b = ribbonVerts((i - 1) * SEG)
-  // segment i starts where segment i-1 ends
   const gapL = a[0].distanceTo(b[b.length - 2])
   const gapR = a[1].distanceTo(b[b.length - 1])
   const g = Math.max(gapL, gapR)
@@ -56,8 +50,6 @@ check(
   `worst seam = ${worstSeam.toExponential(2)}m at s=${worstAt}`,
 )
 
-// 2. The gap the OLD approach produced, for comparison: two flat 50m tiles
-//    rotated to the tangent at their own midpoints.
 let worstOld = 0
 for (let i = 1; i < 400; i++) {
   const sMidA = (i - 0.5) * SEG,
@@ -65,10 +57,8 @@ for (let i = 1; i < 400; i++) {
   const yaw = (s: number) =>
     Math.atan2((roadCenterX(s + 4) - roadCenterX(s - 4)) / 8, 1)
   const corner = (sMid: number) => {
-    // far end of the tile, +half width along its rotated normal
     const dx = (roadCenterX(sMid + 4) - roadCenterX(sMid - 4)) / 8
     const y = yaw(sMid)
-    // tile local +z (towards the seam) then rotate about z to follow yaw
     const dz = SEG / 2
     const nx = Math.cos(y),
       nz = Math.sin(y)
@@ -89,7 +79,6 @@ check(
   `old seam error was up to ${worstOld.toFixed(2)}m`,
 )
 
-// 3. Road must keep constant width through curves (no pinching).
 let minW = Infinity,
   maxW = -Infinity
 for (let i = 0; i < 500; i++) {
@@ -106,7 +95,6 @@ check(
   `min=${minW.toFixed(3)} max=${maxW.toFixed(3)} target=${WIDTH}`,
 )
 
-// 4. Ribbon must not self-intersect or flip inside out on the tightest curve.
 let maxTwist = 0
 for (let i = 0; i < 500; i++) {
   const v = ribbonVerts(i * SEG)
@@ -125,7 +113,6 @@ check(
   `max turn between consecutive cross-sections = ${(maxTwist * 57.3).toFixed(2)}deg`,
 )
 
-// 5. Normals must point UP (road lit from above, not from below).
 const geo = new THREE.BufferGeometry()
 const rows = RIB_DIV + 1
 const pos = new Float32Array(rows * 2 * 3)
@@ -162,7 +149,6 @@ check(
   `first normal = (${n.getX(0).toFixed(3)}, ${n.getY(0).toFixed(3)}, ${n.getZ(0).toFixed(3)})`,
 )
 
-// 6. UVs tile continuously along the road (asphalt has no visible banding).
 let uvV0 = Infinity,
   uvV1 = -Infinity
 for (let j = 0; j < rows; j++) {

@@ -37,10 +37,6 @@ export function makeGlowTexture(
   return t
 }
 
-/**
- * Light-bloom sprite: tight hot core, quick exponential falloff and a faint
- * four-point streak. Reads as an emissive bulb instead of a flat blurry disc.
- */
 export function makeBloomTexture(size = 128, star = 0.3): THREE.DataTexture {
   const data = new Uint8Array(size * size * 4)
   const sstep = (a: number, b: number, x: number) => {

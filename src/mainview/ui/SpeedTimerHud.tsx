@@ -45,7 +45,6 @@ function Row({ r }: { r: RunView }) {
   )
 }
 
-/** 0-100 style timers, sitting above the right-hand dial (clear of it). */
 export function SpeedTimerHud() {
   const runs = useStore(speedTimer.store)
   if (!runs.length) return null

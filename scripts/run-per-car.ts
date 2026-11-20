@@ -1,12 +1,3 @@
-/**
- * Runs a physics script once per registry car (CAR=<id>) and prints one
- * pass/fail line per car. Usage:
- *   bun scripts/run-per-car.ts scripts/smoke-test.ts [--only id,id] [--verbose]
- * Failing checks listed in scripts/known-failures.json are reported as
- * "known" and do not fail the run; any other failing check does.
- *   --record   rewrite this script's entry in known-failures.json from the
- *              current run (use only to document the state of a baseline)
- */
 import { CARS } from "./lib/cars"
 
 const KNOWN_PATH = new URL("./known-failures.json", import.meta.url).pathname
@@ -46,7 +37,6 @@ for (const def of CARS) {
   ])
   const code = await p.exited
   const text = out + err
-  // One name per failed check: the text between "FAIL | " and the next " | ".
   const failed_checks = [
     ...new Set(
       text

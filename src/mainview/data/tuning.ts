@@ -7,28 +7,19 @@ export interface Tuning {
   rearBias: number
   downforce: number
   gripBias: number
-  /** Engine output (ECU / boost map). */
   power: number
-  /** Rear-diff lock: power and coast lock rate, preload. */
   diffLock: number
-  /** Damper rate on top of the spring-linked damping. */
   damping: number
-  /** Overall brake force. */
   brakeForce: number
-  /** >1 shifts braking forward, <1 rearward. */
   brakeBias: number
-  /** Steering lock. */
   steerAngle: number
-  /** Camber/toe: 1 = stock, each 0.1 = ALIGN_DEG/10 degrees of change. */
   camberFront: number
   camberRear: number
   toeFront: number
   toeRear: number
-  /** Drift assist: <1 lets drifts run wider and longer, >1 corrects sooner. */
   driftAssist: number
 }
 
-/** Degrees of alignment change per 1.0 of slider offset. */
 export const ALIGN_DEG = { camber: 3, toe: 0.4 }
 
 export const STOCK_TUNING: Tuning = {
@@ -69,7 +60,6 @@ export const TUNING_LIMITS: Record<keyof Tuning, [number, number]> = {
   driftAssist: [0, 1.2],
 }
 
-/** Drift-assist slider at or below this value turns the assist fully off. */
 export const DRIFT_ASSIST_OFF = 0.02
 
 const KEY = "oversteer_tuning"
@@ -112,7 +102,6 @@ function snapshot(carId: string): Tuning {
   if (!c || c.key !== key) snaps.set(carId, (c = { key, t }))
   return c.t
 }
-/** The saved tuning for a car; every board using it updates together. */
 export const useTuning = (carId: string) =>
   useSyncExternalStore(subscribe, () => snapshot(carId))
 

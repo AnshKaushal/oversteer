@@ -70,7 +70,6 @@ export function dressHill(
           Math.floor(this.rand(seed + k * 29) * rockVars.length) %
             rockVars.length
         ]
-      // small / medium / big rocks, mostly small and medium
       const sz = this.rand(seed + k * 59)
       const u = this.rand(seed + k * 31)
       sc = sz < 0.5 ? 0.7 + u * 0.5 : sz < 0.85 ? 1.4 + u * 0.8 : 2.8 + u * 1.4
@@ -100,7 +99,6 @@ export function dressHill(
     m.quaternion.copy(q)
     m.position.copy(s.pos)
     if (pv.category === "rock") {
-      // lodge it in: bury 35-60% of its height, measured from its base
       const g = pv.im.geometry as THREE.BufferGeometry
       if (!g.boundingBox) g.computeBoundingBox()
       const bb = g.boundingBox!

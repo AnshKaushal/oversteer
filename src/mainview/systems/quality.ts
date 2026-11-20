@@ -76,8 +76,6 @@ export class AutoQuality {
     capMs = 0,
   ): number | null {
     if (frameMs <= 0) return null
-    // With a frame cap every frame takes >= capMs, so "fast" can't be judged
-    // by an absolute frame time: judge against the cap itself.
     const target = capMs
       ? Math.max(AutoQuality.TARGET_MS, capMs * 1.12)
       : AutoQuality.TARGET_MS

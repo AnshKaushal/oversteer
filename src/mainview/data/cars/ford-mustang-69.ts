@@ -453,8 +453,6 @@ export const fordMustang69: CarSpec = {
   },
   defaultTint: null,
   paintMatch: ["^Body_Paint"],
-  // Real car: Mach 1 428 Cobra Jet, 335 hp quoted (about 400 real) and
-  // 597 Nm; roughly 6 s to 100 km/h, about 200 km/h flat out
   tested: {
     zeroToHundredS: 5,
     topSpeedKmh: 340,

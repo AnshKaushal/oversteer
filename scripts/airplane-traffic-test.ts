@@ -1,12 +1,3 @@
-/**
- * Runs the flyby the way the game does: the traffic is loaded over HTTP,
- * a pass is started, the aircraft is flown and its propeller is turned.
- *
- * The browser bits are stubbed: a canvas for the shadow texture and a
- * ProgressEvent for three.js's file loader.
- *
- * Run: bun scripts/airplane-traffic-test.ts
- */
 import * as THREE from "three"
 import { AirplaneFlyby, AIRCRAFT } from "../src/mainview/systems/AirplaneFlyby"
 import { roadCenterX, roadYaw } from "../src/mainview/systems/WorldManager"
@@ -19,7 +10,6 @@ function check(ok: boolean, label: string, detail = "") {
   )
 }
 
-// The shadow texture needs a canvas; three's loader needs a progress event.
 const ctx2d = {
   fillStyle: "",
   fillRect: () => {},
@@ -44,7 +34,6 @@ const ctx2d = {
   total = 0
 }
 
-// A seeded random, so the traffic the test sees is the same every run.
 let seed = 20240521
 const rand = () => {
   seed = (seed * 1664525 + 1013904223) >>> 0
@@ -78,7 +67,6 @@ const flyby = new AirplaneFlyby(() => 0)
 const loaded = await flyby.init(scene, base)
 check(loaded, "the traffic loaded")
 
-// Every aircraft is in the scene, hidden until it flies.
 const roots = scene.children.filter((c) => c.type === "Group")
 check(
   roots.length >= AIRCRAFT.length,
@@ -86,15 +74,12 @@ check(
   `${roots.length} groups for ${AIRCRAFT.length} aircraft`,
 )
 
-// Fly a lot of passes and see what turns up in the sky.
 const seen = new Set<string>()
 let propTurned = 0
 let passes = 0
-// Take-offs and landings are long now, so give the sky five minutes.
 for (let step = 0; step < 60 * 300; step++) {
   const dt = 1 / 60
   flyby.update(dt, carS, 40, true)
-  // Look for the aircraft that is in the air and note its props.
   for (const ac of (flyby as any).aircraft as any[]) {
     if (!ac.root.visible) continue
     seen.add(ac.spec.file)
@@ -114,7 +99,6 @@ check(
 check(passes > 10, "passes kept running", `${passes} frames of flying`)
 check(propTurned > 0, "a propeller turned")
 
-// The Cessna's propeller is the one that had to be cut out of the body.
 {
   const ac = ((flyby as any).aircraft as any[]).find(
     (a) => a.spec.prop === "merged",
@@ -142,18 +126,14 @@ check(propTurned > 0, "a propeller turned")
   }
 }
 
-// The propeller has to turn at a steady rate, not wind itself up.
 {
   const ac = ((flyby as any).aircraft as any[]).find(
     (a) => a.spec.prop === "merged",
   )
   if (ac) {
     const node = ac.props[0].node
-    // How far the prop turns in one frame, measured against the frame
-    // before it.
     const steps: number[] = []
     let prev = node.quaternion.clone()
-    // Wait for the Cessna's turn, then watch it for a few frames.
     for (let i = 0; i < 60 * 600 && steps.length < 25; i++) {
       flyby.update(1 / 60, carS, 40, true)
       if (!ac.root.visible) {
@@ -173,7 +153,6 @@ check(propTurned > 0, "a propeller turned")
   }
 }
 
-// The world only ever has one aircraft in the air.
 {
   const visible = ((flyby as any).aircraft as any[]).filter(
     (a) => a.root.visible,
@@ -185,8 +164,6 @@ check(propTurned > 0, "a propeller turned")
   )
 }
 
-// The airfield: the runway holds the whole landing roll-out and the start
-// of a take-off, and stays well clear of the main road.
 {
   const { layoutAirport, airportBlocked, RUNWAY_LENGTH, RUNWAY_WIDTH } =
     await import("../src/mainview/systems/Airport")
@@ -213,7 +190,6 @@ check(propTurned > 0, "a propeller turned")
           Math.abs(across) - RUNWAY_WIDTH / 2,
         )
       }
-      // The landing roll: touchdown to a full stop.
       for (
         let t = 0.85 * landing.length;
         t < 0.85 * landing.length + 600;
@@ -222,12 +198,10 @@ check(propTurned > 0, "a propeller turned")
         const st = passState("landing", t, landing, 0)
         worstOff = Math.max(worstOff, inRunway(st.x, st.z))
       }
-      // The take-off roll.
       for (let t = -600; t < -300; t += 10) {
         const st = passState("takeoff", t, takeoff, 0)
         worstOff = Math.max(worstOff, inRunway(st.x, st.z))
       }
-      // The runway's distance from the road.
       for (let a = -RUNWAY_LENGTH / 2; a <= RUNWAY_LENGTH / 2; a += 50) {
         const x = lay.cx + lay.ux * a
         const z = lay.cz + lay.uz * a
@@ -248,12 +222,10 @@ check(propTurned > 0, "a propeller turned")
     "the runway keeps clear of the road",
     `${minRoad.toFixed(0)} m`,
   )
-  // The lamps light at night only.
   {
     const { AirportView } = await import("../src/mainview/systems/Airport")
     const lay = layoutAirport(makePath(900, 60 * DEG, 1, 1))
     const view = new AirportView(lay)
-    // The runway lamps' halo is the biggest set of points in the airfield.
     const halos: THREE.Points[] = []
     view.group.traverse((o) => {
       if (o.type === "Points") halos.push(o as THREE.Points)
@@ -279,7 +251,6 @@ check(propTurned > 0, "a propeller turned")
       "the airfield has runway, taxi and approach lamps",
       `${count}`,
     )
-    // Fence, light towers and the control tower.
     let posts = 0
     view.group.traverse((o) => {
       if ((o as THREE.InstancedMesh).isInstancedMesh)
@@ -296,7 +267,6 @@ check(propTurned > 0, "a propeller turned")
       "the control tower stands tall",
       `${box.max.y.toFixed(0)} m`,
     )
-    // Every layout that fits has its fence and gate clear of the road.
     let nearest = Infinity
     for (let sC = 400; sC < 2400; sC += 200) {
       for (const deg of [40, 60, 90]) {
@@ -331,8 +301,6 @@ check(propTurned > 0, "a propeller turned")
   )
 }
 
-// A parked car gets traffic from one airfield only, landing and taking
-// off in turn.
 {
   const parked = new AirplaneFlyby(() => 0)
   await parked.init(new THREE.Scene(), base)
@@ -350,7 +318,6 @@ check(propTurned > 0, "a propeller turned")
       views.add((parked as any).airport?.view)
     }
   }
-  // Cruises may come before the first airfield; from then on it is all airfield traffic.
   const first = modes.findIndex((m) => m !== "cruise")
   const air = first < 0 ? [] : modes.slice(first)
   check(modes.length >= 4, "a parked car sees several flights", modes.join(","))

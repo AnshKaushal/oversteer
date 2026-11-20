@@ -1,8 +1,6 @@
 import type { SVGProps } from "react"
 
-/** Number of trailing copies drawn behind a moving needle. */
 export const BLUR_GHOSTS = 5
-/** Simulated shutter time: the smear spans this much of the needle's travel. */
 const EXPOSURE_S = 0.05
 const MAX_TRAIL_DEG = 16
 const MIN_TRAIL_DEG = 0.25
@@ -16,10 +14,6 @@ interface BlurState {
 
 const states = new WeakMap<SVGGElement, BlurState>()
 
-/**
- * Ghost copies of the needle shape, drawn first inside the needle group.
- * `blurNeedle` rotates them back along the direction of travel.
- */
 export function NeedleGhosts({
   render,
 }: {
@@ -30,7 +24,6 @@ export function NeedleGhosts({
       {Array.from({ length: BLUR_GHOSTS }, (_, i) =>
         render(
           {
-            // hidden until the needle actually moves
             opacity: 0,
             ...({ "data-ghost": "" } as object),
           } as SVGProps<SVGGElement>,
@@ -41,11 +34,6 @@ export function NeedleGhosts({
   )
 }
 
-/**
- * Motion blur for a needle group. Call after setting its rotation.
- * `rotation` is the group's current SVG rotate() angle in degrees and
- * (cx, cy) its pivot. Trailing ghosts fade out and lengthen with speed.
- */
 export function blurNeedle(
   group: SVGGElement | null,
   rotation: number,

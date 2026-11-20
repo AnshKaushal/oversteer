@@ -9,7 +9,6 @@ import type { CarTelemetry } from "../../physics/vehicle/Vehicle"
 import { SingleDialDashboard } from "../dashboard/SingleDialDashboard"
 import { ACCENT, accentFill, glass } from "./kit"
 
-// Power is the blue accent, torque is white: two reads on one glass card.
 const POWER = ACCENT
 const TORQUE = "#ffffff"
 const MUTED = "#8b97ab"
@@ -192,10 +191,6 @@ const vs = (v: number, prev: number | null) =>
     ? ""
     : ` · ${v > prev ? "+" : "−"}${Math.abs(Math.round(v - prev))}`
 
-/**
- * Rolling-road readout shown while the camera is on the car. The pull itself
- * runs in the dyno system; this only draws its state.
- */
 export function DynoHud({ carName }: { carName: string }) {
   const s = useDyno()
   const ref = useRef<HTMLDivElement>(null)
@@ -203,7 +198,6 @@ export function DynoHud({ carName }: { carName: string }) {
     setBoardElement("dyno", ref.current)
     return () => setBoardElement("dyno", null)
   }, [])
-  // W / S throttle and brake, Q / E gear down / up.
   useEffect(() => {
     let thr = 0
     let brk = 0
@@ -261,7 +255,6 @@ export function DynoHud({ carName }: { carName: string }) {
     )
     return Math.max(100, Math.ceil((m * 1.08) / 100) * 100)
   }, [pk, s.curve, s.prev])
-  // The in-game single gauge cluster, fed from the dyno's rpm / speed / gear.
   const tele = {
     rpm: s.rpm,
     speedKmh: s.speedKmh,

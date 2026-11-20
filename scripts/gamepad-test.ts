@@ -1,9 +1,3 @@
-/**
- * Gamepad input tests: deadzones, analog triggers, edges, handbrake tap/hold and
- * keyboard merging, against a fake navigator.getGamepads.
- *
- * Run: `bun scripts/gamepad-test.ts` (exit 1 on any failure).
- */
 import { InputManager } from "../src/mainview/systems/InputManager"
 
 let failures = 0
@@ -35,7 +29,6 @@ const handlers: Record<string, (() => void)[]> = {}
   },
   removeEventListener() {},
 }
-// the browser announces a pad before it can be polled; nothing is polled until then
 let announced = false
 const announce = (on: boolean) => {
   if (on === announced) return

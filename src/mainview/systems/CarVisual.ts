@@ -126,7 +126,6 @@ export class CarVisual {
   headlightSpots: THREE.SpotLight[] = []
   beamsEnabled = true
 
-  /** Gate the real spot lights (shared budget); emissive lamps stay on. */
   setBeamsEnabled(on: boolean) {
     if (on === this.beamsEnabled) return
     this.beamsEnabled = on
@@ -403,7 +402,6 @@ export class CarVisual {
     this.syncFromPose(t, r, steerAngle, wheelOmegas, dt, compressions)
   }
 
-  /** Spin the wheels in place (the garage dyno), one speed per wheel. */
   spinWheels(omegas: readonly number[], dt: number) {
     if (!this.hiDetail) return
     for (let i = 0; i < this.wheels.length; i++) {

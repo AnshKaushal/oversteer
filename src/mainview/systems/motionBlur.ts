@@ -6,7 +6,6 @@ import {
 
 const SAMPLES = 10;
 
-/** Camera-motion blur: reprojects each pixel's depth into the previous frame. */
 const MASK_LAYER = 5;
 
 export class MotionBlurPass extends Pass {
@@ -16,7 +15,6 @@ export class MotionBlurPass extends Pass {
   private vp = new THREE.Matrix4();
   private hasPrev = false;
   strength = 0;
-  /** Objects whose pixels must stay sharp (the player's car, nearby cars). */
   maskRoots: THREE.Object3D[] = [];
   private masked = new Set<THREE.Object3D>();
   private maskTarget = new THREE.WebGLRenderTarget(1, 1);
@@ -125,9 +123,6 @@ export class MotionBlurPass extends Pass {
       this.scene.overrideMaterial = this.maskMat;
       this.scene.background = null;
       this.scene.fog = null;
-      // The mask is a flat silhouette: it must not re-run the shadow pass, which
-      // would rebuild the shadow maps from this one layer and leave them wrong
-      // (or consume a pending shadow update) for the real scene.
       sm.autoUpdate = false;
       sm.needsUpdate = false;
       r.setClearColor(0x000000, 1);

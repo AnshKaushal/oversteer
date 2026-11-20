@@ -184,8 +184,6 @@ const ROWS: {
   },
 ]
 
-// The track fills outward from the stock notch, so a change reads as a
-// distance travelled (left = softer, right = more), not as a level.
 const css = `
 .tune-range{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer;display:block;position:relative;z-index:1}
 .tune-range:focus{outline:none}
@@ -259,7 +257,7 @@ function Slider({
           onChange={(e) => onChange(Number(e.target.value))}
           onDoubleClick={() => onChange(1)}
         />
-        {/* stock notch */}
+        {}
         <span
           className="pointer-events-none absolute top-[-1px] h-[22px] w-[2px] bg-white/40"
           style={{ left: `calc(${off(stock)} - 1px)` }}

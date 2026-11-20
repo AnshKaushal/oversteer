@@ -1,10 +1,3 @@
-/**
- * Raycast cars lean on one ray per wheel, so a ray that slips through a trimesh seam or reports a
- * flipped normal at an edge shows up as a dropped wheel or a kick. This casts rays down across a
- * rolling trimesh (including exactly along its edges and through its vertices) and checks that
- * every ray hits, normals point up, and neighbouring normals never jump more than the surface's
- * own crease angle.
- */
 import { initPhysics } from "../src/mainview/physics/core/PhysicsSystem"
 
 const RAPIER = await initPhysics()
@@ -53,7 +46,6 @@ const angle = (
   b: { x: number; y: number; z: number },
 ) => Math.acos(Math.min(1, Math.max(-1, a.x * b.x + a.y * b.y + a.z * b.z)))
 
-// sweep lines: across cells, along a grid line (every ray on an edge), along a diagonal (every ray on an edge too)
 const lines: { name: string; at: (t: number) => [number, number] }[] = [
   { name: "across cells", at: (t) => [3 + t, 7.37] },
   { name: "along a grid line", at: (t) => [3 + t, 6 * CELL] },
@@ -99,7 +91,6 @@ for (const line of lines) {
   )
 }
 
-// rays through every vertex
 let vertexMisses = 0
 for (let i = 1; i < N; i++) {
   for (let j = 1; j < N; j++) {

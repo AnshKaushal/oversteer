@@ -52,8 +52,6 @@ export function join(
     const hosting = /^(ws:\/\/)?(localhost|127\.|\[?::1)/i.test(key)
     const connect = () => {
       try {
-        // joinLAN() calls leave(), which stops a relay we own. When hosting, the relay was
-        // just (re)started for this join, so hide the flag from leave() and restore it after.
         const ownedBefore = this.lanRelayHosted
         this.lanRelayHosted = false
         this.joinLAN(key, playerName, carColor, passHash)
@@ -64,7 +62,6 @@ export function join(
       }
     }
     if (hosting) {
-      // Hosting: start the relay only now, then connect to it.
       void setLanRelay(true).then(connect)
     } else connect()
     return true

@@ -1,8 +1,3 @@
-/**
- * Driving-feel acceptance checks, one car per run (CAR=<id>, or run-per-car).
- * These are the things a player notices: how the revs answer the pedal, a
- * handbrake slide that stops, a burnout, wheelspin, a donut and a powerslide.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -50,7 +45,6 @@ function fresh() {
   r.car.update(FIXED_DT, idle)
   r.world.step()
   r.car.parkingBrake = false
-  // the scenarios below were written for a car with its aids on; the real default is off (see 1c)
   r.car.tractionControlOn = true
   r.car.stabilityControlOn = true
   r.car.abs.enabled = true
@@ -77,7 +71,6 @@ function run(
 }
 const kmh = (r: Rig) =>
   Math.hypot(r.body.linvel().x, r.body.linvel().z) * KMH_PER_MS
-/** Slip ratio of the driven rear wheels: how far they spin past ground speed. */
 function rearSlip(r: Rig) {
   const om = r.car.getWheelOmegas()
   const v = Math.max(1, Math.abs(r.car.forwardSpeed))
@@ -103,7 +96,6 @@ function sideslipDeg(r: Rig) {
 const lo = E.idleRPM,
   hi = E.redlineRPM
 
-// 1. the revs answer the pedal at once, in auto and in manual, and do not sag
 const flare = E.dynamics.launchFlareRPM
 for (const auto of [true, false]) {
   const r = fresh()
@@ -132,7 +124,6 @@ for (const auto of [true, false]) {
       peak = 0
       changed = t
     }
-    // the drop that follows an upshift is the shift, not a sag
     if (t - changed < 0.5) return
     peak = Math.max(peak, r.car.rpm)
     if (t > 1.5) worst = Math.max(worst, (peak - r.car.rpm) / peak)
@@ -165,8 +156,6 @@ for (const auto of [true, false]) {
   )
 }
 
-// 1b. the managed launch (flare rpm and torque ramp) belongs to the safety aids:
-// with traction and stability control off the driven wheels get raw power at once
 {
   const wheelSpeed = (aids: boolean) => {
     const r = fresh()
@@ -192,7 +181,6 @@ for (const auto of [true, false]) {
   )
 }
 
-// 1c. aids start off, and the driver can switch each one with its key
 {
   const raw = makeRig(RAPIER, def)
   check(
@@ -233,8 +221,6 @@ for (const auto of [true, false]) {
   )
 }
 
-// 1d. a car held against an obstacle: with the aids off the engine loads against
-// the wheels and the wheels spin up (revs climb past the stall), it does not sit at the launch rpm
 {
   const r = fresh()
   r.car.autoMode = false
@@ -255,10 +241,6 @@ for (const auto of [true, false]) {
   )
 }
 
-// 1e. the gearbox is always automatic (manual mode only picks the gear). Starting off in a gear
-// that cannot pull the car from rest (wheel force at converter stall under stallMinAccel)
-// labours and then kills the engine; a gear that can, goes. The ignition key still stops and
-// restarts it
 const stalledOf = (r: Rig) =>
   (r.car as unknown as { engine: { stalled: boolean } }).engine.stalled
 {
@@ -329,7 +311,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 1f. handbrake like BeamNG: a tap latches it and pulling away on the throttle lets a latched one go
 {
   const r = fresh()
   const press = (k: string) =>
@@ -349,7 +330,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 1g. with the engine off nothing pushes the car: no converter creep, no hold force
 {
   const r = fresh()
   r.car.autoMode = true
@@ -368,8 +348,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 1h. creep is not a force: it emerges from converter drag at governed idle rpm, in every gear
-// (how far it gets follows the gearing and idle rpm in the car's data)
 {
   const creepIn = (auto: boolean, gear: number) => {
     const r = fresh()
@@ -399,8 +377,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 1i. self-aligning torque feeds steering feedback: quiet when straight, loaded in a turn, and
-// the sign follows the turn direction
 {
   const feedback = (steer: number) => {
     const r = fresh()
@@ -443,7 +419,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 2. handbrake in a sideways slide, no throttle, stops the car
 {
   const r = fresh()
   r.car.autoMode = false
@@ -478,8 +453,6 @@ const stalledOf = (r: Rig) =>
   )
 }
 
-// 3. burnout: handbrake and throttle at a standstill spins the rears, if the
-// engine can out-pull the handbrake through first gear
 const wheelTorque1 =
   (E.maxTorqueNm *
     P.transmission.gearRatios[0] *
@@ -504,7 +477,6 @@ if (
   )
 }
 
-// 4. wheelspin in 1st on a hard launch (rear or all wheel drive with real power)
 if (P.drivetrain.frontTorqueSplit < 1) {
   const r = fresh()
   r.car.autoMode = false
@@ -520,7 +492,6 @@ if (P.drivetrain.frontTorqueSplit < 1) {
   )
 }
 
-// Thrust in 1st at peak torque, in g: below ~0.6 the car cannot out-pull its tires
 const mass = P.mass.chassis + 2 * P.mass.frontWheel + 2 * P.mass.rearWheel
 const thrust1 =
   (E.maxTorqueNm *
@@ -530,14 +501,11 @@ const thrust1 =
   R /
   mass /
   9.81
-// Rear-biased drive only: an AWD car with a centre diff is meant to hold its line
 const canSlide = P.drivetrain.frontTorqueSplit <= 0.1 && thrust1 >= 0.6
 console.log(
   `info | 1st gear thrust at peak torque ${thrust1.toFixed(2)} g, slide checks ${canSlide ? "on" : "off"}`,
 )
 
-// 5. donut: with the aids off (the N key), roll in, flick the
-// handbrake, and lock plus power keep it rotating
 if (canSlide) {
   const r = fresh()
   r.car.tractionControlOn = false
@@ -560,7 +528,6 @@ if (canSlide) {
   )
 }
 
-// 6. powerslide: with the aids off, on throttle through a bend in 1st the tail steps out and holds
 if (canSlide) {
   const r = fresh()
   r.car.tractionControlOn = false
@@ -584,7 +551,6 @@ if (canSlide) {
   )
 }
 
-// 7. driver aids: each one has to do the job a real one does
 const cruise = (kmhTarget: number) => {
   const r = fresh()
   while (kmh(r) < kmhTarget) run(r, { throttle: 1 }, 0.25)
@@ -600,7 +566,6 @@ const heading = (r: Rig) => {
   }
 }
 {
-  // ABS: lets the car steer under full braking, where locked wheels plough straight on
   const turn = (abs: boolean) => {
     const r = cruise(120)
     r.car.stabilityControlOn = false
@@ -630,7 +595,6 @@ const heading = (r: Rig) => {
   )
 }
 {
-  // traction control: less wheelspin on a rolling full-throttle start in 2nd
   const spin = (tc: boolean) => {
     const r = cruise(25)
     r.car.stabilityControlOn = false
@@ -656,7 +620,6 @@ const heading = (r: Rig) => {
     )
 }
 {
-  // stability control: a lift-off flick would spin the car, ESC brakes it back in line
   const flick = (esc: boolean) => {
     const r = cruise(110)
     r.car.stabilityControlOn = esc

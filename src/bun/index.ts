@@ -282,7 +282,6 @@ function getLocalIp(): string {
 const lanClients = new Set<any>()
 let lanServer: ReturnType<typeof Bun.serve> | null = null
 
-/** Starts the LAN relay on demand (host only). Returns whether it is running. */
 function startLanRelay(): boolean {
   if (lanServer) return true
   try {

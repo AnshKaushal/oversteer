@@ -34,7 +34,6 @@ export class RainEffect {
   private haveLastCam = false
   private shelter: ((x: number, y: number, z: number) => boolean) | null = null
 
-  // splatter pool
   private readonly splatPos = new Float32Array(SPLAT_CAP * 3)
   private readonly splatVel = new Float32Array(SPLAT_CAP * 3)
   private readonly splatLife = new Float32Array(SPLAT_CAP)

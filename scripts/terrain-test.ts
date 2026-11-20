@@ -1,9 +1,3 @@
-/**
- * Terrain tests: the road is unbounded both ways, hills are the same wherever you
- * come from, and no hill flank is too steep to climb.
- *
- * Run: `bun scripts/terrain-test.ts` (exit 1 on any failure).
- */
 import * as THREE from "three"
 import {
   WorldManager,
@@ -30,7 +24,6 @@ for (let s = -300000; s < 300000; s += 997)
   if (roadArcLength(s + 50) <= roadArcLength(s)) mono = false
 check("road arc length keeps growing far past the old limits, both ways", mono)
 
-// The same place holds the same hills and clouds whichever way the car arrives.
 const noop = () => {}
 const ctx: any = new Proxy(
   {},

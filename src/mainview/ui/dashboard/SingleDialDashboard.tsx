@@ -23,8 +23,6 @@ import {
   ICON_SIZE,
 } from "./icons"
 
-// One round dial: RPM on a 270° sweep (open at the bottom), speed and gear
-// in the hub. Same palette, rim, needle and telltales as the twin cluster.
 const C = 200
 const R_RIM = 192
 const R_PROG = 180
@@ -78,7 +76,6 @@ export function SingleDialDashboard({
   embedded = false,
 }: {
   tele: CarTelemetry
-  /** Fill its parent instead of pinning to the screen corner; no caption. */
   embedded?: boolean
 }) {
   const teleRef = useRef(tele)

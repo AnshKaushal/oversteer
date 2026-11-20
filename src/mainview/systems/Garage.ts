@@ -9,16 +9,10 @@ import {
   type SurfaceId,
 } from "./garageSurfaces"
 
-// The garage model is open on its local +z side. Its dummy car is the node
-// named DUMMY_CAR; it is dropped so the player's own car can stand in its place.
 const DUMMY_CAR = "mobil_15"
 const HALF_DEPTH = 10.74
 const ROOF_Y = 6.93
-// Distance from the spawn point to the garage centre, so the opening sits
-// well clear of the widest road.
-// The model is shrunk so the car fills more of the room.
 const SCALE = 0.7
-// Showroom scale-up of the displayed car (visual only).
 const CAR_SCALE = 1.15
 const SIDE_OFFSET = HALF_DEPTH * SCALE + 18
 
@@ -30,8 +24,6 @@ export const GARAGE_CAM = {
   maxPitch: 0.7,
 }
 
-// Opaque-to-depth, transparent-to-the-page: NoBlending skips the OPAQUE define,
-// so the fragment keeps its (zero) alpha and overwrites the sky behind it.
 const HOLE_MAT = new THREE.MeshBasicMaterial({
   color: 0x000000,
   opacity: 0,
@@ -47,9 +39,6 @@ const NO_SUN = THREE.ShaderChunk.lights_fragment_begin.replace(
   "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color = vec3( 0.0 );",
 )
 
-// The sun never reaches the inside of the garage. Shadow maps leak at wall and
-// floor seams and through the window panes, so the garage's own surfaces simply
-// ignore the directional light (the lamps and sky light still apply).
 function blockSun(mat: THREE.Material) {
   mat.shadowSide = THREE.DoubleSide
   mat.onBeforeCompile = (sh) => {
@@ -62,15 +51,8 @@ function blockSun(mat: THREE.Material) {
   mat.needsUpdate = true
 }
 
-// Dyno rig, in world units: stage height, roller radius and half the gap
-// between the two rollers under each tyre.
 const DYNO = { stage: 0.2, offset: 0.27 }
 const ROLLER_R = 0.2
-/**
- * How far the car rises so each tyre sits between its roller pair, with the
- * rollers set into the stage. Uses every wheel's own height, so cars with
- * different front/rear tyres still sit level.
- */
 const dynoLift = (wheels: { baseY: number }[]) =>
   Math.max(
     ...wheels.map((w) => {
@@ -86,22 +68,13 @@ const _lc: THREE.Vector3[] = []
 
 export class Garage {
   readonly group = new THREE.Group()
-  /** World position of the car spot (floor level). */
   readonly carPos = new THREE.Vector3()
-  /** Yaw that points the car's nose out of the garage. */
   carYaw = 0
   private lights: THREE.PointLight[] = []
-  /**
-   * Invisible quads at each screen: they write depth and zero alpha, so the
-   * canvas is transparent exactly there and the DOM screen behind it shows
-   * through, while anything nearer (the car, walls) still covers it.
-   */
   readonly holes = new Map<SurfaceId, THREE.Mesh>()
-  // Dyno rig (rollers under the driven wheels) and how far the car is lifted.
   private dynoGroup = new THREE.Group()
   private dynoFor: CarVisual | null = null
   private rollers: { mesh: THREE.Mesh; ratio: number }[] = []
-  // Lift the current rig was built for (world units).
   private liftFor = 0
   private lift = 0
   private snapLift = false
@@ -124,9 +97,6 @@ export class Garage {
       }
     })
     g.group.add(root)
-    // Concrete apron from the garage mouth out to the road shoulder. Sized in
-    // garage-local units (the group is scaled by SCALE). It is a thick slab so
-    // it still meets the ground on uneven terrain.
     const apronStart = HALF_DEPTH
     const apronEnd = 30
     const slab = new THREE.Mesh(
@@ -154,11 +124,9 @@ export class Garage {
       }
     }
     g.dynoGroup.visible = false
-    // The rig is modelled in world units, so undo the garage's own scale.
     g.dynoGroup.scale.setScalar(1 / SCALE)
     g.group.add(g.dynoGroup)
     g.group.scale.setScalar(SCALE)
-    // Warm lamps under the ceiling; the roof blocks the sun and sky light.
     for (const z of [-3.5, 3.5]) {
       const l = new THREE.PointLight(0xfff1dc, 14, 14, 2)
       l.position.set(0, 5.6, z)
@@ -168,10 +136,6 @@ export class Garage {
     return g
   }
 
-  /**
-   * Put the garage beside the road at the spawn point, opening toward it.
-   * `fwd` is the spawn heading; the garage goes on its right-hand side.
-   */
   place(
     spawnX: number,
     spawnZ: number,
@@ -186,8 +150,6 @@ export class Garage {
     let y = groundAt(cx, cz)
     for (const dx of [-9 * SCALE, 9 * SCALE]) {
       for (const dz of [-10.7 * SCALE, 10.7 * SCALE]) {
-        // Corners in garage space are close enough to world axes for a
-        // conservative "floor at or above the terrain" estimate.
         y = Math.max(y, groundAt(cx + dx, cz + dz))
       }
     }
@@ -197,10 +159,6 @@ export class Garage {
     this.carYaw = Math.atan2(rx, rz)
   }
 
-  /**
-   * World-space corners (TL, TR, BR, BL) of a garage screen; returns its
-   * outward normal in world space.
-   */
   surfaceCorners(id: SurfaceId, out: THREE.Vector3[]): THREE.Vector3 {
     const def = SURFACE_BY_ID[id]
     this.group.updateMatrixWorld()
@@ -213,10 +171,6 @@ export class Garage {
     return _n.set(...def.normal).transformDirection(this.group.matrixWorld)
   }
 
-  /**
-   * Fixed camera pose of a surface, if it has one (world space). Returns false
-   * when the surface should be framed head-on instead.
-   */
   surfaceView(id: SurfaceId, pos: THREE.Vector3, look: THREE.Vector3): boolean {
     const v = SURFACE_BY_ID[id].view
     if (!v) return false
@@ -226,7 +180,6 @@ export class Garage {
     return true
   }
 
-  /** Hold the (non-driving) player car on the garage floor. */
   holdCar(visual: CarVisual) {
     visual.group.position.copy(this.carPos)
     visual.group.position.y += this.lift
@@ -239,11 +192,6 @@ export class Garage {
     visual.group.scale.setScalar(CAR_SCALE)
   }
 
-  /**
-   * Raise the car onto the dyno stage, with a pair of rollers under each tyre
-   * (placed from the car's own wheel positions), and spin the driven wheels
-   * and rollers while it runs. Call before holdCar each frame.
-   */
   updateDyno(
     visual: CarVisual,
     d: {
@@ -285,7 +233,6 @@ export class Garage {
     }
   }
 
-  /** Jump the dyno lift straight to its end state on the next update. */
   snapDynoLift() {
     this.snapLift = true
   }
@@ -318,7 +265,6 @@ export class Garage {
       roughness: 0.5,
     })
     for (const m of [steel, stageMat, slotMat, markMat]) blockSun(m)
-    // Car-local -> world units; the car faces local +z in the garage frame.
     const spots = visual.wheels.map((w) => ({
       x: -w.mesh.position.x * CAR_SCALE,
       z: -w.mesh.position.z * CAR_SCALE,
@@ -383,7 +329,6 @@ export class Garage {
     })
   }
 
-  /** Keep a world point inside the room (with a margin), in place. */
   clampInside(p: THREE.Vector3, margin = 1): THREE.Vector3 {
     const gp = this.group.position
     const a = this.group.rotation.y
@@ -401,7 +346,6 @@ export class Garage {
     return p
   }
 
-  /** True for a world point inside the garage and under its roof. */
   shelters = (x: number, y: number, z: number): boolean => {
     const gp = this.group.position
     if (y > gp.y + ROOF_Y * SCALE) return false

@@ -1,10 +1,3 @@
-/**
- * Per-car physics gate. Every entry in the car registry (data/cars)
- * must: settle on its suspension, launch from a standstill, pull to a
- * sane top speed, survive a handbrake slide + recovery, and expose
- * exactly 4 GLB wheel pivots (else the car silently gets cylinder
- * wheels in-game). Add a car to CARS and it is tested automatically.
- */
 import * as RAPIER_ from "@dimforge/rapier3d-compat"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
@@ -51,7 +44,6 @@ const check = (car: string, name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-/** Straight-line expectations per car (0-100 s, top-speed km/h). */
 const EXPECT: Record<string, { t100: number; vmax: number }> = {
   "bmw-m3": { t100: 7, vmax: 270 },
   "audi-r8": { t100: 5, vmax: 335 },
@@ -62,7 +54,6 @@ const EXPECT: Record<string, { t100: number; vmax: number }> = {
 }
 
 for (const def of CARS) {
-  // --- visual: exactly 4 pivots (same rule as CarVisual.load) ---
   try {
     const buf = await Bun.file(
       `src/mainview/models/${def.modelFile.split("/").pop()}`,
@@ -97,7 +88,6 @@ for (const def of CARS) {
     check(def.id, "4 wheel pivots in GLB", false, String(e).slice(0, 120))
   }
 
-  // --- physics ---
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
   world.timestep = FIXED_DT
   const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
@@ -116,7 +106,6 @@ for (const def of CARS) {
     def.wheels,
     def.dash,
   )
-  // performance figures are measured with the aids on, as the thresholds were set
   car.tractionControlOn = true
   car.stabilityControlOn = true
   car.abs.enabled = true
@@ -136,16 +125,11 @@ for (const def of CARS) {
   step(idle, 120)
   const y = body.translation().y
   check(def.id, "suspension settles", y > 0.55 && y < 0.9, `y=${y.toFixed(3)}`)
-  // Parking brake: engaged at spawn, cleared by throttle (electronic
-  // park-brake auto-release). Idle alone must NOT release it.
   check(def.id, "parking brake engaged at spawn", car.parkingBrake === true)
   car.parkingBrake = true
   step(W, 1)
   check(def.id, "throttle releases parking brake", car.parkingBrake === false)
 
-  // straight-line performance: 0-100 timing + top-speed run to
-  // PLATEAU (3 s chunks, stops when gaining < 1.5 km/h — measures the
-  // true drag-limited vmax, however long the approach takes).
   let t100 = -1
   let top = 0
   let t: any = null
@@ -157,7 +141,6 @@ for (const def of CARS) {
       const v = Math.abs(car.forwardSpeed)
       if (v > top) top = v
       if (t100 < 0 && Math.abs(t.speedKmh) >= 100) {
-        // sim time = chunks + in-chunk steps
         t100 = chunk * 3 + i / 120
       }
       if (i % 60 === 0) {
@@ -192,9 +175,6 @@ for (const def of CARS) {
   )
   check(def.id, "gearbox walks up", t.gear >= 3, `gear=${t.gearLabel}`)
 
-  // lift-off coast: foot off at 150, 6 s of idle. Must shed speed
-  // like a real car (drag + half engine braking ≈ 20–40 km/h here),
-  // never like the brakes are on (>55) nor freewheel forever (<8).
   body.setLinvel({ x: 0, y: 0, z: 0 }, true)
   body.setAngvel({ x: 0, y: 0, z: 0 }, true)
   body.setTranslation({ x: 0, y: 0.72, z: 0 }, true)
@@ -224,8 +204,6 @@ for (const def of CARS) {
     `150→${vCoast.toFixed(0)} loss=${loss.toFixed(0)} km/h/6s`,
   )
 
-  // slide + recovery: steady speed, handbrake flick with lock, then
-  // countersteer off-throttle — yaw rate must flip sign (car comes back).
   step(idle, 60)
   const hb = { ...idle, handbrake: true, steer: 1, throttle: 0.6 }
   step(hb, 90)

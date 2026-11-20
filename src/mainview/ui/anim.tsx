@@ -59,9 +59,7 @@ export type ScreenProps = {
   from?: gsap.TweenVars
   to?: gsap.TweenVars
   exit?: gsap.TweenVars
-  /** Opt in to x/y/scale motion on enter, and slide-out of staggered items on exit. */
   motion?: boolean
-  /** Blue slash sweeps across the screen; staggered items are wiped in behind it. */
   slash?: boolean
   stagger?: StaggerSpec | StaggerSpec[]
   onClosed?: () => void
@@ -108,7 +106,6 @@ export function Screen({
           { autoAlpha: 0 },
           { autoAlpha: 1, duration: 0.2, ease: "none", clearProps: CLEAN },
         )
-        // No UI until the slash has fully left the screen.
         const kids = slashKids()
         gsap.set(kids, { autoAlpha: 0 })
         const reveal = () => {
@@ -261,8 +258,6 @@ export function Screen({
   )
 }
 
-// Slanted wipe: the clip's leading edge is skewed like the slash that sweeps
-// across the screen. Paint-only, so it stays cheap over the 3D scene.
 const CLIP_HIDDEN = "polygon(0% 0%, 0% 0%, -14% 100%, 0% 100%)"
 const CLIP_SHOWN = "polygon(0% 0%, 114% 0%, 100% 100%, 0% 100%)"
 export function wipeIn(targets: gsap.TweenTarget, vars: gsap.TweenVars = {}) {
@@ -293,14 +288,8 @@ export function usePresence(open: boolean, ms = 320) {
 }
 
 const FADE_EASE = "ease-in-out"
-// Never hold the cover forever if a load never reports back.
 const WIPE_MAX_HOLD = 30000
 
-/**
- * Loading cover: fades a black screen with the app icon in, holds while
- * `busy`, then fades out. Driven by Web Animations (compositor) so the
- * main-thread stalls of scene loading can't freeze the fade.
- */
 export function Wipe({
   token,
   busy,
@@ -308,9 +297,7 @@ export function Wipe({
 }: {
   token: number
   busy: boolean
-  /** Fires once the cover is fully opaque. */
   onCovered?: () => void
-  /** Kept for call-site compatibility. */
   label?: string
   tone?: "blue" | "red"
 }) {
@@ -322,8 +309,6 @@ export function Wipe({
   const busyRef = useRef(busy)
   busyRef.current = busy
 
-  // The 30 s safety timer must die with the cover it belongs to; left armed it
-  // fires mid-game and flashes the cover (opacity 1 -> 0) for 400 ms.
   const holdTimer = useRef(0)
   const isCovering = useRef(false)
 

@@ -17,11 +17,6 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`
 
-/**
- * Bakes a tiny procedural sky (gradient + sun hotspot) into a PMREM
- * environment so glossy materials (car paint) have something to reflect.
- * Derives colours from the live scene, so it works for every map.
- */
 export class SkyEnvironment {
   private readonly pmrem: THREE.PMREMGenerator
   private readonly bake = new THREE.Scene()
@@ -54,7 +49,6 @@ export class SkyEnvironment {
     this.bake.add(this.sunMesh)
   }
 
-  /** Cheap per-frame check; only re-bakes when the sky/lighting changed. */
   refresh(scene: THREE.Scene) {
     const bg =
       scene.background instanceof THREE.Color ? scene.background : null
@@ -78,7 +72,6 @@ export class SkyEnvironment {
 
     let target = this.cache.get(key)
     if (target) {
-      // refresh LRU order
       this.cache.delete(key)
       this.cache.set(key, target)
     } else {

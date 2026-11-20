@@ -98,12 +98,10 @@ export class AirplaneFlyby {
     this.onClearZones?.(views.flatMap((v) => v.layout.zones))
   }
 
-  /** Shared textures built at init, for the caller to upload to the GPU. */
   warmTextures: THREE.Texture[] = []
 
   private precompile: ((o: THREE.Object3D) => Promise<void>) | null = null
 
-  /** Lets new scenery compile its shaders off the render path before it appears. */
   setPrecompile(fn: (o: THREE.Object3D) => Promise<void>) {
     this.precompile = fn
   }
@@ -115,8 +113,6 @@ export class AirplaneFlyby {
       scene.add(view.group)
       return
     }
-    // Compile the new materials in parallel, then add: adding unseen
-    // materials otherwise stalls the next frame on synchronous compiles.
     const add = () => {
       if (this.scene === scene && !this.disposed) scene.add(view.group)
     }
@@ -148,7 +144,6 @@ export class AirplaneFlyby {
   }
 
   async init(scene: THREE.Scene, baseUrl: string): Promise<boolean> {
-    // Start every download up front; processing below stays in order.
     const loads = AIRCRAFT.map((spec) => {
       const p = createGLTFLoader().loadAsync(`${baseUrl}models/${spec.file}`)
       p.catch(() => {})

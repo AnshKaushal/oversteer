@@ -1,7 +1,3 @@
-/**
- * P6 world checks, one car per run (CAR=<id>, or via run-per-car): surfaces and weather,
- * aero at a yaw angle and active aero, crash limits, and the road/ground split.
- */
 import {
   initPhysics,
   stepVehicleOnce,
@@ -70,7 +66,6 @@ function run(
   }
 }
 
-/** Distance to brake from 25 m/s on a surface. */
 function brakeDistance(surface: SurfaceId): number {
   const r = fresh(surface)
   r.body.setLinvel({ x: 0, y: 0, z: -25 }, true)
@@ -84,7 +79,6 @@ function brakeDistance(surface: SurfaceId): number {
   return stopped < 0 ? Math.abs(r.body.translation().z - z0) : stopped
 }
 
-// ---- 1. surfaces and weather ------------------------------------------------
 {
   conditions.weather = "dry"
   const dry = brakeDistance("asphalt")
@@ -118,7 +112,6 @@ function brakeDistance(surface: SurfaceId): number {
   )
 }
 
-// ---- 2. the flat ground splits into road and grass ---------------------------
 {
   const cx = roadCenterX(0)
   check(
@@ -136,7 +129,6 @@ function brakeDistance(surface: SurfaceId): number {
   )
 }
 
-// ---- 3. aero at a yaw angle and movable aero ---------------------------------
 {
   const a = new Aero(P.aero)
   const straight = a.force(-40, 0, 0)!
@@ -171,7 +163,6 @@ function brakeDistance(surface: SurfaceId): number {
   }
 }
 
-// ---- 4. a hit cannot launch or spin the car and upsets the tyres for a while -------
 {
   const r = fresh()
   const wall = r.world.createCollider(

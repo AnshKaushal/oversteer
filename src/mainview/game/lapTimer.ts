@@ -1,12 +1,10 @@
 import type { LapSnapshot } from "../ui/LapHud"
 
-/** Minimal circuit shape the lap timer needs. */
 interface LapCircuit {
   lengthM: number
   progressAt(x: number, z: number): number
 }
 
-/** Counts laps, current/last/best lap time and pushes a throttled HUD snapshot. */
 export class LapTimer {
   private prevS: number
   private clock = 0
@@ -26,12 +24,10 @@ export class LapTimer {
     setLap(null)
   }
 
-  /** Car was reset: the current lap no longer counts. */
   cancelLap() {
     this.startClock = null
   }
 
-  /** Call every frame with the car position; `running` is false while paused / not started. */
   update(dt: number, x: number, z: number, running: boolean) {
     const L = this.circuit.lengthM
     const prog = this.circuit.progressAt(x, z)

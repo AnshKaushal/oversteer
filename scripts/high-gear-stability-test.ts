@@ -1,8 +1,3 @@
-/**
- * High-gear stability: after a hard steer at speed in gears 5-6, releasing the
- * wheel at full throttle must straighten the car instead of leaving it in a
- * steady slide. Run with CAR=<id>.
- */
 import {
   initPhysics,
   moveGroundBody,

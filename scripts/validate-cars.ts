@@ -1,4 +1,3 @@
-/** Validates every car spec. Exit 1 if any problem is found. */
 import { CARS } from "../src/mainview/data/cars"
 import { validateAll } from "../src/mainview/data/validate"
 const errs = validateAll(CARS)

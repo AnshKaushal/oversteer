@@ -9,7 +9,6 @@ import { carProgress } from "../systems/AIDriver"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD_CONFIG } from "../constants/world"
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface buildRaceSetupEnv {
   R: typeof RAPIER
   lin: LinearRoad

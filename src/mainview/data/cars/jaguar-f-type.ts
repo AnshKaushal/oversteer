@@ -430,8 +430,6 @@ export const jaguarFType: CarSpec = {
   },
   defaultTint: null,
   paintMatch: ["^Body_Paint", "^Indicator_Amber_Rear$"],
-  // Real SVR: 3.7 s and 322 km/h (Jaguar). Top speed is set to 335 so
-  // 320-330 km/h is reachable with margin.
   tested: {
     zeroToHundredS: 3.7,
     topSpeedKmh: 335,

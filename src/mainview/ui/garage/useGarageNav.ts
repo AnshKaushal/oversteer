@@ -21,11 +21,6 @@ interface Pt {
   y: number
 }
 
-/**
- * Pick the neighbour of `from` in direction `dir`. Candidates in that
- * direction are scored by distance plus a penalty for drifting sideways; with
- * none ahead the choice wraps to the far side so every item is reachable.
- */
 function pick(from: Pt | null, pts: Pt[], dir: Dir, ox: number, oy: number) {
   const [dx, dy] = VEC[dir]
   const sx = from?.x ?? ox
@@ -46,7 +41,6 @@ function pick(from: Pt | null, pts: Pt[], dir: Dir, ox: number, oy: number) {
     }
   }
   if (best) return best
-  // Wrap: the candidate furthest back against the direction of travel.
   let far: Pt | null = null
   let farAlong = Infinity
   for (const p of pts) {
@@ -66,7 +60,6 @@ function clearPadFocus() {
   })
 }
 
-// The < > car arrows are part of the orbit-view navigation too.
 let arrowFocus: HTMLElement | null = null
 const ARROWS = "[data-car-arrow]"
 const liveArrow = () => (arrowFocus?.isConnected ? arrowFocus : null)
@@ -118,7 +111,6 @@ function navigateBoard(id: SurfaceId, dir: Dir) {
     const r = e.getBoundingClientRect()
     return r.width > 1 && r.height > 1
   }
-  // The "Garage /" back button lives outside the board but must be reachable.
   const extras = Array.from(
     document.querySelectorAll<HTMLElement>("[data-pad-extra]"),
   ).filter(shown)
@@ -130,7 +122,6 @@ function navigateBoard(id: SurfaceId, dir: Dir) {
   const active = document.activeElement as HTMLElement | null
   const cur =
     active && (root.contains(active) || extras.includes(active)) ? active : null
-  // Sliders: left/right adjust the value, up/down move between rows.
   if (cur instanceof HTMLInputElement && cur.type === "range") {
     if (dir === "left" || dir === "right") {
       const step = Number(cur.step) || 1
@@ -153,7 +144,6 @@ function navigateBoard(id: SurfaceId, dir: Dir) {
   })
   let next: Pt | null
   if (!cur) {
-    // First press: start at the top-left-most control.
     next = [...pts].sort((a, b) => a.y - b.y || a.x - b.x)[0]
   } else {
     const r = cur.getBoundingClientRect()
@@ -206,11 +196,6 @@ function back() {
   }
 }
 
-/**
- * Gamepad control for the garage: d-pad or left stick moves between hotspots
- * (or between controls on a focused screen), A selects, B steps back and the
- * bumpers cycle cars.
- */
 export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
   const onCarRef = useRef(onCar)
   onCarRef.current = onCar
@@ -263,8 +248,6 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
               ? "down"
               : "up"
       const now = performance.now()
-      // First tilt moves at once, then a slow repeat; a minimum gap stops
-      // jitter around the threshold or a direction flip from double-firing.
       if (sd && now > nextRepeat && now - lastStep > 170) {
         if (!dir) dir = sd
         nextRepeat = now + (sd === stickDir ? 330 : 480)
@@ -280,7 +263,6 @@ export function useGarageNav(open: boolean, onCar: (d: 1 | -1) => void) {
       if (eA) activate()
       if (eB) back()
       if (getFocus() === "dyno") {
-        // RT throttle, LT brake, bumpers change gear.
         dyno.setPad(pad.buttons[7]?.value ?? 0, pad.buttons[6]?.value ?? 0)
         if (eLB) dyno.shift(-1)
         if (eRB) dyno.shift(1)

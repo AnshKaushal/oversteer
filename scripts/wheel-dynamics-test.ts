@@ -16,7 +16,7 @@ import { activeCar, makeRig } from "./lib/cars"
 
 const RAPIER = await initPhysics()
 const DT = FIXED_DT
-const INERTIA = estimateWheelInertia(25, 0.33) // ≈ 1.36125 kg·m²
+const INERTIA = estimateWheelInertia(25, 0.33)
 
 const idle: DriveInput = {
   throttle: 0,
@@ -42,9 +42,7 @@ const check = (name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-// ---- Unit tests: WheelDynamics module directly (no Rapier) ----
 
-// 1. Stationary, undriven wheel stays stationary.
 {
   const wd = new WheelDynamics(0.33, INERTIA)
   for (let i = 0; i < 120; i++) wd.step(0, DT, 0, 0, 0)
@@ -55,7 +53,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 2. Positive drive torque gives the expected angular acceleration.
 {
   const wd = new WheelDynamics(0.33, INERTIA)
   const T = 500
@@ -73,7 +70,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 3. Equal and opposite torque over equal intervals cancels out.
 {
   const wd = new WheelDynamics(0.33, INERTIA)
   for (let i = 0; i < 60; i++) wd.step(0, DT, 800, 0, 0)
@@ -85,7 +81,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 4. Brake opposes forward and reverse rotation.
 {
   const fwd = new WheelDynamics(0.33, INERTIA)
   fwd.wheels[0].omega = 50
@@ -106,7 +101,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 5. Strong braking locks without sign-flipping or chatter.
 {
   const wd = new WheelDynamics(0.33, INERTIA)
   wd.wheels[0].omega = 5
@@ -125,7 +119,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   check("locked wheel never goes negative under brake", min === 0, `min=${min}`)
 }
 
-// 9a. Wheels driven differently end up different (unit level).
 {
   const wd = new WheelDynamics(0.33, INERTIA)
   for (let i = 0; i < 60; i++) {
@@ -139,7 +132,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 10. Angular acceleration follows the configured inertia.
 {
   const a = new WheelDynamics(0.33, 1.0)
   const b = new WheelDynamics(0.33, 2.0)
@@ -157,13 +149,11 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// Slip damper: relaxes toward road speed, idle when airborne.
 {
   const K = 1500
   const spin = new WheelDynamics(0.33, INERTIA, K)
   spin.wheels[0].omega = 100
-  spin.step(0, DT, 0, 0, 0, 10) // road at 10 m/s
-  // Implicit damper closed form: (ω + dt*k*r*v/I) / (1 + dt*k*r²/I).
+  spin.step(0, DT, 0, 0, 0, 10)
   const expected =
     (100 + ((DT * K * 0.33) / INERTIA) * 10) /
     (1 + (DT * K * 0.33 * 0.33) / INERTIA)
@@ -174,7 +164,7 @@ const check = (name: string, cond: boolean, extra = "") => {
     `ω=${spin.wheels[0].omega.toFixed(4)} exp=${expected.toFixed(4)}`,
   )
   const still = new WheelDynamics(0.33, INERTIA, K)
-  for (let i = 0; i < 120; i++) still.step(0, DT, 0, 0, 0, 20) // road moving, wheel relaxed only by damper
+  for (let i = 0; i < 120; i++) still.step(0, DT, 0, 0, 0, 20)
   check(
     "damper spins a free wheel up toward rolling",
     Math.abs(still.wheels[0].omega - 20 / 0.33) < 0.5,
@@ -182,7 +172,7 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
   const air = new WheelDynamics(0.33, INERTIA, K)
   air.wheels[0].omega = 50
-  air.step(0, DT, 0, 0, 0, undefined) // airborne: no damping
+  air.step(0, DT, 0, 0, 0, undefined)
   check(
     "no damping without road contact",
     air.wheels[0].omega === 50 && air.wheels[0].slipDampTorque === 0,
@@ -190,7 +180,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// ---- Integration tests: through Vehicle ----
 
 function mk() {
   return makeRig(RAPIER, activeCar())
@@ -207,7 +196,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   }
 }
 
-// 6+7. RWD routing: fronts get zero drive, rears split equally.
 {
   const s = mk()
   let frontDriveMax = 0
@@ -221,7 +209,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
       Math.abs(ws[1].driveTorque),
     )
     {
-      // the differential may bias the split, but only inside its lock cap
       const D = activeCar().physics.differential
       const sum = ws[2].driveTorque + ws[3].driveTorque
       const cap =
@@ -248,7 +235,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 8. Airborne: no tire reaction, but drive still spins the wheel.
 {
   const s = mk()
   run(s, idle, 1)
@@ -280,7 +266,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 9b. Wheels differ in a real drive (rears spin, fronts don't).
 {
   const s = mk()
   run(s, W, 2.0)
@@ -292,14 +277,12 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
   check(
     "axles differ: driven vs undriven",
-    // an AWD car drives both axles, so only 2WD cars must show a difference
     activeCar().physics.drivetrain.type === "awd" ||
       Math.abs(om[2] - om[0]) > 1,
     `RL-FL=${(om[2] - om[0]).toFixed(1)}`,
   )
 }
 
-// Reverse: rear wheels turn backward.
 {
   const s = mk()
   s.car.autoMode = false
@@ -320,14 +303,7 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 11+12. Reset determinism + fixed-step determinism.
 {
-  // NOTE: a brand-new Rapier world needs one step before raycasts see
-  // freshly added colliders, so the very first update ever reads all
-  // wheels airborne (and applies no creep). Both traces below warm up with
-  // one idle step and then reset, so the measured windows start from
-  // exactly the reset state — which is precisely what reset determinism
-  // means.
   const THREE_V = await import("three")
   const trace = () => {
     const s = mk()

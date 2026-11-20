@@ -1,22 +1,7 @@
 import * as THREE from "three"
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 
-/**
- * Spatial upscaler following AMD FidelityFX Super Resolution 1 (MIT):
- *  1. EASU, edge-adaptive spatial upsampling. A 12-tap kernel whose shape and
- *     direction follow the local edge, so diagonals stay clean instead of
- *     blurring or stair-stepping the way bilinear/bicubic do.
- *  2. RCAS, robust contrast-adaptive sharpening, with ringing limits and
- *     noise damping, run at output resolution.
- * Both expect the tone-mapped, gamma-encoded image, which is what the chain
- * hands over (this pass is last, after FinalPass and FXAA/SMAA).
- *
- * This is the same algorithm family as FSR 1, written for WebGL2; the vendor
- * upscalers that use motion vectors (DLSS, FSR 2+, MetalFX) need native APIs
- * and are not reachable from a web view.
- */
 
-/** RCAS sharpness in stops: 0 = sharpest, 2 = off. AMD's default is ~0.2. */
 export const RCAS_SHARPNESS = 0.2
 
 const VERT = `
@@ -245,14 +230,12 @@ export class UpscalePass extends Pass {
     this.rcasQuad = new FullScreenQuad(this.rcasMat)
   }
 
-  /** src: internal render size; out: canvas drawing-buffer size. */
   setSizes(srcW: number, srcH: number, outW: number, outH: number) {
     this.easuMat.uniforms.srcSize.value.set(srcW, srcH)
     this.easuMat.uniforms.outSize.value.set(outW, outH)
     this.rcasMat.uniforms.outSize.value.set(outW, outH)
     if (!this.rt || this.rt.width !== outW || this.rt.height !== outH) {
       this.rt?.dispose()
-      // LDR, already gamma-encoded: an 8-bit target holds it exactly.
       this.rt = new THREE.WebGLRenderTarget(outW, outH, {
         type: THREE.UnsignedByteType,
         depthBuffer: false,
@@ -262,8 +245,6 @@ export class UpscalePass extends Pass {
     }
   }
 
-  // The composer resizes passes to the internal size; this pass owns its
-  // own output-sized target and gets its sizes through setSizes().
   setSize() {}
 
   render(

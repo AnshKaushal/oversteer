@@ -46,7 +46,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-// Instrument: count controller updates (+ dts seen) and Rapier steps.
 function instrument(s: ReturnType<typeof mk>) {
   let updates = 0
   let steps = 0
@@ -73,7 +72,6 @@ function instrument(s: ReturnType<typeof mk>) {
   }
 }
 
-// Simulates one rendered frame through the same accumulator pipeline as App.
 function runFrame(
   s: ReturnType<typeof mk>,
   stepper: ReturnType<typeof createFixedStepper>,
@@ -88,7 +86,6 @@ function runFrame(
   return n
 }
 
-// 1. One fixed-size frame -> exactly one controller update + one Rapier step.
 {
   const s = mk()
   const probe = instrument(s)
@@ -112,7 +109,6 @@ function runFrame(
   )
 }
 
-// 2. A long (1/30 s) frame subdivides into 4 fixed substeps, none oversized.
 {
   const s = mk()
   const probe = instrument(s)
@@ -131,7 +127,6 @@ function runFrame(
   )
 }
 
-// 3. Backlog policy: excessive time is capped and measured, never looped forever.
 {
   const stepper = createFixedStepper()
   const n = pushFrameTime(stepper, 0.5)
@@ -148,7 +143,6 @@ function runFrame(
   )
 }
 
-// 4. Determinism: same frame sequence twice -> identical body state.
 {
   const runSeq = () => {
     const s = mk()
@@ -165,8 +159,6 @@ function runFrame(
   check("identical frame sequences are deterministic", a === b, a)
 }
 
-// 5. Frame-rate independence: the same inputs, keyed to the step count,
-// give bit-identical state at the same step count at 30/60/144/240 fps.
 {
   const STEPS = 6 * Math.round(1 / FIXED_DT)
   const stateAt = (fps: number) => {
@@ -203,7 +195,6 @@ function runFrame(
   }
 }
 
-// 6. Render alpha: fraction of a step left in the accumulator.
 {
   const stepper = createFixedStepper()
   const n = pushFrameTime(stepper, FIXED_DT * 1.25)
@@ -222,7 +213,6 @@ function runFrame(
   )
 }
 
-// 7. Budget backlog drop keeps the sub-step remainder and counts the rest.
 {
   const stepper = createFixedStepper()
   pushFrameTime(stepper, FIXED_DT * 5.5)
@@ -239,7 +229,6 @@ function runFrame(
   )
 }
 
-// 8. PoseHistory: blends between steps and snaps on teleport.
 {
   const h = new PoseHistory()
   const id = { x: 0, y: 0, z: 0, w: 1 }

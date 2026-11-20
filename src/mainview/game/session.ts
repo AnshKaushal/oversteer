@@ -40,10 +40,6 @@ import {
   isLowLight,
 } from "../constants/timeOfDay"
 
-// Rivals keep emissive lamps only. Their real light comes from the shared
-// npcSpotPool, which already covers the nearest rivals and traffic. Rival
-// spots switching on after the start changed the scene's light count and
-// recompiled every lit material (a 300+ ms hitch).
 const MAX_RIVAL_BEAMS = 0
 
 const SMOKE_LIGHT: Partial<Record<string, number>> = {
@@ -171,8 +167,6 @@ export function startSession(ctx: SessionCtx): () => void {
 
       applyRendererResolution(renderer, camera, mount, settingsRef.current)
 
-      // Everything below used to wait on the previous step. Start the physics
-      // wasm and every model download together; later awaits hit the cache.
       const loadT0 = performance.now()
       const mark = (label: string) => {
         if (import.meta.env.DEV)
@@ -229,16 +223,12 @@ export function startSession(ctx: SessionCtx): () => void {
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setSunSource(() => wm.sunDirection())
         flyby.setTimeOfDay(timeOfDayRef.current)
-        // Upload textures now (while loading) instead of on the first frame
-        // the airport is drawn, and compile its shaders before it is added.
         const upload = (o: THREE.Object3D) =>
           o.traverse((c) => {
             const m = (c as THREE.Mesh).material as
               THREE.MeshStandardMaterial | undefined
             if (m?.map) renderer!.initTexture(m.map)
           })
-        // Each step runs on its own frame so no single frame pays for texture
-        // upload + whole-scene light setup + program lookups together.
         const nextFrame = () =>
           new Promise<void>((r) => requestAnimationFrame(() => r()))
         flyby.setPrecompile(async (o) => {
@@ -271,15 +261,11 @@ export function startSession(ctx: SessionCtx): () => void {
         loadTuning(carIdRef.current),
       )
 
-      // The physics car is fixed for this session. The garage only swaps the
-      // visual, so in-place starts must bail if car or tuning changed since.
       const builtKey = `${carIdRef.current}|${JSON.stringify(loadTuning(carIdRef.current))}`
       const carStale = () =>
         builtKey !==
         `${carIdRef.current}|${JSON.stringify(loadTuning(carIdRef.current))}`
 
-      // rivalCount/raceDistance/gridCount are reassigned when a race starts in
-      // place (enterRace below).
       let {
         setup,
         rivalCount,
@@ -435,9 +421,7 @@ export function startSession(ctx: SessionCtx): () => void {
           garage = null
         }
       }
-      // Take the garage out of the live scene (menu -> play without a rebuild).
       const leaveGarage = () => {
-        // The garage shows the car 1.15x; every car on the road is 1x.
         visual.group.scale.setScalar(1)
         garage?.dispose()
         garage = null
@@ -491,10 +475,6 @@ export function startSession(ctx: SessionCtx): () => void {
               console.warn("garage paint failed", e)
             }
           },
-          // Menu -> free roam without tearing the world down: the map, car
-          // and physics are already the ones free roam needs (the menu session
-          // always builds the "highway" map with no race), so only the garage
-          // goes away and traffic starts. The caller has set startedRef.
           enterFreeRoam: (mapId: string) => {
             if (disposed || !garage || !startedRef.current) return false
             if (carStale()) return false
@@ -504,11 +484,6 @@ export function startSession(ctx: SessionCtx): () => void {
             void spawnTrafficLater?.()
             return true
           },
-          // Menu -> race without rebuilding: the rivals are built and settled
-          // while the garage is still on screen, then everything flips at once
-          // (startedRef is set here, not by the caller, so the player car
-          // stays held until the grid is ready). raceSetupRef must already
-          // hold the setup.
           enterRace: async (mapId: string) => {
             if (disposed || !garage || startedRef.current) return false
             if (carStale()) return false
@@ -516,8 +491,6 @@ export function startSession(ctx: SessionCtx): () => void {
             if (raceActive || isNetRace || net?.roomId) return false
             if (dyno.active || getFocus() === "dyno") return false
             if (!raceSetupRef.current) return false
-            // buildRaceSetup also makes a player body at the grid slot. We keep
-            // our own player; take the slot from the new one and drop it.
             const rb = buildRaceSetup({
               R,
               lin,
@@ -561,8 +534,6 @@ export function startSession(ctx: SessionCtx): () => void {
               world,
             })
             if (disposed || startedRef.current) return false
-            // spawnField pointed the shared refs at its own arrays: keep this
-            // session's (the loop closes over them).
             for (const r of field.rivals) {
               rivals.push(r)
               allBodies.push(r.car.body)
@@ -570,7 +541,6 @@ export function startSession(ctx: SessionCtx): () => void {
             activeRivalsRef.current = rivals
             activeTrafficRef.current = trafficCars
             car.reset(new THREE.Vector3(rb.playerX, 0.72, rb.playerZ), slotYaw)
-            // settle the suspensions on the grid, like the initial build does
             const hold = holdInput()
             for (let i = 0; i < 120; i++) {
               car.update(FIXED_DT, hold)
@@ -613,8 +583,6 @@ export function startSession(ctx: SessionCtx): () => void {
       let shadowAcc = 0
       const TRAFFIC_BEHIND = 700
       const TRAFFIC_AHEAD = 1500
-      // Full-detail cars cost 10-25 draw calls each (more in shadow passes),
-      // so with a big AI field only the nearest few get them.
       const DETAIL_FAR = 200
       const DETAIL_NEAR = 150
       const HI_MAX = 14
@@ -698,8 +666,6 @@ export function startSession(ctx: SessionCtx): () => void {
       const _bPos = new THREE.Vector3()
       const _bRot = new THREE.Quaternion()
       const _bComp: number[] = []
-      // Cars close to the camera stay out of the motion blur: smeared
-      // neighbours look broken. Capped so the mask pass stays cheap.
       const SHARP_RANGE2 = 55 * 55
       const MAX_SHARP = 5
       const sharp: THREE.Object3D[] = []
@@ -725,7 +691,6 @@ export function startSession(ctx: SessionCtx): () => void {
           sharp.push(sharpCand[i].g)
         return sharp
       }
-      // Reused every frame; AI drivers only read it during drive().
       const trafficPool: TrafficEntry[] = []
       let trafficPoolFrame = -1
       let trafficFrameId = 0
@@ -747,7 +712,6 @@ export function startSession(ctx: SessionCtx): () => void {
         return trafficPool
       }
       const NO_SPIN: readonly number[] = []
-      // True while the player is pinned on the grid before green.
       let gridLocked = false
       const syncVisual = (
         vis: CarVisual,
@@ -803,8 +767,6 @@ export function startSession(ctx: SessionCtx): () => void {
       const skyEnv = new SkyEnvironment(renderer!)
       skyEnv.refresh(scene)
       mark("player+garage ready")
-      // Async compile lets the driver build shaders in parallel instead of
-      // blocking on each program in turn.
       await renderer!.compileAsync(scene, camera)
       mark("shaders compiled")
       {
@@ -845,7 +807,6 @@ export function startSession(ctx: SessionCtx): () => void {
       }
       mark("ready")
       setLoading(false)
-      // Traffic fills in over the first second or two, far from the player.
       void spawnTrafficLater?.().then(() => mark("traffic spawned"))
 
       const circuit = map.circuit
@@ -865,8 +826,6 @@ export function startSession(ctx: SessionCtx): () => void {
       const loop = (now: number) => {
         if (disposed) return
         raf = requestAnimationFrame(loop)
-        // Optional frame cap: skip the whole frame (sim time accumulates in dt)
-        // so fanless machines can hold a lower, cooler duty cycle.
         const cap = settingsRef.current.fpsCap
         if (cap && now - last < 1000 / cap - 3) return
         skyEnv.refresh(scene)
@@ -889,8 +848,6 @@ export function startSession(ctx: SessionCtx): () => void {
             padAbsApplied = true
           }
         } else padAbsApplied = false
-        // In the garage the pad's A button selects menu items (useGarageNav),
-        // so it must not also start free roam.
         if (
           !startedRef.current &&
           !showIntroRef.current &&
@@ -1329,9 +1286,6 @@ export function startSession(ctx: SessionCtx): () => void {
                 return { i, d: dx * dx + dz * dz }
               })
               .sort((a, b) => a.d - b.d)
-            // Every visible spot light is paid for by every lit pixel, so
-            // only the few nearest rivals get real beams; the rest keep
-            // their emissive lamps. The count stays fixed, so no recompiles.
             ranked.forEach(({ i }, rank) => {
               rivals[i].visual.setBeamsEnabled(rank < MAX_RIVAL_BEAMS)
             })
@@ -1490,8 +1444,6 @@ export function startSession(ctx: SessionCtx): () => void {
           }
         }
         spike.ph("npcLights")
-        // Push the shadow area toward what the camera is looking at so the
-        // crisp part of the map isn't wasted behind the car.
         camera.getWorldDirection(viewDir)
         const hl = Math.hypot(viewDir.x, viewDir.z)
         if (hl > 0.2) {
@@ -1583,7 +1535,6 @@ export function startSession(ctx: SessionCtx): () => void {
         const fwd = _fw.set(0, 0, -1).applyQuaternion(quat)
         rig.smoothFwd.lerp(fwd, 1 - Math.exp(-dt * 10)).normalize()
         rig.update({ dt, nowS, carPos, quat, car, raceActive, headsUp })
-        // The dyno is fully raised/lowered and framed: lift the cover.
         if (dynoSnap.release > 0 && --dynoSnap.release === 0) setLoading(false)
 
         if (garage && !startedRef.current) {
@@ -1606,7 +1557,6 @@ export function startSession(ctx: SessionCtx): () => void {
             renderer!.domElement.clientWidth,
             renderer!.domElement.clientHeight,
           )
-          // Focused screens sit behind the canvas; let clicks fall through.
           renderer!.domElement.style.pointerEvents =
             (focused && focused !== "dyno") || (!focused && pointerOverOpenBoard())
               ? "none"
@@ -1638,8 +1588,6 @@ export function startSession(ctx: SessionCtx): () => void {
         )
         if (photoState.pending) {
           photoState.pending = false
-          // Photos are always high-res: re-render this frame at 4K (or the
-          // panel's native size if larger), then restore the play resolution.
           const r = renderer!
           const el = r.domElement
           try {

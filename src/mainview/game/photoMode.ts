@@ -1,4 +1,3 @@
-/** Shared state for free-camera photo mode (FOV + pending capture). */
 export const FOV_MIN = 12
 export const FOV_MAX = 110
 

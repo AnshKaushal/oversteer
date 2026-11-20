@@ -1,7 +1,3 @@
-// Re-encodes src/mainview/models/*.glb (the editable sources) into
-// src/mainview/public/models/ with EXT_meshopt_compression. Geometry is stored
-// without changing node names/hierarchy so code that looks parts up by name
-// keeps working. Run: bun scripts/compress-models.ts [--verify]
 import { NodeIO } from "@gltf-transform/core"
 import {
   EXTMeshoptCompression,
@@ -37,7 +33,7 @@ for (const f of readdirSync(SRC).filter((n) => n.endsWith(".glb"))) {
   const a = statSync(src).size
   let b = statSync(out).size
   if (b >= a) {
-    copyFileSync(src, out) // not worth it
+    copyFileSync(src, out)
     b = a
   }
   before += a

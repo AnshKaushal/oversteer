@@ -1,8 +1,3 @@
-/**
- * Steering back to centre: after a hard steer at full throttle in gears 2-5,
- * centring the wheel must bring the car back in line instead of letting it
- * keep travelling sideways, even rear-wheel drive on power. Run with CAR=<id>.
- */
 import {
   initPhysics,
   moveGroundBody,

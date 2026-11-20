@@ -53,7 +53,6 @@ function run(
     `${name.padEnd(34)} power ${min.toFixed(2)}..${max.toFixed(2)} jumps ${changes}`,
   )
 }
-// engine off by ignition tap then tap on
 const offOn = (t: number) => ({
   toggleIgnitionPressed: t === 0.25 || t === 0.5,
 })

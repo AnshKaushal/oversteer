@@ -15,26 +15,18 @@ export interface RunView {
   from: number
   to: number
   state: "idle" | "armed" | "running" | "done"
-  /** Live elapsed while running, final time when done (seconds). */
   time: number | null
   best: number | null
 }
 
 interface RunState extends RunView {
   t0: number
-  /** Runs from 0: when the car last left (near-)standstill. */
   leftAt: number
 }
 
-const ARM_EPS = 1 // km/h treated as "standing still" for runs from 0
-const LAUNCH_KMH = 3 // a run from 0 only starts once the car is really moving
+const ARM_EPS = 1
+const LAUNCH_KMH = 3
 
-/**
- * Times speed gates (0-100, 100-200, 100-0...) from the speed the car reports
- * each frame. Gate crossings are interpolated between frames, so results do
- * not depend on the frame rate. All runs are tracked at once, so one pull
- * gives 0-100 and 100-200 together.
- */
 export class SpeedTimer {
   readonly store = createStore<RunView[]>([])
   private runs: RunState[] = []
@@ -77,7 +69,6 @@ export class SpeedTimer {
     this.prev = v
     for (const r of this.runs) {
       const up = r.to > r.from
-      // Time at which the speed crossed `g` during this frame.
       const cross = (g: number) =>
         v === v0 ? this.clock : t0 + (dt * (g - v0)) / (v - v0)
       const atStart = up
@@ -86,10 +77,7 @@ export class SpeedTimer {
           : v <= r.from
         : v >= r.from
       const fromRest = up && r.from === 0
-      // Jitter around standstill must not start (or flicker) a run from 0.
       if (fromRest && v >= ARM_EPS && v0 < ARM_EPS)
-        // Extrapolate the crossing back to true zero speed along this
-        // frame's slope, so the 1 km/h "rest" band is not timed away.
         r.leftAt = cross(ARM_EPS) - (ARM_EPS * dt) / (v - v0)
       const pastStart = fromRest ? v > LAUNCH_KMH : up ? v > r.from : v < r.from
       if (r.state === "done" || r.state === "idle") {

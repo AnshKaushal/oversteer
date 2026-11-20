@@ -136,7 +136,6 @@ export interface SuspensionSpec {
 export interface TireSpec {
   rollingV0: number
   maxSlip: number
-  /** Fraction of peak grip lost once the contact patch is fully sliding. */
   slideLoss: number
 }
 
@@ -277,17 +276,9 @@ export interface BodyStabilitySpec {
   powerOnThrottle: number
   liftBoost: number
   countersteerRange: number
-  /**
-   * Extra slip-correction authority per speedRef of speed above speedRef, so
-   * a slide at motorway speed is pulled straight instead of settling into a
-   * steady drift. Defaults to DEFAULT_HIGH_SPEED_GAIN when omitted.
-   */
   highSpeedGain?: number
-  /** Drift tuning (1 = stock): scales the slip-angle deadzone while steering. */
   driftDeadzoneScale?: number
-  /** Drift tuning (1 = stock): scales how hard the assist pulls back. */
   driftAuthorityScale?: number
-  /** Drift tuning "off": no slip correction and no slide power cut at all. */
   disabled?: boolean
 }
 
@@ -557,7 +548,6 @@ export interface CarSpec {
   paintMatch?: string[]
   tailLampMeshes?: string[]
   flatTailLamps?: boolean
-  /** Lamps are painted into the body's emissive map, not separate meshes. */
   emissiveLampMap?: boolean
   paintTexture?: PaintTextureRule
 }

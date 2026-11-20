@@ -1,12 +1,3 @@
-/**
- * Per-material report for a car's GLB — the lamps in particular. Use it
- * while adding a car (see cars.ts) to see what the paint heuristic will and
- * won't catch: `PAINT`-column materials get tinted, `LAMP` materials stay
- * stock and can glow as brake lights.
- *
- * Run: bun scripts/light-info.ts bmw-m3
- *      bun scripts/light-info.ts models/audi_r8.glb
- */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import { CARS, getCar } from "../src/mainview/data/cars"

@@ -42,8 +42,6 @@ export function buildImposter(
   for (const w of wheelParts) w.dispose()
   lo.add(wheels)
 
-  // Each lamp pair is one mesh: an imposter is drawn many times per frame
-  // with a big AI field, so draw calls matter more than vertices here.
   const headMat = new THREE.MeshBasicMaterial({
     color: 0xfff0cc,
     toneMapped: false,
@@ -185,11 +183,6 @@ export function mergeInto(
   }
 }
 
-/**
- * Pair every clear-coated paint material with a plain standard twin so far-off
- * cars can skip the extra clearcoat lobe. Call after mergeStatic so merged
- * meshes (which hold the final materials) are covered.
- */
 export function buildGlossSlots(this: CarVisual) {
   const twins = new Map<THREE.Material, THREE.MeshStandardMaterial>()
   this.glossSlots = []

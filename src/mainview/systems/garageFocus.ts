@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from "react"
 import type { SurfaceId } from "./garageSurfaces"
 
-// Which garage screen the camera is focused on (null = free orbit around the
-// car), plus the gamepad-highlighted hotspot while orbiting.
 let focus: SurfaceId | null = null
 let hot: SurfaceId | null = null
 const subs = new Set<() => void>()
@@ -11,7 +9,6 @@ const sub = (f: () => void) => (subs.add(f), () => void subs.delete(f))
 
 export const getFocus = () => focus
 export const getHot = () => hot
-/** Set by the app: runs `apply` once the loading cover has fully landed. */
 let coverHook: ((apply: () => void) => void) | null = null
 export const setDynoCoverHook = (f: typeof coverHook) => void (coverHook = f)
 let covering = false
@@ -23,7 +20,6 @@ export function setFocus(id: SurfaceId | null) {
     if (id) hot = id
     emit()
   }
-  // Entering/leaving the dyno raises/lowers it: hide that behind the cover.
   if (coverHook && !covering && (id === "dyno") !== (focus === "dyno")) {
     covering = true
     coverHook(() => {
@@ -40,7 +36,6 @@ export function setHot(id: SurfaceId | null) {
   hot = id
   emit()
 }
-/** Handshake for hiding the dyno raise/lower behind the loading cover. */
 export const dynoSnap = { pending: false, release: 0 }
 
 export const useFocus = () => useSyncExternalStore(sub, getFocus)

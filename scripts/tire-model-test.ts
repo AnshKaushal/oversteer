@@ -58,13 +58,12 @@ const check = (name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-/** Steady-state slip for a contact, as the wheel solver's patch state settles to. */
 function contact(over: Record<string, any> = {}) {
   const c = {
     grounded: true,
     normalLoad: 4000,
     normal: { x: 0, y: 1, z: 0 },
-    patchVel: { x: 0, y: 0, z: -10 }, // 10 m/s forward (-Z)
+    patchVel: { x: 0, y: 0, z: -10 },
     wheelOmega: 10 / RADIUS,
     wheelHeading: { x: 0, y: 0, z: -1 },
     bodyForward: { x: 0, y: 0, z: -1 },
@@ -84,7 +83,6 @@ function contact(over: Record<string, any> = {}) {
   return c
 }
 
-// 1. Zero slip → (near-)zero tire force (rolling resistance isolated).
 {
   const r = model.eval(contact())
   check("free rolling: lateral force is zero", r.fy === 0, `fy=${r.fy}`)
@@ -102,7 +100,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 2. Slip signs: faster→forward force, slower→braking force.
 {
   const plus = model.eval(contact({ wheelOmega: 12 / RADIUS }))
   const minus = model.eval(contact({ wheelOmega: 8 / RADIUS }))
@@ -114,7 +111,6 @@ function contact(over: Record<string, any> = {}) {
   check("negative slip brakes", minus.fx < -3000, `fx=${minus.fx.toFixed(0)}`)
 }
 
-// 3. Smooth rising region near zero slip (slip RATIO decades).
 {
   const at = (sx: number) =>
     model.eval(contact({ wheelOmega: (10 + sx * 10) / RADIUS })).fx
@@ -126,7 +122,7 @@ function contact(over: Record<string, any> = {}) {
     f1 > 0 && f5 > f1 && f10 > f5,
     `${f1.toFixed(0)} ${f5.toFixed(0)} ${f10.toFixed(0)}`,
   )
-  const ratio = (f5 + 48) / (f1 + 48) // remove rolling offset for the linearity check
+  const ratio = (f5 + 48) / (f1 + 48)
   check(
     "rising region is near-linear",
     ratio > 4 && ratio < 6,
@@ -134,7 +130,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 4+5. Saturation and stable post-peak (no runaway, bounded).
 {
   const vals = [0.14, 0.2, 0.5, 1.0, 2.0, 5.0].map((sx) => {
     const v = 10
@@ -171,11 +166,9 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 6. Slip angles give symmetric restoring forces.
 {
-  const left = model.eval(contact({ patchVel: { x: 2, y: 0, z: -10 } })) // sliding vehicle-left? +x patch vel
+  const left = model.eval(contact({ patchVel: { x: 2, y: 0, z: -10 } }))
   const right = model.eval(contact({ patchVel: { x: -2, y: 0, z: -10 } }))
-  // Basis l = vehicle-left (-X): patchVel +X means sliding right → restoring Fy < 0? l=(-1,0,0): vy = v·l = -2 → sa<0 → Fy = -MF(neg) > 0 (pushes left). Check restoring: Fy opposes lateral slide.
   check(
     "lateral force opposes slide (+x slide)",
     left.fy > 500,
@@ -193,7 +186,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 7. Combined slip respects the friction budget.
 {
   const v = 10
   const r = model.eval(
@@ -215,14 +207,13 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 7b. Combined-slip cross-weighting: locked tire loses lateral stiffness.
 {
   const v = 10
   const free = model.eval(contact({ patchVel: { x: 1, y: 0, z: -v } }))
   const locked = model.eval(
     contact({
       patchVel: { x: 1, y: 0, z: -v },
-      wheelOmega: 0, // fully locked at speed
+      wheelOmega: 0,
     }),
   )
   check(
@@ -232,7 +223,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 8. Load sensitivity: sublinear scaling.
 {
   const f4 = model.eval(
     contact({ normalLoad: 4000, wheelOmega: 10.1 / RADIUS }),
@@ -248,9 +238,7 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 10. Reverse travel signs (unit level).
 {
-  // Moving backward (vx<0), wheel turning backward faster → backward force.
   const r = model.eval(
     contact({
       patchVel: { x: 0, y: 0, z: 10 },
@@ -272,7 +260,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 11. Locked wheel at speed (unit level).
 {
   const r = model.eval(
     contact({ patchVel: { x: 0, y: 0, z: -20 }, wheelOmega: 0 }),
@@ -294,7 +281,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 13. Steering rotates the tire basis (unit level).
 {
   const steer = 0.5
   const heading = { x: Math.sin(steer) * -1, y: 0, z: -Math.cos(steer) }
@@ -310,7 +296,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// 15. Degenerate inputs stay finite.
 {
   const a = model.eval(
     contact({ patchVel: { x: 0, y: 0, z: 0 }, wheelOmega: 0 }),
@@ -336,10 +321,6 @@ function contact(over: Record<string, any> = {}) {
       wheelOmega: -500,
     }),
   )
-  // NOTE: at tiny loads the load-sensitivity curve raises effective μ
-  // (μx = 1.4·(100/4000)^−0.1 ≈ 2.02), so the true ellipse budget is
-  // ~285 N here, above the nominal μ·Fz = 140 N. The model is
-  // self-consistent (ellipse on effective peaks); fmax stays nominal.
   check(
     "tilted normal + extreme slip stays finite",
     Number.isFinite(d.fx) &&
@@ -355,7 +336,6 @@ function contact(over: Record<string, any> = {}) {
   )
 }
 
-// ---- Integration tests through Vehicle ----
 
 function mk() {
   return makeRig(RAPIER, activeCar())
@@ -372,7 +352,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   }
 }
 
-// 9. Airborne: zero tire force and reaction; throttle cannot push the car.
 {
   const s = mk()
   run(s, idle, 1)
@@ -398,7 +377,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 12. Patch velocity includes chassis angular velocity.
 {
   const s = mk()
   run(s, idle, 2)
@@ -418,7 +396,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 13b. Front basis follows steerAngle in the running sim.
 {
   const s = mk()
   run(s, idle, 2)
@@ -435,7 +412,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 14. Reaction torque equals total contact force × radius, applied once.
 {
   const s = mk()
   run(s, W, 1.0)
@@ -460,7 +436,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 10b. Reverse driving signs in the running sim.
 {
   const s = mk()
   s.car.autoMode = false
@@ -471,7 +446,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
     )
     run(s, idle, 0.2)
   }
-  // sampled while still accelerating, before the reverse speed limit trims the drive
   run(s, W, 1.0)
   const d = s.car.lastTireDiag
   const v = s.car.forwardSpeed
@@ -483,7 +457,6 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 11b. Braking to lock stays finite and opposes motion.
 {
   const s = mk()
   s.body.setLinvel({ x: 0, y: 0, z: -40 }, true)
@@ -506,9 +479,7 @@ function run(s: ReturnType<typeof mk>, inp: DriveInput, secs: number) {
   )
 }
 
-// 16b. Relaxation lag: applied force ramps toward steady state.
 
-// 16. Determinism of tire diagnostics.
 {
   const s = mk()
   run(s, idle, 2)

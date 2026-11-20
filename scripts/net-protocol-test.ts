@@ -1,9 +1,3 @@
-/**
- * Phase 2 regression tests: packet validation, ordering, sessions, clocks.
- *
- * Run: `bun scripts/net-protocol-test.ts` (exit 1 on any failure).
- * Follows the repo's scripts/ convention — plain bun, zero new dependencies.
- */
 import * as THREE from "three"
 import {
   initPhysics,
@@ -24,7 +18,6 @@ import { MultiplayerManager } from "../src/mainview/systems/net/MultiplayerManag
 import { NET } from "../src/mainview/data/net"
 import { getCar } from "../src/mainview/data/cars"
 
-/** Net tests only need some real car; they do not depend on which. */
 const TEST_CAR = getCar("bmw-m3")
 const TEST_REMOTE_OPTS = {
   modelFile: TEST_CAR.modelFile,
@@ -71,7 +64,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   }
 }
 
-// ---------- 1. valid initial packet ----------
 {
   const r = validateStatePacket(makePkt())
   check("1 valid packet ok", r.ok === true)
@@ -83,7 +75,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
     )
 }
 
-// ---------- 2. increasing sequence numbers ----------
 {
   const tr = new PeerSessionTracker()
   check("2 seq0 initial", tr.evaluate("p", "s", 0) === "accept-initial")
@@ -91,7 +82,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("2 seq2 accept", tr.evaluate("p", "s", 2) === "accept")
 }
 
-// ---------- 3. duplicates ----------
 {
   const tr = new PeerSessionTracker()
   tr.evaluate("p", "s", 4)
@@ -99,7 +89,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("3 lastSeq unmoved", tr.lastSeq("p") === 4)
 }
 
-// ---------- 4. older after newer ----------
 {
   const tr = new PeerSessionTracker()
   tr.evaluate("p", "s", 10)
@@ -107,7 +96,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("4 lastSeq unmoved", tr.lastSeq("p") === 10)
 }
 
-// ---------- 5. sequence gaps accepted + counted ----------
 {
   const tr = new PeerSessionTracker()
   tr.evaluate("gp", "s", 5)
@@ -123,7 +111,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("5 diag dup/stale counted", d?.dups === 1 && d?.ooo === 1, d)
 }
 
-// ---------- 6. invalid pos / quat / vel ----------
 {
   check(
     "6 NaN x",
@@ -148,7 +135,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   )
 }
 
-// ---------- 7. null packets and missing fields ----------
 {
   check("7 null", validateStatePacket(null).reason === "malformed-envelope")
   check(
@@ -166,7 +152,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("7 missing seq rejected", validateStatePacket(noroot).ok === false)
 }
 
-// ---------- 8. NaN/Infinity across numeric categories ----------
 {
   const cases: Array<[string, string]> = [
     ["steer", "bad-steer"],
@@ -205,13 +190,11 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   )
 }
 
-// ---------- 9. malformed packets don't advance sequence state ----------
 {
   const tr = new PeerSessionTracker()
   tr.evaluate("p", "s", 3)
   check("9 invalid vel", validateStatePacket(makePkt({ vy: NaN })).ok === false)
   check("9 tracker untouched", tr.lastSeq("p") === 3)
-  // A later valid packet with the SAME next seq is still accepted.
   const r = validateStatePacket(makePkt({ sess: "s", seq: 4 }))
   check("9 next valid ok", r.ok === true)
   if (r.ok)
@@ -221,27 +204,25 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
     )
 }
 
-// ---------- 10. legitimate extremes accepted ----------
 {
   const legs: Record<string, unknown>[] = [
-    { vx: 140, vz: -140 }, // fast but under 150/comp cap
+    { vx: 140, vz: -140 },
     { steer: 1.5 },
     { steer: -1.5 },
     { speed: 350 },
-    { speed: -120 }, // reverse
+    { speed: -120 },
     { rpm: 7400 },
     { rpm: 800 },
     { gear: -1 },
     { gear: 0 },
     { gear: 8 },
-    { progress: -50 }, // behind start line (grid rows)
+    { progress: -50 },
     { drift: true, smoke: true },
   ]
   legs.forEach((o, i) => {
     const r = validateStatePacket(makePkt(o))
     check(`10 legit #${i} accepted`, r.ok === true, r)
   })
-  // Unnormalized quat is normalized on accept WITHOUT mutating input.
   const input = makePkt({ qx: 2, qy: 0, qz: 0, qw: 0 })
   const r = validateStatePacket(input)
   check(
@@ -253,15 +234,13 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("10 input untouched", (input.qx as number) === 2)
 }
 
-// ---------- 11. reconnect with seq restart ----------
 {
   const tr = new PeerSessionTracker()
   for (let i = 0; i <= 5; i++) tr.evaluate("p", "sessA", i)
-  tr.noteSession("p", "sessB") // HELLO of the rejoined session
+  tr.noteSession("p", "sessB")
   const d = tr.evaluate("p", "sessB", 0)
   check("11 rejoin seq0 accepted", d === "accept-initial", d)
   check("11 continues", tr.evaluate("p", "sessB", 1) === "accept")
-  // Duplicate HELLO is idempotent: no reset, live seq survives.
   tr.noteSession("p", "sessB")
   check(
     "11 dup HELLO keeps seq",
@@ -269,7 +248,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   )
 }
 
-// ---------- 12. delayed packets from previous session ----------
 {
   const tr = new PeerSessionTracker()
   for (let i = 0; i <= 5; i++) tr.evaluate("p", "sessA", i)
@@ -284,7 +262,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("12 current still flows", tr.evaluate("p", "sessB", 2) === "accept")
 }
 
-// ---------- 13. alien sender timestamps ----------
 {
   for (const t of [9e12, -5e8, 0, 0.001]) {
     check(
@@ -294,7 +271,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   }
 }
 
-// ---------- 14. P2P + LAN payload compatibility ----------
 {
   const pkt = makePkt({
     extraFutureField: "ignored",
@@ -304,13 +280,11 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("14 P2P clone ok", viaP2P.ok === true, viaP2P)
   const viaLAN = validateStatePacket(JSON.parse(JSON.stringify(pkt)))
   check("14 LAN JSON ok", viaLAN.ok === true, viaLAN)
-  // LAN turns NaN into null — still rejected, never applied.
   const nanPkt = makePkt({ x: NaN })
   check(
     "14 LAN NaN rejected",
     validateStatePacket(JSON.parse(JSON.stringify(nanPkt))).ok === false,
   )
-  // Legacy senders (no sess) still interoperate via seq ordering.
   const legacy = makePkt({ seq: 3 })
   delete legacy.sess
   const tr = new PeerSessionTracker()
@@ -330,7 +304,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   }
 }
 
-// ---------- integration: real manager accept/reject flow ----------
 {
   const mgr = new MultiplayerManager("tester", 0xffffff)
   const H = (m: unknown) =>
@@ -353,7 +326,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("I stale cannot move state back", prog() === 200, prog())
   H(makePkt({ id: "peerX", sess: "A", seq: 6, x: NaN, progress: 777 }))
   check("I invalid cannot move state", prog() === 200, prog())
-  // Rejoin: HELLO(B) then seq restarts at 0.
   E({
     type: "HELLO",
     senderId: "peerX",
@@ -364,7 +336,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   check("I rejoin accepted", prog() === 10, prog())
   H(makePkt({ id: "peerX", sess: "A", seq: 99, progress: 31337 }))
   check("I old session cannot resurrect", prog() === 10, prog())
-  // LAN wire format through the same path.
   H(
     JSON.parse(
       JSON.stringify(makePkt({ id: "peerX", sess: "B", seq: 1, progress: 11 })),
@@ -386,7 +357,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   mgr.leave()
 }
 
-// ---------- integration: real RemoteCar applies atomically, arrival clock ----------
 {
   const R = await initPhysics()
   const world = createWorld()
@@ -406,7 +376,6 @@ function makePkt(over: Record<string, unknown> = {}): Record<string, unknown> {
   )
   check("R validates", r.ok === true)
   if (r.ok) {
-    // Phase 3: onPacket buffers; the target materializes in drive().
     const arrival = performance.now()
     car.onPacket(r.state, arrival)
     check(

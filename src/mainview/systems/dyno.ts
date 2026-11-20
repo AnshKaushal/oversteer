@@ -15,7 +15,6 @@ import type { CarSpec } from "../data/schema"
 const RAD_TO_RPM = 60 / (2 * Math.PI)
 const HP = 745.7
 const STEP = 1 / 240
-/** Same threshold normal driving uses to decide the clutch/converter can slip. */
 const SLIP_MIN_RATIO_FRACTION = 0.5
 const TARGET_PULL_S = 9
 
@@ -35,14 +34,11 @@ export interface DynoState {
   phase: DynoPhase
   gear: number
   gears: number
-  /** Gearbox in automatic (the car's own shift logic) or manual. */
   auto: boolean
   rpm: number
   redline: number
-  /** Crank torque (Nm) and crank power (hp) right now. */
   nm: number
   hp: number
-  /** Power at the wheels after drivetrain losses. */
   whp: number
   throttle: number
   boost: number
@@ -54,7 +50,6 @@ export interface DynoState {
   peakNm: Peak | null
   pullTime: number | null
   topKmh: number | null
-  /** True when the last run used different tuning from the one before. */
   retuned: boolean
 }
 
@@ -86,10 +81,9 @@ let state: DynoState = blank()
 let active = false
 let car: CarSpec | null = null
 let eng: Engine | null = null
-let omega = 0 // roller / wheel speed, rad/s
+let omega = 0
 let inertia = 100
 let throttle = 0
-// The car's own drivetrain parts, exactly as normal driving builds them.
 let gb: Gearbox | null = null
 let shiftLogic: ShiftLogic | null = null
 let aggression: Aggression | null = null
@@ -102,7 +96,6 @@ let acc = 0
 let sampleAcc = 0
 let startRpm = 2000
 let tuningKey = ""
-// Pedals: keyboard and gamepad are tracked separately and the larger wins.
 const pedals = { kThr: 0, kBrk: 0, pThr: 0, pBrk: 0 }
 const manualBins = new Map<number, { nm: number; hp: number }>()
 let manualAcc = 0
@@ -123,7 +116,6 @@ const ratioOf = (c: CarSpec, g: number) =>
 const effOf = (c: CarSpec) =>
   Math.min(1, Math.max(0.5, c.physics.drivetrain.efficiency || 0.9))
 
-/** The gear closest to 1:1 - the usual dyno gear. */
 function referenceGear(c: CarSpec): number {
   const r = c.physics.transmission.gearRatios
   let best = 1
@@ -134,7 +126,6 @@ function referenceGear(c: CarSpec): number {
 
 const startRpmOf = (c: CarSpec) => c.physics.engine.idleRPM * 1.12
 
-/** Steady-state crank output at full throttle and full boost (eddy-brake style). */
 function steady(rpm: number): DynoPoint {
   const e = car!.physics.engine
   const nm = e.maxTorqueNm * curveLookup(e.torqueCurve, rpm)
@@ -147,11 +138,6 @@ const seen = (rpm: number) => {
   seenHi = Math.max(seenHi, rpm)
 }
 
-/**
- * Roller inertia is a property of the dyno, not of the car: calibrate it so a
- * stock pull in the reference gear lasts about TARGET_PULL_S, then keep it
- * fixed. Taller gearing then genuinely makes the pull slower.
- */
 function calibrate(stock: CarSpec): number {
   const p = stock.physics
   const g = referenceGear(stock)
@@ -201,7 +187,6 @@ function reload() {
   resetEngine()
 }
 
-/** Speed at redline in the current gear - the same formula as the tuning board. */
 function redlineKmh(): number {
   if (!car) return 0
   const g = gearSpeeds(car, STOCK_TUNING)
@@ -254,11 +239,6 @@ export const dyno = {
     emit(true)
   },
 
-  /**
-   * Manual gear change through the car's own gearbox: it refuses a downshift
-   * that would over-rev at road speed, takes the car's shift time and cuts
-   * torque while it happens. Taking over the gears turns auto off.
-   */
   shift(dir: 1 | -1) {
     if (!active || !car || !gb || !eng || state.phase === "pulling") return
     if (gb.gear + dir < 1 || gb.gear + dir > gb.count) return
@@ -275,7 +255,6 @@ export const dyno = {
     emit(true)
   },
 
-  /** Automatic gearbox on/off, the same toggle as in normal driving. */
   toggleAuto() {
     if (!active || state.phase === "pulling") return
     autoMode = !autoMode
@@ -296,7 +275,6 @@ export const dyno = {
     pedals.pBrk = brk
   },
 
-  /** Scripted full-throttle pull from low revs to the limiter. */
   start() {
     if (!active || !car) return
     if (state.phase === "pulling" || state.phase === "cooldown") return
@@ -327,15 +305,12 @@ export const dyno = {
     emit(true)
   },
 
-  /** Hands-on mode: throttle, brake and gears are yours. */
   beginManual() {
     if (!active || !car) return
     if (state.phase === "manual" || state.phase === "pulling") return
     if (state.phase === "cooldown") return
     reload()
     startRpm = startRpmOf(car)
-    // A gear the converter/clutch can slip in starts from rest and creeps like
-    // the car does; a tall gear has no slip, so the rollers start turning.
     const g = gb!
     const slips =
       Math.abs(g.ratio(g.gear)) >= SLIP_MIN_RATIO_FRACTION * g.ratio(1)
@@ -369,7 +344,6 @@ export const dyno = {
     emit(true)
   },
 
-  /** End a manual session or abort a pull; the rollers spin down. */
   abort() {
     if (state.phase === "pulling") {
       state.phase = "cooldown"
@@ -381,7 +355,6 @@ export const dyno = {
     }
   },
 
-  /** Wheel/roller speed (rad/s) and what the car needs to draw itself. */
   visual() {
     const split = car?.physics.drivetrain.frontTorqueSplit ?? 0
     return {
@@ -397,14 +370,12 @@ export const dyno = {
 
   tick(dtReal: number) {
     if (!active || !car || !eng) return
-    // Throttle while idle starts a hands-on session.
     if (
       (state.phase === "idle" || state.phase === "done") &&
       effThrottle() > 0.05
     )
       dyno.beginManual()
     if (state.phase === "idle" || state.phase === "done") {
-      // Roller coasts to a stop; engine ticks over.
       gb?.tick(dtReal)
       omega *= Math.exp(-dtReal * 3.5)
       const idle = car.physics.engine.idleRPM
@@ -432,9 +403,6 @@ export const dyno = {
       const v = omega * p.wheels.radius
       const speedKmh = v * 3.6
 
-      // From here on this is the same drivetrain sequence as Vehicle.update:
-      // gearbox timers, engine rpm (clutch/converter slip), shift logic,
-      // engine torque, torque converter, driveline, creep.
       g.tick(STEP)
       shiftLogic!.cancelIfRelaxed(throttle, brakeIn)
       const ratio = g.ratio(g.gear)
@@ -467,7 +435,6 @@ export const dyno = {
         driveline!.prevThrottle,
       )
       g.tickChangeDelay(STEP)
-      // Only a hands-on session shifts by itself; a pull holds its gear.
       if (phase === "manual" && autoMode) {
         const delta = shiftLogic!.decide({
           dt: STEP,
@@ -534,7 +501,6 @@ export const dyno = {
       })
       const creepTorque = creepF * p.wheels.radius * driveline!.drivenCount
       const brakeTq = brakeIn * inertia * 25
-      // Aero drag torque at the wheels.
       const aero = p.aero
       let aeroDragF = 0
       if (aero && v > (aero.minSpeed ?? 0)) {
@@ -547,7 +513,6 @@ export const dyno = {
           v
       }
       const aeroTorque = aeroDragF * p.wheels.radius
-      // Rolling resistance torque at the wheels.
       const rollingResist = p.wheels.rollingResist ?? 0.015
       const rollingV0 = p.wheels.tire.rollingV0 ?? 5
       const rollingTorque =
@@ -557,8 +522,6 @@ export const dyno = {
       omega = Math.max(0, omega + ((wheelTq + creepTorque - load) / I) * STEP)
       const rpm = eng.rpm
       state.gear = g.gear
-      // Crank figures: add back the internal friction the engine model
-      // subtracts, so peaks equal the spec-sheet power and torque.
       const crank =
         eng.limiterCut || shifting || nm === 0
           ? 0
@@ -612,7 +575,6 @@ export const dyno = {
   },
 }
 
-/** Peaks over the rpm range actually swept, at 1 rpm resolution like the spec sheet. */
 function peaksSwept() {
   let ph: Peak | null = null
   let pn: Peak | null = null

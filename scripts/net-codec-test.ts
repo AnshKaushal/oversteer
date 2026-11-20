@@ -1,9 +1,3 @@
-/**
- * P7 tests: binary codec, clock sync with adaptive delay, Hermite interpolation,
- * extrapolation fade, spec hash and version gate.
- *
- * Run: `bun scripts/net-codec-test.ts` (exit 1 on any failure).
- */
 import { NET } from "../src/mainview/data/net"
 import {
   STATE_BYTES,
@@ -64,7 +58,6 @@ const base: WireState = {
   smokeLevel: 0.6,
 }
 
-// ---- codec ----
 {
   const bytes = encodeState(base)
   check(
@@ -131,7 +124,6 @@ const base: WireState = {
     const v = validateStatePacket({ ...s, id: "p", sess: "x" })
     check("passes the validator, F1 rpm included", v.ok, v)
   }
-  // rotation sweep: every largest-component case, both signs
   let worst = 0
   for (let i = 0; i < 2000; i++) {
     const r = () => Math.random() * 2 - 1
@@ -169,9 +161,7 @@ const base: WireState = {
   )
 }
 
-// ---- clock ----
 {
-  // sender clock runs 5 s behind ours; link has 30 ms base, bursty jitter
   const c = new NetClock()
   let seed = 7
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32
@@ -198,7 +188,6 @@ const base: WireState = {
     calmDelay,
   )
 
-  // a clean link settles lower than a jittery, lossy one
   const clean = new NetClock()
   const rough = new NetClock()
   let t2 = 0
@@ -223,7 +212,6 @@ const base: WireState = {
     clean.delayMs,
   )
 
-  // a pause restarts the timeline instead of poisoning it
   const p = new NetClock()
   p.observe(1000, 0, 5000)
   p.observe(1016, 1, 5016)
@@ -237,9 +225,7 @@ const base: WireState = {
   )
 }
 
-// ---- interpolation ----
 {
-  // car doing 20 m/s on a curve through known points: Hermite should track the true curve
   const buf = new SnapshotBuffer()
   const R = 50
   const w = 20 / R
@@ -281,7 +267,6 @@ const base: WireState = {
   )
   buf.sampleInto(out, 300)
   check("passes through a snapshot exactly", Math.abs(out.x - at(300).x) < 1e-9)
-  // continuous across a snapshot boundary
   const before = newInterpTarget(),
     after = newInterpTarget()
   buf.sampleInto(before, 399.99)
@@ -291,7 +276,6 @@ const base: WireState = {
     Math.hypot(before.x - after.x, before.z - after.z) < 0.01,
   )
 
-  // out of order arrival lands in time order
   const o = new SnapshotBuffer()
   o.append(
     { x: 20, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vy: 0, vz: 0 },
@@ -306,7 +290,6 @@ const base: WireState = {
   o.sampleInto(out, 150)
   check("late packet sorted into place", Math.abs(out.x - 10) < 1e-6, out.x)
 
-  // extrapolation: bounded, fades, and follows spin
   const e = new SnapshotBuffer()
   e.append(
     {
@@ -342,12 +325,11 @@ const base: WireState = {
   )
 }
 
-// ---- end to end: jittery link, sender-time timeline against arrival timing ----
 {
   let seed = 99
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32
   const iv = 1000 / NET.sendHz
-  const truth = (ms: number) => 25 * (ms / 1000) // 25 m/s straight
+  const truth = (ms: number) => 25 * (ms / 1000)
   type Pkt = { t: number; arrive: number; bytes: Uint8Array }
   const pkts: Pkt[] = []
   for (let i = 0; i < 600; i++) {
@@ -400,7 +382,6 @@ const base: WireState = {
       }
       const delay = useSenderTime ? clock.delayMs : NET.interp.minDelayMs
       buf.sampleInto(out, now - delay)
-      // what the car shows against where the sender was at that same instant
       const shown = out.x
       if (!Number.isNaN(prev) && now > 2500)
         stepMax = Math.max(stepMax, Math.abs(shown - prev - 25 / 120))
@@ -425,7 +406,6 @@ const base: WireState = {
   )
 }
 
-// ---- spec hash ----
 {
   const a = getCar("bmw-m3").physics
   const b = JSON.parse(JSON.stringify(a))

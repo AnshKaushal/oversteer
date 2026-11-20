@@ -1,28 +1,3 @@
-/**
- * Makes the palette-atlas low-poly exports (Bugatti Chiron, Mercedes W124)
- * usable by the game, with the same material layout as the DB12:
- *
- *   CARS_Color_1_Material  palette, everything that is not split out below
- *   CARS_Lights_Material   white lens triangles (front), emissive: headlights
- *   Tail_Lamp              red lens triangles (rear), red emissive: brake lamps
- *   Indicator_Amber_Front  triangles that become a front indicator (zones)
- *   Indicator_Amber_Rear   triangles that become a rear indicator (zones)
- *   Body_Paint[_n]         flat-colour paint, the only thing paint changes
- *
- *   bun scripts/prepare-low-poly-cars.ts [--textures <_shared_textures dir>]
- *
- * Works on the GLBs in src/mainview/models (and rewrites the copy in
- * public/models). Safe to run again on an already-prepared file. A fresh
- * export first needs the palette PNG it points at (looked up in --textures,
- * default ~/Downloads/models-glb/_shared_textures); it is embedded.
- *
- * Triangles are classified by the palette colour under their UV centroid.
- * Each paint material carries `paintShade` (extras): its brightness relative
- * to the main paint, so a repaint keeps the model's light and dark panels.
- *
- * Also done: the wheel mesh nodes (FLW...) are wrapped in `Wheel_FL` etc.
- * pivots, which is what CarVisual spins.
- */
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as zlib from "node:zlib"
@@ -33,35 +8,21 @@ const BIN_CHUNK = 0x004e4942
 type Part = "lights" | "tail" | "ampF" | "ampR"
 
 interface CarRule {
-  /** palette colours that are body paint; `ref` is the shade-1 colour */
   paint: string[]
   ref: string
-  /** lamp triangles by palette colour and position (x is |x|, cm, nose +z) */
   lamp: (hex: string, x: number, y: number, z: number, verts: number[][]) => Part | null
-  /** what the indicator triangles looked like, for the unlit base material */
   ampFColor?: string
   ampRColor?: string
-  /** palette colour (and test) that must never be paint */
   notPaint?: (hex: string, x: number, y: number, z: number) => boolean
-  /** triangles authored with this source material are indicators (z<0 = rear) */
   ampMat?: string
-  /** drop indicator candidates further than this (cm) from any lamp vertex */
   ampNear?: number
-  /** drop indicator candidates with an edge longer than this (cm): stray flaps */
   ampMaxEdge?: number
-  /** every corner (not just one) must be within `ampNear` of a lamp vertex */
   ampTight?: boolean
-  /** raise the darkest paint shades so a repaint reads as one colour */
   shadeFloor?: number
-  /** unpainted-colour triangles that are really body panels: the paint hex to use */
   extraPaint?: (hex: string, x: number, y: number, z: number) => string | null
-  /** triangles that stay unpainted and get a flat pure-black material */
   pureBlack?: (hex: string, x: number, y: number, z: number) => boolean
-  /** keep the file's own "Body_Paint" material (single paint) on re-runs */
   keepPaint?: boolean
-  /** after classifying, swap the roles: lens <-> indicator (lights/ampF, tail/ampR) */
   swapAmp?: boolean
-  /** with swapAmp: lens triangles that stay in the interior (not the frame) */
   pod?: (verts: number[][], z: number) => boolean
 }
 
@@ -70,25 +31,16 @@ const RED = "#ff0000"
 const near = (x: number, y: number, cx: number, cy: number) =>
   Math.hypot(x - cx, y - cy)
 
-/** Porsche: trim that keeps the model's own dark colour (not body paint):
- *  front/rear bumper openings, diffuser, lowest edge, tail-lamp panel */
 const porscheBlack = (x: number, y: number, z: number) =>
   (y < 30 && Math.abs(z) > 150) || (z < -185 && y < 52)
-/** the dark tail-lamp panel: only its dark triangles, not the body-colour
- *  band between it and the lamp strip */
 const porschePanel = (hex: string, x: number, y: number, z: number) =>
   hex === "#141414" && z < -195 && y >= 70 && y <= 79 && x <= 84
 const porscheBlackTrim = (x: number, y: number, z: number) =>
   (z > 160 && y < 62 && x <= 77) ||
   (z < -165 && y < 62) ||
-  // rear lamp band: black across the whole width, including between the two
-  // lamp housings (x from the centreline)
   (z < -150 && y >= 66 && y <= 90 && x <= 84)
 
 const RULES: Record<string, CarRule> = {
-  // F-Type SVR: the round centre lens is the headlight, the rest of the white
-  // housing is the front indicator; rear: red = tail lamp, and the dark-green housing
-  // just inboard of each tail lamp is the indicator. Paint is the three greens.
   "jaguar_f_type.glb": {
     paint: ["#6dc71b", "#98ff39", "#45830c"],
     ref: "#6dc71b",
@@ -96,7 +48,6 @@ const RULES: Record<string, CarRule> = {
     ampRColor: "#45830c",
     lamp: (hex, x, y, z) => {
       if (hex === WHITE && z > 0) {
-        // the round lens at the centre (|x|~62, y~68, z~169) is the headlight
         if (z >= 168.5 && near(x, y, 62.3, 68.4) <= 4.5) return "lights"
         return "ampF"
       }
@@ -106,9 +57,6 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // F12: blue body. White lens on the outer headlight = headlight, the dark housing
-  // round it = front indicator. Rear: red ring = tail lamp, the dark disc inside the
-  // round lamp (not the ring or the body round it) = indicator. White stripes stay.
   "ferrari_f12.glb": {
     paint: ["#0063c3", "#0f89ff", "#004383"],
     ref: "#0063c3",
@@ -126,7 +74,6 @@ const RULES: Record<string, CarRule> = {
   "bugatti_chiron_pur_sport.glb": {
     paint: ["#2141a9", "#142e83", "#0a1f62", "#000b1e", "#00112d", "#000713"],
     ref: "#2141a9",
-    // rear: the two upper lamps are the indicators, the low strip is only a tail lamp
     ampRColor: "#ff0000",
     lamp: (hex, _x, y, z) =>
       hex === WHITE && z > 0
@@ -137,7 +84,6 @@ const RULES: Record<string, CarRule> = {
             : "tail"
           : null,
   },
-  // orange lenses are the indicators, front and rear
   "mercedes_benz_w124.glb": {
     paint: ["#4b4b4b", "#383838", "#222222"],
     ref: "#4b4b4b",
@@ -154,9 +100,6 @@ const RULES: Record<string, CarRule> = {
               : "ampR"
             : null,
   },
-  // headlight = white disc at |x|~68; its dark ring is the front indicator;
-  // rear: three red bars, the outermost is the indicator. Paint spans white
-  // to grey (hood and roof highlights are white), exhaust tips are not paint.
   "ford_mustang_1969.glb": {
     paint: ["#c7c7c7", "#ffffff", "#bababa", "#969696", "#8a8a8a"],
     ref: "#ffffff",
@@ -166,7 +109,6 @@ const RULES: Record<string, CarRule> = {
       if (z > 175) {
         const d = near(x, y, 68, 57)
         if (hex === WHITE && d <= 6.5 && z > 180) return "lights"
-        // the ring is the tight cluster at d 7.4-8.7; the housing shards start at 9.6
         if (hex === "#2d2d2d" && d <= 9) return "ampF"
       }
       if (hex === RED && z < 0) return x > 59 ? "ampR" : "tail"
@@ -174,9 +116,6 @@ const RULES: Record<string, CarRule> = {
     },
     notPaint: (hex, _x, y, z) => hex === "#bababa" && y < 50 && z < -195,
   },
-  // Evo X: white strip = headlight, red strip = tail lamp; the dark (#141414)
-  // housing round each lamp is the indicator, front and rear. Paint is red;
-  // the silver bits (mirrors, exhaust) are not paint.
   "mitsubishi_lancer_evo_x.glb": {
     paint: ["#b80000", "#8f0000", "#620000"],
     ref: "#b80000",
@@ -192,9 +131,6 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // DB12: white = headlight, red = tail lamp (the rear indicator stays the
-  // tail strip); the dark housing right round each headlight is the front
-  // indicator. Keeps the existing single green paint.
   "aston_martin_db12.glb": {
     paint: [],
     ref: "#474747",
@@ -209,8 +145,6 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // 350Z: same scheme as the Evo X. White strip = headlight, red strip = tail
-  // lamp, the dark (#141414) housing round each lamp is the indicator.
   "nissan_350z.glb": {
     paint: ["#d65710", "#ff7122", "#ad3e00"],
     ref: "#d65710",
@@ -227,24 +161,19 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // 911 Turbo S: white = headlight, red = tail lamp. The dark housing round
-  // the headlight is the front indicator; the rear indicator is the model's
-  // own "Indicator" material. Paint is the three greys.
   "porsche_911.glb": {
     paint: ["#969696", "#747474", "#525252", "#2d2d2d", "#202020"],
     ref: "#969696",
     ampFColor: "#141414",
     ampRColor: "#141414",
     shadeFloor: 1,
-    // #141414 is both body panels (doors, hood, roof, arches, bumpers) and the
-    // real trim: paint all of it except the trim zones above
     extraPaint: (hex, x, y, z) =>
       hex === "#141414" && !porscheBlack(x, y, z) && !porscheBlackTrim(x, y, z)
         ? "#969696"
         : null,
     notPaint: (hex, x, y, z) =>
       porscheBlack(x, y, z) || porschePanel(hex, x, y, z),
-    ampMat: "Indicator_Amber_Rear", // was "Indicator" in the raw export
+    ampMat: "Indicator_Amber_Rear",
     ampNear: 3,
     ampMaxEdge: 15,
     ampTight: true,
@@ -256,9 +185,6 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // R8 (2008): the white / red outer frame of each lamp is the indicator; the
-  // dark interior (pods + housing, found as the dark triangles right beside
-  // the frame) is the headlight / tail lamp. Paint is the three oranges.
   "audi_r8.glb": {
     paint: ["#f09500", "#ffb626", "#cb7d00"],
     ref: "#f09500",
@@ -266,9 +192,6 @@ const RULES: Record<string, CarRule> = {
     ampRColor: "#ff0000",
     ampNear: 3,
     swapAmp: true,
-    // roles are swapped afterwards (see swapAmp): "lights"/"tail" here is the
-    // indicator frame, "ampF"/"ampR" the lamp interior; `pod` pulls the lens
-    // pods back into the interior
     pod: (verts, z) => {
       const inBox = (b: number[]) =>
         verts.every((v) => v[0] >= b[0] && v[0] <= b[1] && v[1] >= b[2] && v[1] <= b[3])
@@ -286,8 +209,6 @@ const RULES: Record<string, CarRule> = {
       return null
     },
   },
-  // two lamp rings per side: the outer ring is the front indicator; rear: two
-  // red bars, the lower one is the indicator
   "dodge_challenger_srt_hellcat.glb": {
     paint: ["#d24b00", "#ff650f", "#a53b00"],
     ref: "#ff650f",
@@ -309,7 +230,6 @@ const TEX_DIR =
 const SRC = "src/mainview/models"
 const OUT_DIRS = [SRC, "src/mainview/public/models"]
 
-// ---- GLB io ---------------------------------------------------------------
 
 function readGlb(buf: Buffer) {
   const jsonLen = buf.readUInt32LE(12)
@@ -339,7 +259,6 @@ function writeGlb(json: any, bin: Buffer): Buffer {
   return Buffer.concat([head, jh, jb, bh, bb])
 }
 
-// ---- PNG (8-bit RGBA / RGB, non-interlaced) ---------------------------------
 
 function decodePng(png: Buffer) {
   let p = 8
@@ -397,7 +316,6 @@ function decodePng(png: Buffer) {
   }
 }
 
-// ---- geometry -------------------------------------------------------------
 
 interface Prim {
   pos: Float32Array
@@ -449,7 +367,6 @@ function readPrim(json: any, bin: Buffer, p: any): Prim {
   }
 }
 
-/** The given triangles of `src`, with compacted vertices. */
 function subset(src: Prim, tris: number[], material: number): Prim {
   const map = new Map<number, number>()
   const pos: number[] = []
@@ -478,7 +395,6 @@ function subset(src: Prim, tris: number[], material: number): Prim {
   }
 }
 
-// ---- colour ---------------------------------------------------------------
 
 const lin = (c: number) =>
   c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
@@ -489,13 +405,11 @@ const lum = (hex: string) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-// ---- the work -------------------------------------------------------------
 
 function prepare(file: string): Buffer {
   const rule = RULES[file]
   const { json, bin } = readGlb(fs.readFileSync(path.join(SRC, file)))
 
-  // palette PNG: embedded already, or referenced by uri on a fresh export
   let png: Buffer
   const img = json.images[0]
   if (img.uri) png = fs.readFileSync(path.join(TEX_DIR, path.basename(img.uri)))
@@ -506,7 +420,6 @@ function prepare(file: string): Buffer {
   }
   const pal = decodePng(png)
 
-  // wheel mesh nodes -> `Wheel_XX` pivot groups
   const root = json.scenes[0].nodes
   const top = json.nodes[root[0]]
   const list: number[] = root.length === 1 && top.children ? top.children : root
@@ -525,7 +438,6 @@ function prepare(file: string): Buffer {
     list[i] = json.nodes.length - 1
   }
 
-  // materials, in the DB12's layout
   const materials: any[] = [
     {
       name: "CARS_Color_1_Material",
@@ -608,7 +520,6 @@ function prepare(file: string): Buffer {
       ) - 1
     : -1
 
-  // primitives per mesh: the body is split by palette colour, the rest stay
   const bodyMesh = json.nodes.find((n: any) => n.name === "Body").mesh
   const meshPrims: Prim[][] = json.meshes.map((m: any, mi: number) => {
     const prims: Prim[] = m.primitives.map((p: any) => readPrim(json, bin, p))
@@ -616,7 +527,6 @@ function prepare(file: string): Buffer {
       (p: any) => json.materials[p.material]?.name ?? "",
     )
     if (mi !== bodyMesh) return prims.map((p) => ({ ...p, material: COLOR }))
-    // one big primitive first, so each material ends up as a single draw
     const cat = (f: (p: Prim) => ArrayLike<number>) =>
       Float32Array.from(prims.flatMap((p) => Array.from(f(p))))
     let base = 0
@@ -691,8 +601,6 @@ function prepare(file: string): Buffer {
       parts.forEach((q, t) => {
         if ((q !== "ampF" && q !== "ampR") || (rule.ampMat && triSrc[t] === rule.ampMat))
           return
-        // a corner within reach is enough: the housing slivers are long and
-        // thin, so their centres sit far from the lens
         const reach = (c: number[]) =>
           lampV.some(
             (v) => (v[0] - c[0]) ** 2 + (v[1] - c[1]) ** 2 + (v[2] - c[2]) ** 2 <= r2,
@@ -764,8 +672,6 @@ function prepare(file: string): Buffer {
       .map(([mat, tris]) => {
         const prim = subset(src, tris, mat)
         if (mat === LIGHTS) {
-          // every lens vertex samples the middle of the white palette block, so
-          // bilinear/mip filtering can't pull in the yellow/blue cells beside it
           let su = 0
           let sv = 0
           const n = prim.uv.length / 2
@@ -773,8 +679,6 @@ function prepare(file: string): Buffer {
             su += prim.uv[i * 2]
             sv += prim.uv[i * 2 + 1]
           }
-          // the white cell itself when a lens is not made of white triangles
-          // (swapped roles), else the mean of the lens's own cells
           const wu = whiteUv ? whiteUv[0] : su / n
           const wv = whiteUv ? whiteUv[1] : sv / n
           for (let i = 0; i < n; i++) {
@@ -786,7 +690,6 @@ function prepare(file: string): Buffer {
       })
   })
 
-  // rebuild the buffers from scratch: image first, then every primitive
   const chunks: Buffer[] = []
   let size = 0
   json.bufferViews = []
@@ -854,9 +757,6 @@ function prepare(file: string): Buffer {
   return writeGlb(json, Buffer.concat(chunks))
 }
 
-/** `ANALYZE=<file> bun scripts/prepare-low-poly-cars.ts`: per palette colour,
- * the triangle count and |x| / y / z extents of the body, to write a rule.
- * `BOX=xmin,xmax,ymin,ymax,zmin,zmax` (|x|, cm) limits it to a region. */
 function analyze(file: string) {
   const { json, bin } = readGlb(fs.readFileSync(path.join(SRC, file)))
   const img = json.images[0]
@@ -909,7 +809,6 @@ if (process.env.ANALYZE) {
   process.exit(0)
 }
 
-// optional file names after the script restrict which models are redone
 const only = process.argv.slice(2).filter((a) => a.endsWith(".glb"))
 for (const f of Object.keys(RULES)) {
   if (only.length > 0 && !only.includes(f)) continue

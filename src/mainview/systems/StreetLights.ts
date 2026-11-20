@@ -74,8 +74,6 @@ export class StreetLights {
         emissiveIntensity: 0,
         roughness: 0.4,
       })
-      // The glass is sub-pixel from afar and its glow flickers, so keep the
-      // lamp head unlit until it is close enough to read as a lamp.
       this.headMat.onBeforeCompile = (shader) => {
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <emissivemap_fragment>",

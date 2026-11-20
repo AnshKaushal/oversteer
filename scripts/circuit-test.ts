@@ -1,9 +1,3 @@
-/**
- * Checks for the generated race circuit map: valid closed loops across seeds,
- * length, road model, surfaces, and a headless build of the world.
- *
- * Run: bun scripts/circuit-test.ts
- */
 import * as THREE from "three"
 import { createMap, listMaps } from "../src/mainview/maps"
 import { createCircuitConfig } from "../src/mainview/maps/circuit/config"
@@ -256,7 +250,6 @@ check(
 }
 
 {
-  // Hills must never sit on the track.
   const { world, track } = (() => {
     const inst = createMap("circuit", { seed: 77, lengthM: 4000 })
     return { world: inst.world as any, track: null as any }

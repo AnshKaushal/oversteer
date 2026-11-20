@@ -1,16 +1,7 @@
-/**
- * Burn-down for hardcoded physics numbers. Counts numeric literals other
- * than 0, 1, 2 and -1 in the physics source files, ignoring comments and
- * strings. Report-only by default; with --fail it exits non-zero when any
- * file in ENFORCED has a literal that scripts/audit-allowlist.json does not
- * list for that file.
- *   bun scripts/audit-literals.ts [--fail] [--list <file-substring>]
- */
 import ts from "typescript"
 import { readdirSync } from "node:fs"
 
 const DIR = process.env.AUDIT_DIR ?? "src/mainview/physics"
-/** Every file under physics/ must reach zero literals. */
 const ENFORCED_ALL = true
 const TRIVIAL = new Set(["0", "1", "2"])
 
@@ -36,7 +27,7 @@ for (const f of files) {
   const sf = ts.createSourceFile(f, text, ts.ScriptTarget.Latest, true)
   const hits: { line: number; text: string }[] = []
   const visit = (n: ts.Node) => {
-    if (ts.isLiteralTypeNode(n)) return // numeric types like Gear are not values
+    if (ts.isLiteralTypeNode(n)) return
     if (ts.isNumericLiteral(n) && !TRIVIAL.has(n.text)) {
       const neg =
         n.parent &&

@@ -1,8 +1,3 @@
-/**
- * Time-of-day sky tests: rainy and stormy presets, the weather they imply, and the rain system.
- *
- * Run: `bun scripts/sky-test.ts` (exit 1 on any failure).
- */
 import * as THREE from "three"
 import {
   TIME_OF_DAY_MODES,
@@ -116,7 +111,6 @@ rain.setConditions(0.55, false)
     fast.z -= 40 / 60
     rain.update(1 / 60, fast)
   }
-  // driving toward -z, the rain comes at the car from -z, so each streak's tail trails toward -z
   let leaned = 0
   for (let i = 0; i < seg.length; i += 6)
     if (seg[i + 5] - seg[i + 2] < -0.3) leaned++
@@ -132,7 +126,6 @@ for (let i = 0; i < 60 * 40; i++)
 check("plain rain never flashes", calm === 0)
 rain.dispose()
 
-// ---- puddles: a road along z, 16 m wide, grass beyond a 21 m strip
 {
   const surf = (x: number, _z: number, r: number) => {
     const across = Math.abs(x)
@@ -217,7 +210,6 @@ rain.dispose()
     pud.setFlash(1)
   }
 
-  // the rain stops: the puddles stay for a while and then dry out
   {
     const { pud, mesh } = make()
     pud.setRain(1)
@@ -250,7 +242,6 @@ rain.dispose()
     )
   }
 
-  // driving dries the road much sooner than waiting
   {
     const { pud, mesh } = make()
     pud.setRain(1)
@@ -273,7 +264,6 @@ rain.dispose()
     check("partway there, some puddles remain", atHalf > 0, atHalf)
   }
 
-  // changing sky while it keeps raining does not dry anything
   {
     const { pud, mesh } = make()
     pud.setRain(1)
@@ -293,7 +283,6 @@ rain.dispose()
   }
 }
 
-// ---- smoke and spray on wet ground
 {
   const live = (arr: Float32Array) =>
     arr.reduce((n, v) => n + (v > 0 ? 1 : 0), 0)

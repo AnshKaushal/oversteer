@@ -173,7 +173,6 @@ function reindexPrim(
 
   if (!newIndices.length) return null
 
-  // Write new position buffer
   const posBytes = new Uint8Array(new Float32Array(newPositions).buffer)
   const posRes = appendToBin(bin, posBytes)
   bin = posRes.nextBin
@@ -325,7 +324,6 @@ async function prepareCar(
         ? [rlExisting, rrExisting]
         : []
 
-    // We want to create fresh Wheel_RL and Wheel_RR
     const rlChildren: number[] = []
     const rrChildren: number[] = []
 
@@ -391,7 +389,6 @@ async function prepareCar(
       matrix: baseMatrix,
     })
 
-    // Replace old source nodes in parents
     const oldIndices = sourceNodes.map((n: any) => json.nodes.indexOf(n))
     for (const p of json.nodes) {
       if (p.children) {

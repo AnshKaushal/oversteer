@@ -88,7 +88,6 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
       this.rand(seed * 3 + i * 7) * (W.scaleRange.max - W.scaleRange.min)
     let scale = scaleVar * baseScale
     if (rock) {
-      // small / medium / big rocks, each lodged 35-60% into the ground
       const sz = this.rand(seed * 59 + i * 3)
       const u = this.rand(seed * 61 + i * 11)
       scale = sz < 0.5 ? 0.5 + u * 0.4 : sz < 0.85 ? 1.0 + u * 0.6 : 2.0 + u * 1.0
@@ -144,7 +143,6 @@ export function genSegPropsAll(this: WorldManager, seg: number): PropEntry[] {
     if (out.length > 60) break
   }
 
-  // sparse far-field trees so vegetation spreads across the map, not just the verge
   if (treeIdxs.length > 0) {
     const farFrom = W.maxDistanceFromRoad
     for (let s = s0; s < s0 + this.segLen; s += 2) {

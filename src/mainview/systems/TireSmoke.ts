@@ -408,7 +408,6 @@ export function getSprayTexture(): THREE.Texture {
     g.rect(ox, oy, cell, cell)
     g.clip()
     if (v === 0) {
-      // fine mist: many tiny crisp dots
       for (let k = 0; k < 50; k++) {
         const x = ox + rnd() * cell
         const y = oy + rnd() * cell
@@ -418,7 +417,6 @@ export function getSprayTexture(): THREE.Texture {
         g.fill()
       }
     } else if (v === 1) {
-      // a few larger round droplets
       for (let k = 0; k < 8; k++) {
         const x = ox + rnd() * cell
         const y = oy + rnd() * cell
@@ -427,7 +425,6 @@ export function getSprayTexture(): THREE.Texture {
         g.arc(x, y, r, 0, Math.PI * 2)
         g.fill()
       }
-      // satellite mist around them
       for (let k = 0; k < 20; k++) {
         const x = ox + rnd() * cell
         const y = oy + rnd() * cell
@@ -437,7 +434,6 @@ export function getSprayTexture(): THREE.Texture {
         g.fill()
       }
     } else if (v === 2) {
-      // medium droplets
       for (let k = 0; k < 14; k++) {
         const x = ox + rnd() * cell
         const y = oy + rnd() * cell
@@ -447,7 +443,6 @@ export function getSprayTexture(): THREE.Texture {
         g.fill()
       }
     } else {
-      // medium droplets, varied sizes
       for (let k = 0; k < 18; k++) {
         const x = ox + rnd() * cell
         const y = oy + rnd() * cell

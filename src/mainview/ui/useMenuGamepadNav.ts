@@ -68,9 +68,6 @@ export function useMenuGamepadNav(
   onBack?: () => void,
   onShoulder?: (dir: -1 | 1) => void,
 ) {
-  // Callers pass fresh closures every render. Keeping them in refs lets the
-  // poll loop (and its held-button memory) survive re-renders: restarting it
-  // made a held button look like a new press after every state update.
   const backRef = useRef(onBack)
   const shoulderRef = useRef(onShoulder)
   backRef.current = onBack
@@ -127,8 +124,6 @@ export function useMenuGamepadNav(
               : "up"
       }
       const now = performance.now()
-      // First tilt moves at once, then a slow repeat; a minimum gap stops
-      // jitter around the threshold or a direction flip from double-firing.
       if (sd && now > nextRepeat && now - lastStep > 170) {
         if (!dir) dir = sd
         nextRepeat = now + (sd === stickDir ? 330 : 480)
@@ -147,7 +142,6 @@ export function useMenuGamepadNav(
         if (els.length) {
           const active = document.activeElement as HTMLElement | null
           const cur = active && root.contains(active) ? active : null
-          // slider handling
           if (
             cur instanceof HTMLInputElement &&
             cur.type === "range" &&
@@ -168,7 +162,6 @@ export function useMenuGamepadNav(
             cur?.hasAttribute("data-pad-step") &&
             (dir === "left" || dir === "right")
           ) {
-            // choice rows / carousels step through their options in place
             cur.dispatchEvent(
               new CustomEvent("padstep", {
                 detail: dir === "right" ? 1 : -1,
@@ -216,7 +209,6 @@ export function useMenuGamepadNav(
               a.type === "email" ||
               a.type === "number")
           ) {
-            // don't click; keep focus for typing (keyboard still needed)
           } else {
             a.click()
           }

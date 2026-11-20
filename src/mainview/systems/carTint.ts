@@ -29,12 +29,10 @@ function isPaintMaterial(mat: THREE.Material, meshName: string): boolean {
   return max > 0.15 && max - min < 0.18 && c.b >= c.r * 0.7
 }
 
-/** Convert a standard material to glossy clear-coated car paint. */
 export function toClearcoatPaint(
   mat: THREE.MeshStandardMaterial,
 ): THREE.MeshPhysicalMaterial {
   const p = new THREE.MeshPhysicalMaterial()
-  // Physical.copy() reads physical-only fields a standard source lacks.
   THREE.MeshStandardMaterial.prototype.copy.call(p, mat)
   p.userData = { ...mat.userData }
   p.metalness = 0.6

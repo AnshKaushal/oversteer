@@ -30,7 +30,7 @@ const idle: DriveInput = {
 const W = { ...idle, throttle: 1 }
 const S = { ...idle, brake: 1 }
 
-const WEIGHT = activeCar().physics.mass.chassis * 9.81 // modelled chassis mass only (wheels unsprung)
+const WEIGHT = activeCar().physics.mass.chassis * 9.81
 
 function mk() {
   return makeRig(RAPIER, activeCar())
@@ -72,7 +72,7 @@ function pitchOf(body: any): number {
   const q = body.rotation()
   const quat = new THREE.Quaternion(q.x, q.y, q.z, q.w)
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(quat)
-  return Math.asin(Math.max(-1, Math.min(1, fwd.y))) // >0 = nose up
+  return Math.asin(Math.max(-1, Math.min(1, fwd.y)))
 }
 
 function rollOf(body: any): number {
@@ -90,7 +90,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   if (!cond) fails++
 }
 
-// 1. Static equilibrium + ride height + load vs weight.
 {
   const s = mk()
   run(s, idle, 3)
@@ -121,7 +120,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 2. Stable settling: no persistent oscillation.
 {
   const s = mk()
   run(s, idle, 3.5)
@@ -144,7 +142,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 3. Independent contact: 5 cm plank under FL only.
 {
   const s = mk()
   const plank = s.world.createRigidBody(
@@ -154,8 +151,6 @@ const check = (name: string, cond: boolean, extra = "") => {
     RAPIER.ColliderDesc.cuboid(0.5, 0.025, 0.5).setFriction(1.0),
     plank,
   )
-  // Hold the service brake: with idle-creep stroll the car would otherwise
-  // drive off the plank mid-test. This block measures static redistribution.
   run(s, S, 2)
   const st = snap(s)
   const contactY = (i: number) => s.car.suspension.states[i].contactY
@@ -185,7 +180,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 4. Compression then recovery (pushed down 5 cm, released).
 {
   const s = mk()
   run(s, idle, 2)
@@ -215,7 +209,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 5. Pitch: squat under power, dive under braking.
 {
   const s = mk()
   run(s, idle, 1)
@@ -235,7 +228,6 @@ const check = (name: string, cond: boolean, extra = "") => {
     pitchAcc > 0.0005,
     `pitch=${(pitchAcc * 57.3).toFixed(3)}deg`,
   )
-  // Capture dive mid-braking while still at speed (a full stop returns to rest).
   run(s, W, 1.5)
   let dive: ReturnType<typeof snap> | null = null
   let divePitch = 0
@@ -269,7 +261,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 6. Roll during cornering (lean-out, outer loaded).
 {
   const s = mk()
   run(s, W, 1.0)
@@ -278,7 +269,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   const yaw = s.body.angvel().y
   const st = snap(s)
   const roll = rollOf(s.body)
-  // Turn centre is on the inner side: yaw>0 (CCW from above) => left turn => outer = right.
   const leftC = (st[0].c + st[2].c) / 2
   const rightC = (st[1].c + st[3].c) / 2
   const outerMinusInner = yaw > 0 ? rightC - leftC : leftC - rightC
@@ -295,7 +285,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 7. Airborne: no suspension force without contact.
 {
   const s = mk()
   run(s, idle, 1)
@@ -329,7 +318,6 @@ const check = (name: string, cond: boolean, extra = "") => {
   )
 }
 
-// 8. Tilt recovery without uprighting torque (validates natural righting).
 {
   const s = mk()
   run(s, idle, 1)

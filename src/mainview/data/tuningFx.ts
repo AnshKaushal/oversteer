@@ -6,16 +6,10 @@ const G = 9.81
 const RPM_TO_RAD = (2 * Math.PI) / 60
 
 export interface PerfEstimate {
-  /** 0-100 km/h in seconds (null if the car never gets there). */
   zeroTo100: number | null
   topKmh: number
 }
 
-/**
- * Straight-line estimate from the engine map, the (tuned) gear ratios, drag,
- * downforce and a traction cap. It is not the full physics sim, but it moves
- * with the same inputs, so it shows which way a tuning change pushes the car.
- */
 export function estimatePerformance(car: CarSpec): PerfEstimate {
   const p = car.physics
   const eng = new Engine(p.engine)
@@ -25,7 +19,6 @@ export function estimatePerformance(car: CarSpec): PerfEstimate {
   const eff = Math.min(1, Math.max(0.5, p.drivetrain.efficiency || 0.9))
   const a = p.aero
   const crr = p.wheels.rollingResist < 0.1 ? p.wheels.rollingResist : 0.012
-  // Under power the rear axle carries more of the weight.
   const split = p.drivetrain.frontTorqueSplit
   const share = split * 0.5 + (1 - split) * 0.62
   let v = 0.5
@@ -39,8 +32,6 @@ export function estimatePerformance(car: CarSpec): PerfEstimate {
       ((v / R) * tr.gearRatios[g - 1] * tr.finalDriveRatio) / RPM_TO_RAD
     const down = a.downforceAt100kmh * Math.pow(v / (100 / 3.6), 2) + m * G
     const traction = p.wheels.frictionMu * down * share
-    // Take the highest gear that still delivers (nearly) the best usable
-    // force; being traction-limited makes taller gears just as good.
     const forces: number[] = []
     let maxF = -1
     for (let g = 1; g <= tr.gearRatios.length; g++) {
@@ -68,7 +59,6 @@ export function estimatePerformance(car: CarSpec): PerfEstimate {
         break
       }
     }
-    // Never downshift unless the current gear is out of revs.
     if (best !== gear && (best > gear || forces[gear - 1] < 0)) {
       gear = best
       shiftLeft = tr.shiftTimeAuto
@@ -109,11 +99,6 @@ export interface TunedStats {
   topKmh: number
 }
 
-/**
- * The car's listed 0-100 and top speed, moved by how much the tuning changes
- * the straight-line estimate. At stock tuning this is exactly the listed
- * figure, so the spec board and the tuning board always agree.
- */
 export function tunedStats(car: CarSpec, t: Tuning): TunedStats {
   const base = stockPerf(car)
   const listed = {
@@ -133,17 +118,13 @@ export function tunedStats(car: CarSpec, t: Tuning): TunedStats {
 export interface TuneEffects extends TunedStats {
   stockZeroTo100: number
   stockTopKmh: number
-  /** Percent change against stock. */
   gripPct: number
   powerHP: number
   stockPowerHP: number
-  /** Percent change in braking force against stock. */
   brakingPct: number
-  /** -1 (planted) .. +1 (loose rear). */
   balance: number
 }
 
-// Alignment: a little camber helps cornering grip, too much loses it.
 const camberGain = (v: number) => {
   const deg = (v - 1) * 3
   return 0.012 * deg - 0.005 * deg * deg
@@ -156,7 +137,6 @@ const gripPct = (t: Tuning) =>
     camberGain(t.camberRear) * 0.4) *
   100
 
-/** -1 (planted) .. +1 (loose rear). */
 const balance = (t: Tuning) =>
   Math.max(
     -1,

@@ -22,12 +22,10 @@ export async function setNativeCursorLock(locked: boolean): Promise<boolean> {
   }
 }
 
-/** Saves a PNG data URL to ~/Pictures/OverSteer; resolves the file path. */
 export async function savePhoto(dataUrl: string): Promise<string | null> {
   try {
     return await getBridge().request.savePhoto({ dataUrl })
   } catch {
-    // Browser/dev fallback: normal download.
     const a = document.createElement("a")
     a.href = dataUrl
     a.download = `oversteer-${Date.now()}.png`
@@ -120,7 +118,6 @@ export async function moveToDisplay(id: number): Promise<boolean> {
   }
 }
 
-/** Start/stop the LAN relay server in the host process. Resolves true if it is running. */
 export async function setLanRelay(on: boolean): Promise<boolean> {
   try {
     return await getBridge().request.setLanRelay({ on })

@@ -1,8 +1,3 @@
-/**
- * A short steering tap at cruise: the car should lean into a gentle turn and
- * settle, not snap into a slide. Emulates the keyboard ramp (4.5/s in, 7/s out).
- * Run with CAR=<id>.
- */
 import {
   initPhysics,
   moveGroundBody,

@@ -76,13 +76,11 @@ for (const c of CASES) {
   s.car.update(1 / 120, idle)
   s.world.step()
 
-  // establish a sustained right-hand circle / drift at full throttle
   run(
     s,
     { ...idle, throttle: 1, steer: 1, handbrake: c.entry === "hb" },
     c.entry === "hb" ? 1.2 : 3.0,
   )
-  // then release the handbrake (if used) and steer LEFT, throttle still pinned
   const bIn = betaOf(s.body),
     yIn = s.body.angvel().y
   const vIn = Math.abs(s.car.forwardSpeed) * 3.6
@@ -90,8 +88,6 @@ for (const c of CASES) {
   const bOut = betaOf(s.body),
     yOut = s.body.angvel().y
 
-  // "recovered" = the car is now rotating the OTHER way. Sign of yaw rate is
-  // the honest test; beta's sign is ambiguous mid-spin.
   const flipped = yOut < 0
   if (!flipped) bad++
   console.log(

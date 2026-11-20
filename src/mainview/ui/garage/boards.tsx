@@ -27,7 +27,6 @@ import {
 } from "./kit"
 
 export function SpecsBoard({ car }: { car: CarDefinition }) {
-  // Same source as the tuning board, so the figures always agree.
   const tuning = useTuning(car.id)
   const stats = useMemo(() => tunedStats(car, tuning), [car, tuning])
   const peaks = useMemo(() => enginePeaks(car.physics.engine), [car])

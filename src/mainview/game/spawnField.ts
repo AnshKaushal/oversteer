@@ -15,7 +15,6 @@ import { colorHex, rivalColor } from "../systems/carTint"
 import { trafficCountFor } from "../systems/RaceTypes"
 import { CARS } from "../data/cars"
 
-// Heavy models (high texture memory / draw calls) stay out of the traffic pool.
 const NO_TRAFFIC = new Set(["f1-car"])
 const TRAFFIC_CARS = CARS.filter((c) => !NO_TRAFFIC.has(c.id))
 
@@ -57,7 +56,6 @@ export interface SpawnEnv {
   timeOfDayRef: any
   trafficRef: any
   world: any
-  /** Spawn traffic after the caller finishes loading; see spawnTrafficLater. */
   deferTraffic?: boolean
   isDisposed?: () => boolean
   onTraffic?: (r: Rival) => void
@@ -188,8 +186,6 @@ export async function spawnField(env: SpawnEnv) {
   }
   activeRivalsRef.current = rivals
   const trafficCars: Rival[] = []
-  // Read when traffic is actually spawned, not at build time: the garage
-  // session spawns it later, once free roam starts in place.
   const trafficTarget = () =>
     startedRef.current && !raceActiveInit && map.map.features.traffic
       ? trafficCountFor(trafficRef.current)

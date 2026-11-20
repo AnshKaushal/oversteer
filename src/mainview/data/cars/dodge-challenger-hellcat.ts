@@ -453,8 +453,6 @@ export const dodgeChallengerHellcat: CarSpec = {
   },
   defaultTint: null,
   paintMatch: ["^Body_Paint"],
-  // Real car: 6.2 L supercharged V8, 717 hp / 881 Nm, 3.6 s to 100 km/h and
-  // 199 mph (320 km/h)
   tested: {
     zeroToHundredS: 3.6,
     topSpeedKmh: 320,

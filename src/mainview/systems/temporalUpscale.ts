@@ -2,16 +2,6 @@ import * as THREE from "three"
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 import { RCAS_SHARPNESS } from "./upscalePass"
 
-/**
- * Temporal upscaler (TAAU, the same idea as FSR 2 / DLSS without the vendor
- * pieces). The scene is rendered at a lower internal resolution with a
- * sub-pixel camera jitter; every frame the jittered samples are accumulated
- * into an output-resolution history, so detail from many frames adds up to
- * more than one low-res frame holds. Also serves as the anti-aliasing at
- * 100% scale. History is reprojected from depth + camera motion and clamped
- * to the local colour range so moving objects don't smear.
- * Runs after tone mapping (LDR, gamma-encoded), then RCAS sharpens.
- */
 
 const VERT = `
 precision highp float;
@@ -162,7 +152,6 @@ export class TemporalUpscalePass extends Pass {
   private readonly proj = new THREE.Matrix4()
   private srcW = 1
   private srcH = 1
-  /** Sub-pixel jitter (internal pixels) in effect for this frame. */
   readonly jitter = new THREE.Vector2()
 
   constructor(
@@ -220,15 +209,10 @@ export class TemporalUpscalePass extends Pass {
 
   setSize() {}
 
-  /** Drop accumulated history (camera cut, teleport, resize). */
   reset() {
     this.hasHist = false
   }
 
-  /**
-   * Call right before the scene render: applies this frame's jitter to the
-   * camera projection. Returns a function that restores the projection.
-   */
   beginFrame(): () => void {
     const i = this.frame % PHASES
     this.jitter.set(halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5)
@@ -236,7 +220,6 @@ export class TemporalUpscalePass extends Pass {
     const e8 = e[8],
       e9 = e[9]
     this.proj.copy(this.camera.projectionMatrix)
-    // Content shifts by -jitter pixels; texel i then holds (i + 0.5 + jitter).
     e[8] += (this.jitter.x * 2) / this.srcW
     e[9] += (this.jitter.y * 2) / this.srcH
     this.camera.updateMatrixWorld()

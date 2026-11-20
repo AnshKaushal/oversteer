@@ -1,10 +1,5 @@
 import type { ReactNode } from "react"
 
-/**
- * Garage design language: calm automotive-display glass. Deep navy surface,
- * translucent cards, pill controls, big clean numbers and a single
- * blue accent. Amber marks anything the player has tuned.
- */
 export const ACCENT = "#51a7d5"
 export const ACCENT_DEEP = "#51a7d5"
 export const MOD = "#ffc247"
@@ -15,7 +10,6 @@ export const accentFill = ACCENT
 export const glass =
   "border border-white/[0.08] bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
 
-/** Wall-screen backdrop: navy depth with a soft blue bloom top-left. */
 export const screenBg = {
   background: "#0a0a0a",
 } as const
@@ -56,7 +50,6 @@ export function BoardHeader({
   )
 }
 
-/** Pill-shaped segmented control with a glowing blue active segment. */
 export function Seg<T extends string | number>({
   options,
   value,
@@ -66,7 +59,6 @@ export function Seg<T extends string | number>({
   options: { id: T; label: ReactNode }[]
   value: T
   onChange: (id: T) => void
-  /** Option ids that should show a "modified" dot. */
   dots?: T[]
 }) {
   return (
@@ -100,7 +92,6 @@ export function Seg<T extends string | number>({
   )
 }
 
-/** Toggle chip: blue when included, dim and struck through when off. */
 export function Token({
   on,
   onClick,
@@ -124,7 +115,6 @@ export function Token({
   )
 }
 
-/** A figure on a glass card: caption, big value, small unit. */
 export function Readout({
   label,
   value,

@@ -1,9 +1,3 @@
-/**
- * Phase 3 regression tests: snapshot interpolation + bounded extrapolation.
- *
- * Run: `bun scripts/net-interp-test.ts` (exit 1 on any failure).
- * Deterministic explicit timestamps — no wall-clock sleeps.
- */
 import * as THREE from "three"
 import {
   initPhysics,
@@ -25,7 +19,6 @@ import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
 import { MultiplayerManager } from "../src/mainview/systems/net/MultiplayerManager"
 import { getCar } from "../src/mainview/data/cars"
 
-/** Net tests only need some real car; they do not depend on which. */
 const TEST_CAR = getCar("bmw-m3")
 const TEST_REMOTE_OPTS = {
   modelFile: TEST_CAR.modelFile,
@@ -67,7 +60,6 @@ function snap(
   }
 }
 
-// ---------- 1. halfway interpolation ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
@@ -82,20 +74,17 @@ function snap(
   check("1 extrapMs 0", stats.extrapMs === 0)
 }
 
-// ---------- 2. exact-snapshot timestamps ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
   b.append(snap(10, 100, 1), 100, 1)
   b.append(snap(30, 200, 2), 200, 2)
   const out = newInterpTarget()
-  // Exact middle snapshot: bracket (100,200) at t=0 -> exact older value.
   const m1 = b.sampleInto(out, 100)
   check("2 exact middle", m1 === "interp" && approx(out.x, 10), {
     m1,
     x: out.x,
   })
-  // Exact newest: extrapolation of 0 ms -> exact value, bounded trivially.
   const stats = { mode: "extrap" as const, extrapMs: -1 }
   const m2 = b.sampleInto(out, 200, stats)
   check("2 exact newest", approx(out.x, 30) && stats.extrapMs === 0, {
@@ -105,15 +94,13 @@ function snap(
   })
 }
 
-// ---------- 3. quaternion slerp ----------
 {
-  const s45 = Math.SQRT1_2 // yaw 90°: (0, sin45, 0, cos45)
+  const s45 = Math.SQRT1_2
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
   b.append(snap(0, 100, 1, { qx: 0, qy: s45, qz: 0, qw: s45 }), 100, 1)
   const out = newInterpTarget()
   b.sampleInto(out, 50)
-  // Halfway yaw 45°: (0, sin22.5, 0, cos22.5).
   const e = { y: Math.sin(Math.PI / 8), w: Math.cos(Math.PI / 8) }
   check(
     "3 slerp halfway",
@@ -122,7 +109,6 @@ function snap(
   )
   const n = Math.hypot(out.qx, out.qy, out.qz, out.qw)
   check("3 slerp unit", approx(n, 1), n)
-  // q vs -q (same rotation): no flip, stays near q.
   const o = { x: 0, y: 0, z: 0, w: 1 }
   slerpQuat(0, 0, 0, 1, 0, 0, 0, -1, 0.5, o)
   check(
@@ -132,7 +118,6 @@ function snap(
   )
 }
 
-// ---------- 4. degenerate quat defense ----------
 {
   const o = { x: 9, y: 9, z: 9, w: 9 }
   slerpQuat(0, 0, 0, 0, 0, 0, 0, 0, 0.5, o)
@@ -144,14 +129,12 @@ function snap(
   )
 }
 
-// ---------- 5. priming: render time predates history -> hold ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(7, 500, 0, { vx: 3 }), 500, 0)
   const out = newInterpTarget()
   const mode = b.sampleInto(out, 400)
   check("5 priming hold", mode === "hold" && out.x === 7, { mode, x: out.x })
-  // At arrival exactly: 0 ms extrapolation == hold value.
   const stats = { mode: "extrap" as const, extrapMs: -1 }
   const m2 = b.sampleInto(out, 500, stats)
   check("5 fresh single ~hold", approx(out.x, 7) && stats.extrapMs === 0, {
@@ -161,7 +144,6 @@ function snap(
   })
 }
 
-// ---------- 6. extrapolation clamped ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0, { vx: 10 }), 0, 0)
@@ -177,13 +159,11 @@ function snap(
   )
 }
 
-// ---------- 7. bursts + capacity ----------
 {
   const b = new SnapshotBuffer()
   for (let i = 0; i < 100; i++) b.append(snap(i, i * 33, i), i * 33, i)
   check("7 hard cap", b.size === SNAPSHOT_CAP, b.size)
   check("7 newest retained", b.latest()?.seq === 99, b.latest())
-  // Burst with identical arrival times: no NaN, sane output.
   const b2 = new SnapshotBuffer()
   for (let i = 0; i < 10; i++) b2.append(snap(i, 1000, i), 1000, i)
   const out = newInterpTarget()
@@ -194,7 +174,6 @@ function snap(
   check("7 burst finite", finite && b2.size === 10, out)
 }
 
-// ---------- 8. out-of-order rejected before buffering ----------
 {
   const tr = new PeerSessionTracker()
   const b = new SnapshotBuffer()
@@ -206,7 +185,7 @@ function snap(
   }
   accept(0, 0)
   accept(1, 10)
-  const d = accept(0, 500) // stale: rejected, never buffered
+  const d = accept(0, 500)
   check("8 stale rejected", d !== "accept-initial" && d !== "accept", d)
   check("8 buffer untouched", b.size === 2 && b.latest()?.x === 10, {
     size: b.size,
@@ -214,16 +193,14 @@ function snap(
   })
 }
 
-// ---------- 9. session change clears history ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
   b.append(snap(10, 33, 1), 33, 1)
-  b.reset() // manager does this on accept-initial
+  b.reset()
   b.append(snap(500, 1000, 0), 1000, 0)
   const out = newInterpTarget()
   const mode = b.sampleInto(out, 2000)
-  // Lone snapshot with zero velocity: clamped extrapolation == snapshot.
   check(
     "9 new session alone",
     b.size === 1 && approx(out.x, 500) && mode === "extrap",
@@ -231,12 +208,11 @@ function snap(
   )
 }
 
-// ---------- 10. teleport resets (no cross-teleport blend) ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
   b.append(snap(1, 33, 1), 33, 1)
-  b.reset() // warp-snap path
+  b.reset()
   b.append(snap(900, 200, 2), 200, 2)
   const out = newInterpTarget()
   b.sampleInto(out, 250)
@@ -247,7 +223,6 @@ function snap(
   )
 }
 
-// ---------- 11. stale snapshots: frozen, never indefinite ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0, { vx: 10 }), 0, 0)
@@ -265,7 +240,6 @@ function snap(
   )
 }
 
-// ---------- 12. irregular arrival intervals ----------
 {
   const b = new SnapshotBuffer()
   b.append(snap(0, 0, 0), 0, 0)
@@ -273,13 +247,12 @@ function snap(
   b.append(snap(9, 90, 2), 90, 2)
   b.append(snap(10, 95, 3), 95, 3)
   const out = newInterpTarget()
-  b.sampleInto(out, 92.5) // bracket (90,95) -> 9.5
+  b.sampleInto(out, 92.5)
   check("12 burst bracket", approx(out.x, 9.5), out.x)
-  b.sampleInto(out, 50) // bracket (10,90) -> 1 + 8*40/80 = 5
+  b.sampleInto(out, 50)
   check("12 gap bracket", approx(out.x, 5), out.x)
 }
 
-// ---------- 13. no dependence on sender t ----------
 {
   const mk = (t: number) =>
     validateStatePacket({
@@ -324,13 +297,10 @@ function snap(
   }
 }
 
-// ---------- 14. interpolation never touches the local car ----------
 {
   const R = await initPhysics()
   const world = createWorld()
   const scene = new THREE.Scene()
-  // Ground: without it both bodies fall forever (production always has
-  // WorldManager ground; the net scripts must build their own).
   const groundBody = world.createRigidBody(R.RigidBodyDesc.fixed())
   world.createCollider(
     R.ColliderDesc.cuboid(500, 0.5, 500).setTranslation(0, -0.5, 0),
@@ -347,14 +317,10 @@ function snap(
     R,
     TEST_REMOTE_OPTS,
   )
-  // keep the ghost off the local car, which sits at the origin
   remote.colliderBody?.setTranslation({ x: 20, y: 0.72, z: -50 }, true)
-  // Settle suspension under gravity first: a fresh body drops a few cm on
-  // the first steps, which is ordinary physics, not interpolation drift.
   for (let i = 0; i < 60; i++) world.step()
   const t0 = local.translation()
   const rb0 = remote.colliderBody?.translation()
-  // No packets: drive() must not move anything (empty buffer -> coast).
   remote.drive(1 / 120)
   world.step()
   const t1 = local.translation()
@@ -370,7 +336,6 @@ function snap(
       Math.abs(rb1.z - rb0.z) < 0.01,
     { t0, t1, rb0, rb1 },
   )
-  // Feed accepted-style states, drive, step: local body must stay parked.
   const base = performance.now()
   for (let i = 0; i < 5; i++) {
     const r = validateStatePacket({
@@ -412,7 +377,6 @@ function snap(
   world.free()
 }
 
-// ---------- integration: manager session-start resets the buffer ----------
 {
   const R = await initPhysics()
   const world = createWorld()

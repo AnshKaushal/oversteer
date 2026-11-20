@@ -1,9 +1,3 @@
-/**
- * Street light tests: lamps stand beside the road, point their arm across it, are
- * identical whichever way the road is driven, and light only when asked.
- *
- * Run: `bun scripts/streetlight-test.ts` (exit 1 on any failure).
- */
 import * as THREE from "three"
 import { StreetLights } from "../src/mainview/systems/StreetLights"
 import { roadCenterX } from "../src/mainview/systems/WorldManager"
@@ -73,7 +67,6 @@ for (let i = 0; i < sl.count; i++) {
   sides.add(Math.sign(across))
   const dist = Math.abs(across)
   if (dist < 5 || dist > 11) ok = false
-  // the aim point is nearer the road centre than the head
   const ax = sl.aim[i * 3]
   if (Math.abs(ax - roadCenterX(s)) >= dist) ok = false
 }

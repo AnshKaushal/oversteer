@@ -1,10 +1,3 @@
-/**
- * Tyre force curves as text.
- *   bun scripts/tire-curves.ts <preset | car-id> [loadN]
- * Longitudinal force against slip ratio, lateral force and self-aligning
- * torque against slip angle, for a tyre preset (data/tyres.ts) or a car's own
- * wheels, at the given vertical load (default: the car's reference load).
- */
 import { TYRES, tyre, type TyrePresetName } from "../src/mainview/data/tyres"
 import {
   TireModel,

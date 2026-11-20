@@ -17,8 +17,6 @@ const TIER_STYLE: Record<string, string> = {
   "max-fps": "bg-amber-500/20 text-amber-300",
 }
 
-// Stepping through the carousel previews instantly; the (expensive) render
-// target resize is only committed once the player stops on an option.
 const COMMIT_DELAY = 350
 
 export function ResolutionCarousel({

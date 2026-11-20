@@ -6,7 +6,6 @@ export type IndicatorMode = "off" | "left" | "right" | "hazard"
 
 const AMBER = 0xff9a14
 const PERIOD_S = 0.75
-// tail lamp that doubles as the indicator: running-light and off levels
 const TAIL_RUNNING = 1.2
 const TAIL_OFF = 0.15
 
@@ -86,7 +85,6 @@ function yellowSampler(
   }
 }
 
-/** Connected pieces of a mesh: per-vertex piece id plus each piece's size and centre x. */
 function pieces(mesh: THREE.Mesh, inv: THREE.Matrix4) {
   const pos = mesh.geometry.getAttribute("position")
   const idx = mesh.geometry.getIndex()
@@ -116,7 +114,6 @@ function pieces(mesh: THREE.Mesh, inv: THREE.Matrix4) {
 }
 
 const amberCache = new Map<string, THREE.Texture>()
-/** A copy of a lamp texture with its red artwork turned amber. */
 function amberTexture(map: THREE.Texture): THREE.Texture | null {
   const hit = amberCache.get(map.uuid)
   if (hit) return hit
@@ -153,18 +150,15 @@ function amberTexture(map: THREE.Texture): THREE.Texture | null {
   return out
 }
 
-/** Overlay for a lamp that flashes by turning its own red artwork amber. */
 function amberLampMaterial(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
   const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
   const src = mats.find((x) => (x as THREE.MeshStandardMaterial).map) as
     THREE.MeshStandardMaterial | undefined
   const map = src?.map ? amberTexture(src.map) : null
-  // the model's own emissive lens must not glow at rest: only the flash lights it
   for (const x of mats) {
     const std = x as THREE.MeshStandardMaterial
     if (std.emissive && /indicator|tail/i.test(std.name) && !std.map)
       std.emissiveIntensity = 0
-    // at rest the indicator is the same white as the headlight lens, not black
     if (
       /indicator/i.test(std.name) &&
       !std.map &&
@@ -175,7 +169,6 @@ function amberLampMaterial(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     color: 0x000000,
     map,
-    // no texture (a plain amber lens): flash in flat amber
     emissive: map ? 0xffffff : AMBER,
     emissiveMap: map,
     emissiveIntensity: 0,
@@ -187,8 +180,6 @@ function amberLampMaterial(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
     polygonOffsetUnits: -4,
   })
   mat.userData.amberTex = true
-  // a plain lens (no texture) is white like the headlight: it glows with the
-  // headlights and only turns amber while it flashes
   if (!map) {
     mat.userData.lensWhite = true
     mat.color.setHex(0xe8eaf0)
@@ -442,7 +433,6 @@ export function planIndicators(
         z.amber
           ? amberLampMaterial(m)
           : new THREE.MeshStandardMaterial({
-              // glow zones copy the model's brakelight material so the colours match
               color: z.glow
                 ? new THREE.Color().setRGB(
                     0.8,
@@ -652,7 +642,6 @@ export function updateIndicators(this: CarVisual, dt: number) {
     const mat = o.mesh.material as THREE.MeshStandardMaterial
     const flash = on && active
     if (mat.userData.amberTex) {
-      // only on while flashing; otherwise the lamp's own texture shows
       if (mat.userData.lensWhite) {
         const lit = this.headlightsOn && this.power > 0.02
         mat.emissive.setHex(flash ? AMBER : 0xffffff)
@@ -670,7 +659,6 @@ export function updateIndicators(this: CarVisual, dt: number) {
     }
     const glow = mat.userData.glow as number | undefined
     if (glow !== undefined) {
-      // indicator running: amber or dark, never the red tail glow
       mat.emissive.set(active ? AMBER : glow)
       const braking = this.brakeLevel > 0
       const rest = mat.userData.brakeLamp

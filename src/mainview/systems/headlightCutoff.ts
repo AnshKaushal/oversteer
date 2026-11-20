@@ -1,16 +1,8 @@
 import * as THREE from "three"
 
-/** Cone half-angles (radians) of car headlight spots. */
 export const HEADLIGHT_CONE = Math.PI / 3.2
 export const NPC_HEADLIGHT_CONE = Math.PI / 3.0
 
-/**
- * A real low beam has a sharp cutoff just above the horizon: wide to the
- * sides and down, almost no light thrown upward. A three.js spot is a plain
- * cone, so it lights anything up to its full half-angle above the axis.
- * Elevation is the sine of the angle above the beam axis, so the cutoff
- * follows the car's pitch and uphill roads stay lit.
- */
 const FULL_BELOW = Math.sin((1 * Math.PI) / 180)
 const NONE_ABOVE = Math.sin((6 * Math.PI) / 180)
 

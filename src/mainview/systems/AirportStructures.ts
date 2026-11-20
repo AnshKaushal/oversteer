@@ -71,7 +71,6 @@ export class AirportStructures {
   readonly group = new THREE.Group()
   readonly lamps: LocalLamp[] = []
   readonly towerLamps: LocalLamp[] = []
-  /** Floodlight tower heads and where each one aims (local coords). */
   readonly floods: {
     head: [number, number, number]
     aim: [number, number, number]

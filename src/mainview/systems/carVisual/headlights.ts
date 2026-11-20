@@ -183,10 +183,8 @@ export function setupHeadlights(
             }
             const wasTransparent = targetMat.transparent
             const wasOpacity = targetMat.opacity
-            // the palette cars' lens is a solid white disc: keep it opaque or
-            // the empty housing behind it shows through
             if (matName === "lights" && targetMat.color.getHex() === 0)
-              targetMat.color.setHex(0xe8eaf0) // white lens when off
+              targetMat.color.setHex(0xe8eaf0)
             if (!matName.startsWith("cars_lights") && matName !== "lights") {
               targetMat.transparent = true
               targetMat.opacity = Math.min(wasOpacity, 0.7)
@@ -208,7 +206,7 @@ export function setupHeadlights(
         if (this.tintedMats.includes(std)) continue
 
         const isExcludedMat =
-          matName.includes("indicator") || // driven by the indicator, not the lights switch
+          matName.includes("indicator") ||
           matName.includes("paint") ||
           matName.includes("body") ||
           matName.includes("chassis") ||
@@ -301,10 +299,8 @@ export function setupHeadlights(
             }
             const wasTransparent = targetMat.transparent
             const wasOpacity = targetMat.opacity
-            // the palette cars' lens is a solid white disc: keep it opaque or
-            // the empty housing behind it shows through
             if (matName === "lights" && targetMat.color.getHex() === 0)
-              targetMat.color.setHex(0xe8eaf0) // white lens when off
+              targetMat.color.setHex(0xe8eaf0)
             if (!matName.startsWith("cars_lights") && matName !== "lights") {
               targetMat.transparent = true
               targetMat.opacity = Math.min(wasOpacity, 0.7)

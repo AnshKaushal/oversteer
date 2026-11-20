@@ -34,7 +34,6 @@ import { WheelSolver } from "./WheelSolver"
 
 export type { CarTelemetry, Gear } from "./types"
 
-// Tall gears lock the clutch: no free-revving above the wheels' coupled rpm.
 const SLIP_MIN_RATIO_FRACTION = 0.5
 
 export class Vehicle {

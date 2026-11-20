@@ -237,7 +237,6 @@ export class CircuitWorld implements MapWorld {
     return g
   }
 
-  /** Adds a static mesh split into spatial chunks so culling can reject it. */
   private add(
     geo: THREE.BufferGeometry,
     mat: THREE.Material,
@@ -499,11 +498,9 @@ export class CircuitWorld implements MapWorld {
     const e = new THREE.Euler()
     const pos = new THREE.Vector3()
     const scale = new THREE.Vector3()
-    // Jobs: the first chunkCount hug the track (the dense verge band); the
-    // rest are open-field cells so vegetation spreads across the whole map.
     let FIELD_CELL_M = 250
     const FIELD_MARGIN_M = 500
-    const FIELD_PER_TREE_M2 = 600 // match the verge density
+    const FIELD_PER_TREE_M2 = 600
     let minX = Infinity,
       maxX = -Infinity,
       minZ = Infinity,
@@ -519,7 +516,6 @@ export class CircuitWorld implements MapWorld {
     maxX += FIELD_MARGIN_M
     minZ -= FIELD_MARGIN_M
     maxZ += FIELD_MARGIN_M
-    // keep the cell count sane on huge tracks
     const area = (maxX - minX) * (maxZ - minZ)
     FIELD_CELL_M = Math.max(FIELD_CELL_M, Math.sqrt(area / 1600))
     const FIELD_PER_CELL = Math.round(

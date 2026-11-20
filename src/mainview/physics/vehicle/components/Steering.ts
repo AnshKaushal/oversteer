@@ -45,9 +45,6 @@ export class Steering {
     )
     const base = Math.max(gripCap, S.minAngleAtSpeed)
     const want = steerInput * S.maxAngle * factor
-    // When the car is sliding, steering into the slide (countersteer) needs
-    // roughly the body slip angle on top of the grip-limited angle, so the
-    // cap would otherwise stop the driver from catching or holding a drift.
     const countersteer = want * beta < 0
     const cap = countersteer
       ? Math.min(S.maxAngle, base + Math.abs(beta))

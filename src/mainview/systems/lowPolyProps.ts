@@ -148,7 +148,6 @@ export function propMaterial(): THREE.MeshStandardMaterial {
     roughness: 1,
     flatShading: true,
   })
-  // Same screen-door dissolve as the hills so props never outlive them.
   mat.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "void main() {",

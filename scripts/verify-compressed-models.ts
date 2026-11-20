@@ -1,4 +1,3 @@
-// Loads each source GLB and its compressed twin; checks names + bounds match.
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 import * as THREE from "three"

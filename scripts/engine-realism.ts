@@ -1,8 +1,3 @@
-/**
- * Engine realism checks, one car per run (CAR=<id>, or via run-per-car).
- * Each check compares a measured behaviour with a physical range, so a bad
- * car spec or a bad engine model shows up here rather than in play.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -71,7 +66,6 @@ function run(
   }
 }
 
-// ---- 1. the derived peaks are plausible --------------------------------------
 {
   const pk = enginePeaks(E)
   check(
@@ -106,7 +100,6 @@ function run(
   )
 }
 
-// ---- 2. idle is stable -------------------------------------------------------
 {
   const r = fresh()
   r.car.autoMode = false
@@ -126,7 +119,6 @@ function run(
   )
 }
 
-// ---- 3. free revving takes believable time ----------------------------------
 {
   const r = fresh()
   r.car.autoMode = false
@@ -144,7 +136,6 @@ function run(
   )
 }
 
-// ---- 4. the limiter holds ----------------------------------------------------
 {
   const r = fresh()
   r.car.autoMode = false
@@ -161,7 +152,6 @@ function run(
   )
 }
 
-// ---- 5. engine braking in top gear is believable ------------------------------
 {
   const r = fresh()
   r.car.autoMode = false
@@ -180,11 +170,9 @@ function run(
   )
 }
 
-// ---- 6. turbo spool ----------------------------------------------------------
 {
   const r = fresh()
   r.car.autoMode = false
-  // in neutral so a quick launch cannot hit the limiter before the turbo has spooled
   r.car.gear = 0 as never
   r.car.parkingBrake = false
   let t = -1
@@ -203,7 +191,6 @@ function run(
   else check("naturally aspirated engine reports no boost", engine.boost === 0)
 }
 
-// ---- 7. a full-throttle pull through the gears is clean -----------------------
 {
   const r = fresh()
   r.car.autoMode = true
@@ -227,11 +214,7 @@ function run(
   check("full-throttle pull never passes the limiter", over === 0)
 }
 
-// ---- 8. acceleration is consistent with the engine ---------------------------
 {
-  // Power-limited bound: v from energy, using the curve peak and drivetrain
-  // efficiency. 0-100 cannot beat it, and a car far slower than 3x it is
-  // a traction or gearing error rather than an engine one.
   let hp = 0
   for (let rpm = E.idleRPM; rpm <= E.redlineRPM; rpm += 25)
     hp = Math.max(
@@ -253,7 +236,6 @@ function run(
     t >= floor * 0.98,
     `t=${t.toFixed(2)}s floor=${floor.toFixed(2)}s (${hp.toFixed(0)}hp, ${mass.toFixed(0)}kg)`,
   )
-  // traction bound: even at 1.5 g of grip the car needs this long
   const grip = v / (1.5 * 9.81)
   check(
     "0-100 is not faster than a 1.5 g traction limit",

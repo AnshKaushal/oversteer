@@ -88,8 +88,6 @@ export function update(
       h.mesh.position.x - carPos.x,
       h.mesh.position.z - carPos.z,
     )
-    // Fog hides a hill until it is in range; with fog off the hill material
-    // dissolves in by distance. Either way it keeps its full size.
     h.mesh.visible =
       this.withinFog(dist - h.radius) && dist - h.radius < HILL_FADE_TO
     const sc = 1

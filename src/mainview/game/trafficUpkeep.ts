@@ -8,7 +8,6 @@ import { AIDriver, makeTrafficProfile } from "../systems/AIDriver"
 import { shadowRange2 } from "../app/helpers"
 import type { Rival } from "./spawnField"
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface TrafficEnv {
   trafficCars: Rival[]
   wm: any
@@ -19,7 +18,6 @@ export interface TrafficEnv {
   ahead: number
 }
 
-/** Keeps NPC traffic alive: recycles cars that fall behind / get stuck and sets per-car LOD + shadows. */
 export class TrafficUpkeep {
   private shadowAcc = 0
   constructor(private env: TrafficEnv) {}
@@ -116,7 +114,6 @@ export class TrafficUpkeep {
             tc.hi = shouldBeHi
             tc.visual.setDetail(shouldBeHi)
           }
-          // Clearcoat only up close; hysteresis avoids flicker at the edge.
           tc.visual.setGloss(
             tc.visual.glossy ? d < 6400 : d < 3600,
           )

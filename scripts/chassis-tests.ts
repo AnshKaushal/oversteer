@@ -1,8 +1,3 @@
-/**
- * P5 chassis checks, one car per run (CAR=<id>, or via run-per-car): the
- * suspension, alignment, tire and steering models against what the car spec
- * says they should do.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -74,7 +69,6 @@ function run(
   }
 }
 
-// ---- suspension -------------------------------------------------------------
 {
   for (const ax of ["front", "rear"] as const)
     check(
@@ -110,7 +104,6 @@ function run(
   )
 }
 
-// ---- steering geometry -------------------------------------------------------
 {
   const wb = 2.8,
     track = 1.6
@@ -154,7 +147,6 @@ function run(
   )
 }
 
-// ---- alignment ---------------------------------------------------------------
 {
   const al = new Alignment(P.wheels.alignment)
   const A = P.wheels.alignment

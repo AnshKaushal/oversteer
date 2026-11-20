@@ -1,12 +1,3 @@
-/**
- * Golden master for every registry car. Measures headless, deterministic
- * behaviour and compares it with scripts/golden-baseline.json.
- *   bun scripts/golden-master.ts            compare (exit 1 on drift)
- *   bun scripts/golden-master.ts --record   rewrite the baseline
- * Metrics: 0-100 km/h, top speed, 100-0 km/h braking distance, skidpad
- * lateral g, steady yaw gain at 50 km/h, and a 10-point trajectory under
- * fixed throttle and steer. Tolerances: metrics 2 %, trajectory 0.3 m.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -59,11 +50,10 @@ function advance(
 const speedKmh = (r: Rig) => Math.abs(r.car.forwardSpeed) * 3.6
 const fresh = (def: (typeof CARS)[number]) => {
   const r = makeRig(RAPIER, def)
-  advance(r, idle, HZ) // settle
+  advance(r, idle, HZ)
   r.car.parkingBrake = false
   return r
 }
-/** Put the car at speed v (m/s) heading -Z with matching wheel spin. */
 function launchAt(r: Rig, v: number) {
   r.body.setLinvel({ x: 0, y: 0, z: -v }, true)
   advance(r, idle, HZ / 2)
@@ -72,7 +62,6 @@ function launchAt(r: Rig, v: number) {
 function measure(def: (typeof CARS)[number]) {
   const out: Record<string, number> = {}
 
-  // 0-100 and top speed (plateau, 3 s chunks)
   {
     const r = fresh(def)
     const W = { ...idle, throttle: 1 }
@@ -93,7 +82,6 @@ function measure(def: (typeof CARS)[number]) {
     out.topKmh = top
   }
 
-  // 100-0 braking distance
   {
     const r = fresh(def)
     r.car.gear = 3 as any
@@ -103,7 +91,6 @@ function measure(def: (typeof CARS)[number]) {
     out.brake100to0m = Math.abs(r.body.translation().z - z0)
   }
 
-  // skidpad: full lock at 60 km/h, throttle trimmed by a simple P loop
   {
     const r = fresh(def)
     r.car.gear = 3 as any
@@ -121,7 +108,6 @@ function measure(def: (typeof CARS)[number]) {
     void target
   }
 
-  // steady yaw gain at 50 km/h: yaw rate per unit steer, light throttle
   {
     const r = fresh(def)
     r.car.gear = 3 as any
@@ -130,7 +116,6 @@ function measure(def: (typeof CARS)[number]) {
     out.yawGain50 = Math.abs(r.body.angvel().y) / 0.2
   }
 
-  // trajectory under fixed throttle + steer, 10 samples over 5 s
   const traj: [number, number][] = []
   {
     const r = fresh(def)

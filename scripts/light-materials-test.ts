@@ -1,14 +1,3 @@
-/**
- * Guards the two lamp regressions:
- *  1. Painting a car must NOT repaint its headlights. The M3's lamp strip
- *     is a white emissive material with useless names, so the generic
- *     paint heuristic used to swallow it — black car, black lights.
- *  2. Brake lights must be per-instance clones that brighten under load.
- *     Materials are shared with the cached source GLB, so writing
- *     emissiveIntensity in place would light every copy of the car.
- *
- * Run: bun scripts/light-materials-test.ts
- */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import { tintCar, whitenRims } from "../src/mainview/systems/carTint"
@@ -32,7 +21,6 @@ async function loadScene(file: string): Promise<THREE.Object3D> {
   return glb.scene as THREE.Object3D
 }
 
-/** Materials in the scene by name, after any tint pass rewired them. */
 function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   const out = new Map<string, THREE.Material>()
   root.traverse((o: any) => {
@@ -43,7 +31,6 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   return out
 }
 
-// 1. Painting the M3 black must leave its white headlight strip alone.
 {
   const model = (await loadScene("bmw_m3.glb")).clone(true)
   const painted = tintCar(model, 0x000000)
@@ -75,7 +62,6 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   )
 }
 
-// 2. Brake lights: detected, cloned, and driven by setBrake.
 {
   const model = (await loadScene("bmw_m3.glb")).clone(true)
   tintCar(model, 0x000000)
@@ -88,11 +74,8 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
     `idle=${idle0.toFixed(2)} (authored 10)`,
   )
 
-  // CarVisual.load() needs a fetchable baseUrl; hand the already-collected
-  // lamps to the instance so this still drives the real setBrake code.
   const visual = new CarVisual()
   ;(visual as unknown as { brakeLights: BrakeLight[] }).brakeLights = lights
-  // Drive the same smoothing the game uses, through the real API.
   const lamp = lights[0]!.mat
   const drive = (level: number, times: number) => {
     for (let i = 0; i < times; i++) visual.setBrake(level)
@@ -101,17 +84,12 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   const idle = lamp.emissiveIntensity ?? -1
   drive(1, 1)
   const on = lamp.emissiveIntensity ?? -1
-  // LEDs: one frame is full brightness, and one frame back is off. Any
-  // ramp here would read as a filament warming up.
   check(on > idle * 1.5, "brake glow brightens under load", `${idle} -> ${on}`)
   check(
     on === lights[0]!.idle * (1 + 3.4),
     "single frame reaches full brake brightness (no fade-in)",
     `${on}`,
   )
-  // No tone mapping or bloom: pushing the heat far enough clips the green
-  // and blue channels too, and the lamp reads as a reverse light. Captured
-  // while braked — after release the colour is back to plain red.
   const lit = lamp.emissive.clone().multiplyScalar(on)
   check(
     lit.g > 0.05 && !brakeGlowIsBlown(lights[0]!),
@@ -132,7 +110,6 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
     `#${lamp.emissive.getHexString()}`,
   )
 
-  // Clone isolation: a second car of the same model must not share them.
   const other = collectBrakeLights((await loadScene("bmw_m3.glb")).clone(true))
   check(
     other[0]?.mat !== lights[0]?.mat,
@@ -140,15 +117,13 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   )
 }
 
-// 3. Fleet coverage: every car that CAN show lamps must find them, and the
-//    one that bakes lamps into a shared texture must find none.
 {
   const EXPECTED: Record<string, number> = {
     "bmw_m3.glb": 1,
-    "audi_r8.glb": 1, // Tail_Lamp (the housing is an indicator zone)
+    "audi_r8.glb": 1,
     "lamborghini_urus.glb": 1,
-    "porsche_911.glb": 1, // rear lamp strip (Tail_Lamp)
-    "g_wagon.glb": 0, // shell, glass and lights share one textured material
+    "porsche_911.glb": 1,
+    "g_wagon.glb": 0,
   }
   for (const [file, want] of Object.entries(EXPECTED)) {
     const found = collectBrakeLights(await loadScene(file))
@@ -160,9 +135,6 @@ function materialsByName(root: THREE.Object3D): Map<string, THREE.Material> {
   }
 }
 
-// 4. Painting a car must not turn it into a brake lamp. A red car is
-//    red, and taking the paint for a lamp made the whole body glow when
-//    the brakes came on.
 {
   for (const def of CARS) {
     const file = def.modelFile.split("/").pop()!

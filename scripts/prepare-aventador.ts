@@ -1,20 +1,3 @@
-/**
- * Lamborghini Aventador (low poly, one UV-painted atlas) -> the game's layout.
- *
- *   bun scripts/prepare-aventador.ts [source.glb]      (default: the Downloads file)
- *   ANALYZE=1 bun scripts/prepare-aventador.ts         (print the lamp clusters only)
- *
- * The source has no separate lamp or paint meshes: everything is painted into
- * one texture. So, like scripts/prepare-low-poly-cars.ts, triangles are sorted
- * by the texture colour under them:
- *   yellow  -> Body_Paint (a copy of the atlas whose yellow texels are made
- *              neutral grey, so the colour picker tints it and keeps the shading)
- *   white   -> CARS_Lights_Material (headlights, emissive)
- *   red     -> Tail_Lamp
- *   dark housing next to a lamp -> Indicator_Amber_Front / _Rear
- *   the rest -> CARS_Color_1_Material (the original atlas)
- * Output: nose +z, centred on x, in cm, with `Wheel_FL/FR/RL/RR` pivot groups.
- */
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -29,8 +12,6 @@ const OUT = ["src/mainview/models", "src/mainview/public/models"].map((d) =>
 )
 const LENGTH_CM = 478
 
-// The model file in src/mainview/models has since been edited by hand (new
-// headlight lens + indicator meshes). Re-running this would overwrite that.
 if (!process.env.FORCE) {
   console.error(
     "lamborghini_aventador.glb is hand-edited now; set FORCE=1 to regenerate it from scripts/sources",
@@ -38,7 +19,6 @@ if (!process.env.FORCE) {
   process.exit(1)
 }
 
-// ---- PNG ------------------------------------------------------------------
 
 function decodePng(png: Buffer) {
   let p = 8
@@ -128,7 +108,6 @@ function encodePng(w: number, h: number, ch: number, px: Buffer): Buffer {
   ])
 }
 
-// ---- texel colours ----------------------------------------------------------
 
 type Kind = "yellow" | "white" | "red" | "dark"
 function kindOf(r: number, g: number, b: number): Kind {
@@ -136,7 +115,6 @@ function kindOf(r: number, g: number, b: number): Kind {
   const mn = Math.min(r, g, b)
   if (mn > 165) return "white"
   if (r > 120 && g < 0.45 * r && b < 0.45 * r) return "red"
-  // orange-yellow, including its darker baked shading
   if (r > 70 && r > b * 2.2 && g > b * 1.5 && g > 0.35 * r && mx - mn > 50)
     return "yellow"
   return "dark"
@@ -144,7 +122,6 @@ function kindOf(r: number, g: number, b: number): Kind {
 const isOrange = (r: number, g: number, b: number) =>
   Math.max(r, g, b) - Math.min(r, g, b) > 25 && r >= g && g >= b * 1.2
 
-// ---- read the source --------------------------------------------------------
 
 const src = await new NodeIO().read(SRC)
 const meshNodes = src
@@ -165,7 +142,6 @@ interface Geo {
 function readGeo(node: ReturnType<typeof meshNode>): Geo {
   const prim = node.getMesh()!.listPrimitives()[0]
   const m = node.getWorldMatrix()
-  // inverse transpose of the upper 3x3, for normals
   const [a, b, c, d, e, f, g, h, i] = [
     m[0],
     m[4],
@@ -241,8 +217,6 @@ const wheels: Record<string, Geo> = {
 }
 const all = [body, glass, ...Object.values(wheels)]
 
-// scale to LENGTH_CM, centre x on the track, lowest point at y=0. The nose is
-// already +z once the file's own y-up rotation is applied.
 const lo = [Infinity, Infinity, Infinity]
 const hi = [-Infinity, -Infinity, -Infinity]
 for (const g of all)
@@ -269,7 +243,6 @@ for (const g of all)
     g.pos[i + 2] = g.pos[i + 2] * k
   }
 
-// ---- classify the body triangles -------------------------------------------
 
 const BARY = (() => {
   const out: number[][] = []
@@ -327,11 +300,6 @@ for (let t = 0; t < tris; t++) {
   )
 }
 
-// Grow a lamp over the dark triangles hugging it (every corner within `reach`
-// cm of the lamp), front and rear alike. Front: the white strips are only the
-// daytime-light line, so the whole dark headlight cluster becomes the lens and
-// a thin ring round it is the indicator. Rear: the red chevrons plus the dark
-// strip under them are one lamp, and that lamp is the indicator.
 const vert = (t: number, j: number) => {
   const i = body.idx[t * 3 + j]
   return [Math.abs(body.pos[i * 3]), body.pos[i * 3 + 1], body.pos[i * 3 + 2]]
@@ -354,12 +322,8 @@ function grow(from: Part, to: Part, front: boolean, reach: number) {
   }
   for (const t of hit) part[t] = to
 }
-// the round projector next to the strip is the front indicator; the rest of
-// the dark cluster is lens
 grow("lights", "fill", true, 0.8)
 grow("lights", "ampF", true, 2.8)
-// the cluster's flat dark back panel is made of a few big triangles, so reach
-// can't find it: take the dark triangles that sit inside the cluster's box
 for (let t = 0; t < tris; t++) {
   const [x, y, z] = cen[t]
   if (
@@ -376,7 +340,6 @@ for (let t = 0; t < tris; t++) {
 grow("tail", "tail", false, 3)
 
 if (process.env.SVG) {
-  // front (z>0) or rear view of the lamp parts, painter-sorted by depth
   const front = process.env.VIEW !== "rear"
   const col: Record<string, string> = {
     paint: "#d9a400",
@@ -435,7 +398,6 @@ if (process.env.ANALYZE) {
   process.exit(0)
 }
 
-// ---- the paint atlas: orange texels -> neutral grey of the same brightness --
 
 const luma = (r: number, g: number, b: number) =>
   0.299 * r + 0.587 * g + 0.114 * b
@@ -454,7 +416,6 @@ for (let i = 0; i < neutral.length; i += tex.ch) {
 }
 const neutralPng = encodePng(tex.w, tex.h, tex.ch, neutral)
 
-// ---- build the output --------------------------------------------------------
 
 const doc = new Document()
 const buffer = doc.createBuffer()
@@ -473,9 +434,6 @@ const mColor = doc
   .setBaseColorTexture(atlas)
   .setMetallicFactor(0.288)
   .setRoughnessFactor(0.52)
-// The source headlight is black with a few white lines. Make the whole lens a
-// proper white one: white when off, glowing with the headlights. The dark back
-// of the cluster is a second material only so it can sit a touch warmer.
 const mLights = doc
   .createMaterial("CARS_Lights_Material")
   .setDoubleSided(true)
@@ -490,7 +448,6 @@ const mFill = doc
   .setEmissiveFactor([1, 0.97, 0.9])
   .setMetallicFactor(0)
   .setRoughnessFactor(0.3)
-// the model's own lamp artwork: the red chevrons glow, the dark stays dark
 const mTail = doc
   .createMaterial("Tail_Lamp")
   .setBaseColorTexture(atlas)
@@ -511,7 +468,7 @@ const mAmpF = flat(
 const mPaint = doc
   .createMaterial("Body_Paint")
   .setBaseColorTexture(paintAtlas)
-  .setBaseColorFactor([1, 0.51, 0, 1]) // stock yellow; the colour picker replaces it
+  .setBaseColorFactor([1, 0.51, 0, 1])
   .setMetallicFactor(0.45)
   .setRoughnessFactor(0.3)
 const mGlass = doc
@@ -520,7 +477,6 @@ const mGlass = doc
   .setMetallicFactor(0.6)
   .setRoughnessFactor(0.08)
 
-/** the given triangles of `g` as a primitive; `uvOf` replaces a triangle's UVs */
 function prim(g: Geo, tl: number[], mat: any, uvOf?: (t: number) => number[]) {
   const pos: number[] = []
   const nrm: number[] = []
@@ -581,8 +537,6 @@ for (const [p, mat] of [
   const tl = byPart(p)
   counts[mat.getName()] = tl.length
   if (!tl.length) continue
-  // a lens samples one spot of the white texels, so filtering cannot pull in
-  // the dark cells next to it
   bodyMesh.addPrimitive(prim(body, tl, mat))
 }
 const allTris = (g: Geo) =>

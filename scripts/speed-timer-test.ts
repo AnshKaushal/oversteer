@@ -6,7 +6,7 @@ const ok = (c: boolean, m: string) => {
   if (!c) fails++
 }
 const at = (t: SpeedTimer, i: number) => t.store.get()[i]
-const a = 10 * 3.6 // 10 m/s^2 in km/h per second
+const a = 10 * 3.6
 
 for (const dt of [1 / 30, 1 / 60, 1 / 144]) {
   const t = new SpeedTimer()
@@ -43,7 +43,6 @@ for (const dt of [1 / 30, 1 / 60, 1 / 144]) {
   ok(at(t, 0).state !== "done", "rolling start is not a 0-100")
 }
 {
-  // Stationary jitter must never start, flicker or abort a 0-100.
   const t = new SpeedTimer()
   t.configure([{ from: 0, to: 100 }])
   let flips = 0
@@ -56,7 +55,6 @@ for (const dt of [1 / 30, 1 / 60, 1 / 144]) {
     prev = st
   }
   ok(flips <= 1 && at(t, 0).state === "armed", `jitter keeps it armed (${flips} flips)`)
-  // Launch out of the jitter: time starts when the car last left rest.
   let v = 0
   const launch0 = 300 * dt
   for (let s = 0; s < 8 / dt; s++) t.update((v += a * dt), dt)

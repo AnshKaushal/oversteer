@@ -1,16 +1,5 @@
 import * as THREE from "three"
 
-/**
- * Cars like the G-Wagon paint every lamp into one emissive texture on the body
- * material, so the lamps cannot be driven as separate meshes. This tells the
- * shader which lamp a texel belongs to, by its colour, and scales each lamp
- * with its own uniform:
- *   white  -> headlights
- *   red    -> tail / brake lamps
- *   yellow -> indicators (flashed elsewhere by overlay meshes; dark here)
- * White texels in the left edge of the texture are the reversing lamp, which
- * stays dark.
- */
 export interface LampChannels {
   head: { value: number }
   tail: { value: number }
@@ -18,7 +7,7 @@ export interface LampChannels {
 
 const REVERSE_U = 0.135
 
-const FRAGMENT = /* glsl */ `
+const FRAGMENT =  `
 #ifdef USE_EMISSIVEMAP
 	vec3 lampTexel = texture2D( emissiveMap, vEmissiveMapUv ).rgb;
 	float lampLow = min( lampTexel.r, min( lampTexel.g, lampTexel.b ) );
@@ -30,7 +19,6 @@ const FRAGMENT = /* glsl */ `
 #endif
 `
 
-/** Patch `mat` in place so its emissive map is driven per lamp. */
 export function enableLampChannels(
   mat: THREE.MeshStandardMaterial,
 ): LampChannels {
@@ -56,12 +44,10 @@ export function enableLampChannels(
 }
 
 const HEAD_GAIN = 6
-/** Dim red glow of the tail lamp when the lights are off. */
 const TAIL_IDLE = 0.3
 const TAIL_ON = 0.6
 const BRAKE_GAIN = 2
 
-/** Set lamp brightness from the lights switch, power and brake level. */
 export function setLampChannels(
   ch: LampChannels,
   lit: boolean,

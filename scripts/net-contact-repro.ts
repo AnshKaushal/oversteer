@@ -1,33 +1,3 @@
-/**
- * Phase 2 — deterministic collision/support reproduction (READ-ONLY vs prod).
- *
- * Run: `bun scripts/net-contact-repro.ts` (exit 1 on any failure).
- *
- * Production fidelity (see header notes for deltas):
- * - Ghost: real RemoteCar (actual collider cuboid(0.925, 0.32, 2.355)@-0.1,
- *   mass 1650, friction 0.15/Min, restitution 0.2, gravityScale 0, CCD,
- *   damping 0.005/0.55, spawn y 0.72) with real drive()/sampleContacts().
- * - Striker: production createChassisBody() (the local-car config).
- * - Ground: slab top face at y=-0.05, friction 1.0, restitution 0 — same as
- *   WorldManager.createPhysicsGround, but 2000 m wide centered on origin
- *   instead of 6000 m following the player (identical contact physics).
- * - Step: world.timestep = 1/120 via createWorld(); drive() before step.
- *
- * DELIBERATE test-only accesses (no production change):
- * - Ghost collider borrowed via cast for independent support/traffic
- *   classification mirroring sampleContacts (normal-filter logic copied,
- *   not imported, so the test observes rather than reuses).
- * - Commanded velocity read back from body.linvel() AFTER drive() and
- *   BEFORE world.step() — exactly what the solver receives.
- * - RemoteCar.nowOverride freezes the clock; arrivals use explicit times.
- *
- * Conventions:
- * - BOTTOM = bodyY - 0.42 (0.10 collider offset + 0.32 half-height).
- *   Valid when level; when pitched, corners dip lower — logged as a
- *   limitation wherever pitch is significant.
- * - Ground top GROUND_TOP = -0.05. Penetration := BOTTOM < -0.06 (1 cm slop).
- * - Pop := BOTTOM rises > 0.10 above rest clearance (0.30) after contact.
- */
 import * as THREE from "three"
 import {
   initPhysics,
@@ -40,7 +10,6 @@ import { getNetDiagSnapshot } from "../src/mainview/systems/net/NetDiagnostics"
 import { RemoteCar } from "../src/mainview/systems/net/RemoteCar"
 import { getCar } from "../src/mainview/data/cars"
 
-/** Net tests only need some real car; they do not depend on which. */
 const TEST_CAR = getCar("bmw-m3")
 const TEST_REMOTE_OPTS = {
   modelFile: TEST_CAR.modelFile,
@@ -50,7 +19,7 @@ const TEST_REMOTE_OPTS = {
 
 const GROUND_TOP = -0.05
 const BOTTOM_OFF = 0.42
-const REST_BOTTOM = 0.72 - BOTTOM_OFF // 0.30
+const REST_BOTTOM = 0.72 - BOTTOM_OFF
 const PEN_TOL = 0.01
 
 let failures = 0
@@ -132,7 +101,6 @@ interface StepRec {
   mode: string
   impulse: number
 }
-/** Mirror of sampleContacts classification, observing via borrowed handle. */
 function classify(
   world: any,
   col: any,
@@ -172,7 +140,6 @@ function summarize(label: string, trace: StepRec[]) {
   const maxB = Math.max(...bots)
   const supSteps = trace.filter((s) => s.support).length
   const driveInSteps = trace.filter((s) => s.support && s.cmdVy < -0.5).length
-  // Vertical oscillation: direction reversals of y with amplitude > 5 cm.
   let reversals = 0
   let lastDir = 0
   let extremum = ys[0]
@@ -201,15 +168,8 @@ function summarize(label: string, trace: StepRec[]) {
   return { minB, maxB, supSteps, driveInSteps, reversals, finite }
 }
 
-// ---------- T1a. free striker (12 m/s) vs parked ghost: pillar check ----------
-// Documents the velocity-pin effect: with cruise 0 + suppressed correction,
-// drive() re-commands ghost linvel≈0 every substep, erasing solver-imparted
-// momentum. An equal-mass striker should NOT stop dead (real: both move).
 {
   console.log("--- T1a pillar ---")
-  // DELTA from production (documented): frictionless ground (0.0 vs 1.0).
-  // The wheel-less test striker would otherwise lose ~7 m/s to slab
-  // friction before impact, confounding the car-car momentum split.
   const { world, scene } = makeWorld(0.0)
   const striker = createChassisBody(world, 0, 0.72, 14, TEST_CAR.physics)
   for (let i = 0; i < 60; i++) world.step()
@@ -226,7 +186,7 @@ function summarize(label: string, trace: StepRec[]) {
   const col = ghostCollider(car)
   const T = 10_000_000
   car.nowOverride = T
-  feed(car, 0, 0, 0.72, 0, 0, 0, 0, T) // parked owner: cruise 0
+  feed(car, 0, 0, 0.72, 0, 0, 0, 0, T)
   striker.setLinvel({ x: 0, y: 0, z: -12 }, true)
   const trace: StepRec[] = []
   let contactAt = -1
@@ -261,10 +221,6 @@ function summarize(label: string, trace: StepRec[]) {
   }
   const s = summarize("T1a", trace)
   check("T1a contact occurs (no tunneling)", contactAt >= 0, contactAt)
-  // Pre-fix the pinned ghost erased solver momentum: striker died within a
-  // few steps of contact and the ghost barely moved. Post-fix the split is
-  // physical (measured ~4/6 at impact): striker survives the hit window and
-  // the ghost carries real momentum.
   const sv = striker.linvel()
   const sSpeed = Math.hypot(sv.x, sv.z)
   console.log(
@@ -290,10 +246,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T1b. driven striker bulldozes parked ghost, then leaves ----------
-// Driven push creeps the pinned ghost (position-level bulldozing, no
-// momentum); when contact ends, recovery slides it back to the owner
-// trajectory — the "struck car pops away" symptom. Record both magnitudes.
 {
   console.log("--- T1b bulldoze + return ---")
   const { world, scene } = makeWorld()
@@ -334,13 +286,11 @@ function summarize(label: string, trace: StepRec[]) {
     })
   }
   for (let i = 0; i < 240; i++) {
-    striker.setLinvel({ x: 0, y: 0, z: -6 }, true) // engine push
+    striker.setLinvel({ x: 0, y: 0, z: -6 }, true)
     steprec()
     if (i % 2 === 0) car.sampleContacts(T)
   }
   const bulldozed = car.colliderBody!.translation().z
-  // Striker reverses away; owner still parked but packets keep arriving and
-  // wall time advances with sim time (frozen clock would wedge grace).
   let now = T
   let seq = 1
   let retCorrPeak = 0
@@ -351,21 +301,16 @@ function summarize(label: string, trace: StepRec[]) {
     now += 1000 / 120
     car.nowOverride = now
     if (i % 30 === 0) feed(car, seq++, 0, 0.72, 0, 0, 0, 0, now)
-    striker.setLinvel({ x: 0, y: 0, z: 8 }, true) // striker reverses away
+    striker.setLinvel({ x: 0, y: 0, z: 8 }, true)
     steprec()
     const dd = getNetDiagSnapshot().peers["r-t1b"]
     if (i === 0) errStart = dd?.posErrM ?? -1
     if (i === 239) errEnd = dd?.posErrM ?? -1
-    // Seeded continuity carries honest knock momentum through a sign change
-    // (coast-away to return) at the accel limit (~43 steps here): measure
-    // past the bleed. The per-step delta bound holds throughout.
     retDvPeak = Math.max(retDvPeak, dd?.corrDv ?? 0)
     if (i >= 100) retCorrPeak = Math.max(retCorrPeak, dd?.corrCmd ?? 0)
     if (i % 10 === 0) car.sampleContacts(now)
   }
   const s = summarize("T1b", trace)
-  // Return-phase peak ghost speed (second half): gradual recovery should
-  // stay slow; a fast slide-back reads as a pop.
   const ret = trace.slice(240)
   const returnPeak = Math.max(...ret.map((t) => t.speed))
   const snaps = getNetDiagSnapshot().peers["r-t1b"]?.snaps ?? -1
@@ -377,9 +322,6 @@ function summarize(label: string, trace: StepRec[]) {
     bulldozed < -0.5,
     bulldozed,
   )
-  // The pop metric is NETWORK-INDUCED return velocity (correction cmd),
-  // not residual knock momentum (which coasts honestly): capped at 3 in
-  // recover, small in gated follow.
   check(
     "T1b return correction is gradual (peak cmd <= 3.5 m/s)",
     retCorrPeak <= 3.5,
@@ -406,12 +348,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T2. crest-then-level press: dip must recover ----------
-// Owner dips (vy -1.5, 1 s) then levels out while the ghost is pressed
-// against the wall car. A frozen eternal descent would be contradictory
-// input (owner sinking through the world); the production-realistic
-// property is transient-dip recovery. Pre-fix the suppressed vertical
-// correction strands the ghost low; fixed code must pull it back up.
 {
   console.log("--- T2 crest + recover ---")
   const { world, scene } = makeWorld()
@@ -461,8 +397,8 @@ function summarize(label: string, trace: StepRec[]) {
       })
     }
   }
-  run(120, -1.5) // 1 s crest dip while pressing
-  run(240, 0) // 2 s level: must recover height
+  run(120, -1.5)
+  run(240, 0)
   const s = summarize("T2", trace)
   const tail = trace.slice(-60)
   const tailMin = Math.min(...tail.map((t) => t.bottom))
@@ -495,10 +431,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T3. grazing side-swipe with live suspension bounce ----------
-// Owner slides past at 10 m/s with genuinely alternating vertical bounce
-// (fresh packets, advancing clock — net-zero heave). The flank knock must
-// stand laterally while height recovers instead of grinding down the flank.
 {
   console.log("--- T3 side-swipe + bounce ---")
   const { world, scene } = makeWorld()
@@ -574,7 +506,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T4. recovery after separation ----------
 {
   console.log("--- T4 recovery ---")
   const { world, scene } = makeWorld()
@@ -605,7 +536,6 @@ function summarize(label: string, trace: StepRec[]) {
     world.step()
     car.sampleContacts(T + 9 * 33 + 100)
   }
-  // Separate + live packets continuing -z; wall≈sim time advance together.
   const bp = block.translation()
   block.setTranslation({ x: bp.x + 30, y: bp.y, z: bp.z }, true)
   block.setLinvel({ x: 0, y: 0, z: 0 }, true)
@@ -660,7 +590,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T5. high-speed contact (30 m/s) + normal convention ----------
 {
   console.log("--- T5 high-speed + normals ---")
   const { world, scene } = makeWorld()
@@ -677,13 +606,11 @@ function summarize(label: string, trace: StepRec[]) {
     TEST_REMOTE_OPTS,
   )
   const col = ghostCollider(car)
-  // Ghost starts 40 m up-track; owner hurtles -z at 30 m/s (108 km/h).
   const T = 50_000_000
   car.nowOverride = T
   for (let i = 0; i < 40; i++)
     feed(car, i, 0, 0.72, 40 - i * 1.0, 0, 0, -30, T + i * 33)
   car.nowOverride = T + 39 * 33 + 100
-  // Teleport ghost body onto its line so the test measures impact, not travel.
   car.colliderBody!.setTranslation({ x: 0, y: 0.72, z: 12 }, true)
   const trace: StepRec[] = []
   let normLog = ""
@@ -728,11 +655,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T6. support-normal convention + pitched rest ----------
-// A nose-down ghost (post-knock attitude) rests bumper corners on the road.
-// Requirements: (a) confirm support normals are ~vertical in BOTH collider
-// orderings (production classifies with |ny|, sign-agnostic); (b) observe
-// what the level-flight drive does to a pitched, ground-resting ghost.
 {
   console.log("--- T6 support normals ---")
   const { world, scene } = makeWorld()
@@ -750,9 +672,6 @@ function summarize(label: string, trace: StepRec[]) {
   const col = ghostCollider(car)
   const T = 60_000_000
   car.nowOverride = T
-  // Nose-down 10°: front corners dip 2.355*sin(10°) ≈ 0.41 below nominal.
-  // The TARGET carries the same pitched attitude, so the angular servo has
-  // no error to level (otherwise it would right the body before resting).
   const pitch = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.17, 0, 0))
   {
     const r = validateStatePacket({
@@ -791,7 +710,6 @@ function summarize(label: string, trace: StepRec[]) {
     world.step()
     if (i % 5 === 0) car.sampleContacts(T)
   }
-  // Convention check in both orderings, straight from the narrow phase.
   const recs: string[] = []
   let supFwd = false
   let supRev = false
@@ -825,12 +743,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T7. sustained pit vs moving owner: no warp on explained gap ----------
-// Driven 12 m/s side-push vs a 10 m/s owner (consistent packets: positions
-// advance at velocity × dt). Pre-fix the passive drag + grace coast crossed
-// the 15 m warp mid-recovery — a ~13 m teleport out of an ordinary
-// collision. While contact/recover is active the gap is collision
-// displacement: crawl home (cruise + capped correction), never snap.
 {
   console.log("--- T7 pit-sustain, no warp ---")
   const { world, scene } = makeWorld()
@@ -870,7 +782,7 @@ function summarize(label: string, trace: StepRec[]) {
       oz -= (10 * (1000 / 120) * 4) / 1000
       feedOwner()
     }
-    striker.setLinvel({ x: -12, y: 0, z: 0 }, true) // sustained driven push
+    striker.setLinvel({ x: -12, y: 0, z: 0 }, true)
     car.drive(FIXED_DT)
     const cmd = car.colliderBody!.linvel()
     world.step()
@@ -917,7 +829,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T8. a ghost that appears beside a parked car must not shove it ----------
 {
   console.log("--- T8 ghost appears near local car ---")
   const { world, scene } = makeWorld(1.0)
@@ -944,7 +855,6 @@ function summarize(label: string, trace: StepRec[]) {
   world.free()
 }
 
-// ---------- T9. a ghost that appears inside the local car stays ghostly until clear ----------
 {
   console.log("--- T9 ghost appears inside local car ---")
   const { world, scene } = makeWorld(1.0)
@@ -960,7 +870,6 @@ function summarize(label: string, trace: StepRec[]) {
   let peak = 0
   let solidWhileOverlapped = false
   for (let i = 0; i < 480; i++) {
-    // same spot for 2 s, then the owner drives off to the side
     const x = i < 240 ? 0.3 : 8
     if (i % 2 === 0) feed(car, i, x, 0.72, 0, 0, 0, 0, T)
     car.drive(FIXED_DT)

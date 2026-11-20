@@ -32,7 +32,6 @@ export class AntiAlias {
   private w = 0
   private h = 0
   private v = new THREE.Vector2()
-  /** Diagnostic: first WebGL error seen and the stage that raised it. */
   firstGlError = ""
 
   constructor(
@@ -70,8 +69,6 @@ export class AntiAlias {
     c.setPixelRatio(1)
     const rp = new RenderPass(this.scene, this.camera)
     const rpRender = rp.render.bind(rp)
-    // The scene is drawn into whichever composer buffer is "read" this
-    // frame; remember its depth texture for the temporal resolve.
     rp.render = (r, w, rb, ...rest) => {
       this.sceneDepth = rb.depthTexture
       rpRender(r, w, rb, ...rest)
@@ -88,7 +85,6 @@ export class AntiAlias {
     this.finalPass = new FinalPass()
     c.addPass(this.finalPass)
     if (temporal) {
-      // Temporal accumulation is also the anti-aliasing.
       this.tPass = new TemporalUpscalePass(
         this.camera as THREE.PerspectiveCamera,
         () => this.sceneDepth,
@@ -101,7 +97,6 @@ export class AntiAlias {
       c.addPass(this.upPass)
     }
     this.composer = c
-    // Diagnostic: tag the first GL error with the pass that raised it.
     const gl = this.renderer.getContext()
     for (const pass of c.passes) {
       const orig = pass.render.bind(pass)
@@ -115,7 +110,6 @@ export class AntiAlias {
     this.w = this.h = 0
   }
 
-  /** blur: 0-100; keepSharp: object excluded from the blur (player car) */
   render(
     mode: AAMode,
     blur = 0,
@@ -160,9 +154,6 @@ export class AntiAlias {
       this.tPass?.setSizes(iw, ih, this.v.x, this.v.y)
     }
     if (this.finalPass) {
-      // Without the upscaler the canvas is CSS-stretched when the render
-      // scale is below 100%: sharpen to compensate. The upscale pass sharpens
-      // at output resolution itself.
       const ratio = this.upPass || this.tPass
         ? 1
         : this.renderer.domElement.clientWidth / this.v.x
@@ -175,7 +166,6 @@ export class AntiAlias {
     let restore: (() => void) | undefined
     if (this.tPass) {
       const cam = this.camera.position
-      // Camera cut (reset, teleport, view change): old history is wrong.
       if (cam.distanceToSquared(this.lastCam) > 64) this.tPass.reset()
       this.lastCam.copy(cam)
       restore = this.tPass.beginFrame()

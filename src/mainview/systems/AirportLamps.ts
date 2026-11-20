@@ -111,8 +111,6 @@ export class LampSet {
       im.frustumCulled = false
       this.group.add(im)
     }
-    // Lift the halo off the ground so the sprite isn't sliced in half by the
-    // terrain depth test (the hard edge under flat in-pavement lamps).
     const hpos = pos.slice()
     for (let i = 0; i < n; i++)
       hpos[i * 3 + 1] = Math.max(hpos[i * 3 + 1], o.radius(i) * 0.7 + 0.05)
@@ -139,8 +137,6 @@ export class LampSet {
     this.halo.visible = false
     this.group.add(this.halo)
 
-    // In-pavement lamps also light the ground around them: a flat additive
-    // pool sitting just above the surface, so the glow sits on the lamp.
     for (let i = 0; i < n; i++) if (flat(i)) this.poolIdx.push(i)
     if (this.poolIdx.length) {
       const poolGeo = new THREE.PlaneGeometry(1, 1)

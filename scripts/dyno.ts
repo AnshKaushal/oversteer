@@ -1,18 +1,3 @@
-/**
- * Dyno: what a car's data says, and what the running car delivers.
- *
- *   CAR=<id> bun scripts/dyno.ts [--csv]
- *
- * 1. Engine sheet: crank torque and power from the spec every 500 rpm, peaks
- *    and the dash scale check.
- * 2. Full-throttle pull on flat ground in automatic: 0-100, 0-200, top speed,
- *    shift points, and the wheel power implied by the acceleration
- *    (mass * a * v plus drag and rolling loss) against the crank power at the
- *    same rpm, which is the drivetrain loss the car really shows.
- *
- * The numbers are for judging a new car's data against its real figures; no
- * pass/fail here. `--csv` prints the pull as rows for a spreadsheet.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -35,7 +20,6 @@ const HP_PER_KW = 1000 / WATT_PER_HP
 
 console.log(`\n${def.name} (${def.id})`)
 
-// ---- 1. engine sheet ----
 const peaks = enginePeaks(E)
 console.log("\nEngine (crank, from data)")
 console.log("  rpm    Nm     kW     hp")
@@ -60,7 +44,6 @@ console.log(
   `  dash: ${def.dash.maxRpm} rpm / ${def.dash.maxKmh} km/h, redline ${E.redlineRPM}, limiter ${E.revLimiterRPM}`,
 )
 
-// ---- 2. full-throttle pull ----
 const idle = {
   throttle: 0,
   brake: 0,
@@ -125,7 +108,6 @@ for (let i = 0; i < maxSteps; i++) {
   const a = (v - prevV) / FIXED_DT
   prevV = v
   if (i % 12 === 0 && thr >= 1 && T.gear > 0 && v > 5 && a > 0) {
-    // force the wheels delivered: inertia plus drag plus rolling (downforce adds rolling load)
     const drag = 0.5 * A.airDensity * A.dragCoefficient * A.frontalArea * v * v
     const roll = P.wheels.rollingResist * mass * G
     const wheelKw = ((mass * a + drag + roll) * v) / 1000

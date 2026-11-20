@@ -1,7 +1,3 @@
-/**
- * Unit tests for each vehicle component on its own, built from a car's spec.
- * Run per car:  bun scripts/run-per-car.ts scripts/component-tests.ts
- */
 import { activeCar } from "./lib/cars"
 import {
   SURFACES,
@@ -54,12 +50,10 @@ const check = (name: string, cond: boolean, extra = "") => {
 const near = (a: number, b: number, tol = 1e-6) =>
   Math.abs(a - b) <= tol * Math.max(1, Math.abs(b))
 
-// ---- Engine ---------------------------------------------------------------
 {
   const e = new Engine(P.engine)
   e.rpm = enginePeaks(P.engine).torqueRPM
   const t = e.torque(1, 1, false)
-  // a turbo engine starts unspooled, so its curve torque is scaled by what is missing
   const spool = P.engine.turbo ? 1 - P.engine.turbo.boostTorqueShare : 1
   const expect =
     P.engine.maxTorqueNm * curveLookup(P.engine.torqueCurve, e.rpm) * spool -
@@ -127,7 +121,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Gearbox ----------------------------------------------------------------
 {
   const g = new Gearbox(P.transmission, P.shiftLogic, P.engine.redlineRPM)
   check(
@@ -170,7 +163,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- ShiftLogic -------------------------------------------------------------
 {
   const logic = new ShiftLogic(
     P.shiftLogic,
@@ -284,7 +276,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Aggression -------------------------------------------------------------
 {
   const a = new Aggression(P.shiftLogic)
   for (let i = 0; i < 240; i++) a.step(1 / 120, 1, 0, 1)
@@ -308,7 +299,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Driveline --------------------------------------------------------------
 {
   const d = new Driveline(P.drivetrain)
   const out = d.prepare({
@@ -355,7 +345,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Brakes + ABS -----------------------------------------------------------
 {
   const b = new Brakes(P.brakes, P.wheels, 4)
   b.parking = false
@@ -472,14 +461,13 @@ const near = (a: number, b: number, tol = 1e-6) =>
     "abs: disabled passes through",
     new Abs(A, false, 1).modulate(0, 1000, 1, 1, 20, dt) === 1000,
   )
-  // lock slip settles near the target on a wheel that slows with the brake pressure
   const loop = new Abs(A, true, 1)
   let w = 20
   let lockSum = 0
   let n = 0
   for (let i = 0; i < 1200; i++) {
     const t = loop.modulate(0, 4000, 1, w, 20, dt)
-    w = Math.max(0, w + (-(t - 1500) / 40) * dt * (w > 0 ? 1 : 0)) // 1500 N m is the grip torque the tyre can hold
+    w = Math.max(0, w + (-(t - 1500) / 40) * dt * (w > 0 ? 1 : 0))
     if (i > 600) {
       lockSum += 1 - w / 20
       n++
@@ -492,7 +480,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Steering ---------------------------------------------------------------
 {
   const s = new Steering(P.wheels.steering, 2.7, 1.6)
   s.step(1 / 120, 1, 0, 0)
@@ -511,7 +498,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   check("steering: less lock at speed", fast.angle < s.angle)
 }
 
-// ---- Torque converter, traction control, aero, limiter --------------------------
 {
   const tc = new TorqueConverter(P.transmission.torqueConverter)
   check(
@@ -580,7 +566,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Stability control ------------------------------------------------------
 {
   const wheels = [
     { front: true, left: true },
@@ -674,7 +659,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- Cruise, launch, direction shift, relaxation -----------------------------
 {
   const c = new Cruise(P.cruise, 340)
   const st = {
@@ -732,7 +716,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
     P.wheels.relaxationLength,
     P.wheels.tire.maxSlip,
   )
-  // 10 m/s along the wheel with the wheel surface 1 m/s faster: slip ratio 0.1 at steady state
   const first = r.step(0, 1 / 120, 1, 0, 10).slipRatio
   let last = first
   for (let i = 0; i < 600; i++) last = r.step(0, 1 / 120, 1, 0, 10).slipRatio
@@ -929,7 +912,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- surfaces and weather ---------------------------------------------------
 {
   const ids = Object.keys(SURFACES) as SurfaceId[]
   const wx = Object.keys(WEATHER_GRIP) as WeatherId[]
@@ -975,7 +957,6 @@ const near = (a: number, b: number, tol = 1e-6) =>
   )
 }
 
-// ---- impact ---------------------------------------------------------------
 {
   const C = P.chassis.crash
   const still = { x: 0, y: 0, z: 0 }

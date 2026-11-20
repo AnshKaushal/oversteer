@@ -1,14 +1,3 @@
-/**
- * Checks a car's GLB the way CarVisual.load() uses it: scaled so the
- * longest side matches the physics length, turned a half turn (the game
- * stores every model nose-at-+Z and yaws it at load), centred, and then
- * the four wheel pivots are found and classified front/rear, left/right.
- *
- * The GLB is parsed directly rather than fetched, because three.js's
- * URL loader needs a DOM (ProgressEvent) that Bun does not have.
- *
- * Run: bun scripts/car-visual-check.ts porsche-911-turbo-s
- */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import { MIN_PIVOT_FRAC, pivotMatches } from "../src/mainview/systems/CarVisual"
@@ -22,7 +11,6 @@ const buf = await Bun.file(`src/mainview/models/${file}`).arrayBuffer()
 const gltf: any = await new GLTFLoader().parseAsync(buf, "")
 const model = gltf.scene as THREE.Object3D
 
-// --- the transform CarVisual.load() applies -------------------------------
 const box = new THREE.Box3().setFromObject(model)
 const size = box.getSize(new THREE.Vector3())
 const longest = Math.max(size.x, size.y, size.z)
@@ -56,7 +44,6 @@ console.log(
     .join(" x ")}  min y ${finalBox.min.y.toFixed(3)}`,
 )
 
-// --- pivots ----------------------------------------------------------------
 const minPivot = longest * s * MIN_PIVOT_FRAC
 const found: {
   name: string
@@ -84,7 +71,6 @@ for (const f of found) {
   )
 }
 
-// The registry's wheel spots must line up with the pivots the game finds.
 const reg = def.wheels
   .map((w) => `${w.front ? "F" : "R"}${w.left ? "L" : "R"}`)
   .sort()
@@ -107,8 +93,6 @@ for (const w of def.wheels) {
   )
 }
 
-// The nose must point at -Z in the car's local frame: that is the way the
-// game drives. The model is stored nose-at-+Z and yawed a half turn.
 const nose = new THREE.Vector3(0, 0, 1).applyAxisAngle(
   new THREE.Vector3(0, 1, 0),
   model.rotation.y,

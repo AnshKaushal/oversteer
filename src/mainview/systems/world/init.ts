@@ -118,8 +118,6 @@ export async function init(
     roughness: 1,
     flatShading: true,
   })
-  // Distance dissolve (screen-door dither) so hills fade in at the draw
-  // limit instead of growing; fog hides them first whenever it is on.
   hillMat.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "void main() {",

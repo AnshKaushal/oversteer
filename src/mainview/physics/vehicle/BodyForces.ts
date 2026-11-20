@@ -12,16 +12,9 @@ import type { Kinematics } from "./types"
 const DEFAULT_HIGH_SPEED_GAIN = 2
 const HIGH_SPEED_START = 0.7
 const HIGH_SPEED_SPAN = 1.5
-/** Cut begins at this share of the tire's peak slip angle, full a peak later. */
 const SLIDE_CUT_START_SHARE = 0
 const SLIDE_CUT_MAX = 0.85
-/**
- * Drift leniency, set per car through the drift-assist tuning slider (the
- * spec's driftDeadzoneScale / driftAuthorityScale, 1 = stock). While the driver
- * steers, the assist waits for a wider slip angle and pulls back less; the
- * effect fades out toward a spin so the car still catches itself.
- */
-const DRIFT_FADE_FROM = 0.6 // rad of slip angle where leniency starts to fade
+const DRIFT_FADE_FROM = 0.6
 const DRIFT_FADE_SPAN = 0.35
 const SLIDE_CUT_MIN_SPEED = 5
 const SLIDE_CUT_RISE = 4
@@ -52,13 +45,6 @@ export class BodyForces {
     this.peakSlipAngle = Math.atan(Math.tan(Math.PI / (2 * lat.C)) / lat.B)
   }
 
-  /**
-   * Engine torque factor while the body slides with the wheel centred. A
-   * rear-driven car that keeps full power through a slide holds the rear
-   * wheels spinning (no lateral grip) and never straightens; production cars
-   * cut power in that situation. It stays off while the driver steers, so
-   * deliberate countersteered drifts keep their power.
-   */
   slidePower(
     dt: number,
     k: Kinematics,

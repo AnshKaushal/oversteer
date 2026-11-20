@@ -19,10 +19,6 @@ function proxyMaterial() {
   return invisible
 }
 
-/** Shadow-only twin holding just the props near the car. The full prop
- * meshes are not frustum culled, so as casters they would be redrawn whole in
- * every shadow pass (sun and street-light spots) although the shadow fade
- * discards everything beyond SHADOW_FADE_RADIUS. */
 export function addShadowProxy(this: WorldManager, pv: PropVariant) {
   const cap = Math.min(NEAR_CAP, pv.im.instanceMatrix.count)
   const proxy = new THREE.InstancedMesh(pv.im.geometry, proxyMaterial(), cap)

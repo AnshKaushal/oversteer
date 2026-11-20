@@ -26,7 +26,6 @@ const input: DriveInput = {
   escapePressed: false,
 }
 
-// Regression budget (ms per sim step) per car count. Override with PERF_BUDGET_SCALE=<factor> on slower CI hosts.
 const BUDGET_MS: Record<number, number> = {
   1: 0.3,
   5: 0.6,
@@ -61,12 +60,11 @@ async function bench(cars: number) {
       new Vehicle(world, body, RAPIER, def.physics, def.wheels, def.dash),
     )
   }
-  // Warmup (settle suspension, JIT).
   for (let i = 0; i < 240; i++) {
     for (const c of controllers) c.update(FIXED_DT, input)
     world.step()
   }
-  const STEPS = 600 // 5 s of sim
+  const STEPS = 600
   const t0 = performance.now()
   for (let i = 0; i < STEPS; i++) {
     for (const c of controllers) c.update(FIXED_DT, input)

@@ -1,11 +1,6 @@
 import * as THREE from "three"
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 
-/**
- * One full-screen pass doing tone mapping + sRGB output + contrast-adaptive
- * sharpening. Replaces OutputPass and removes the need for a separate sharpen
- * pass after a lowered render scale is upscaled by the canvas.
- */
 export class FinalPass extends Pass {
   private quad: FullScreenQuad
   private mat: THREE.RawShaderMaterial
@@ -78,7 +73,6 @@ export class FinalPass extends Pass {
     this.quad = new FullScreenQuad(this.mat)
   }
 
-  /** 0 = off, 1 = strongest. */
   set sharpness(v: number) {
     this.mat.uniforms.sharpen.value = v
   }

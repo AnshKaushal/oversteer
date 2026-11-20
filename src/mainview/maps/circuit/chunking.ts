@@ -1,10 +1,5 @@
 import * as THREE from "three"
 
-/**
- * Splits an indexed geometry into spatial cells. Every chunk shares the source
- * vertex attributes and only owns a small index buffer, so memory stays flat
- * while frustum and shadow culling can reject whole cells.
- */
 export function chunkGeometry(
   src: THREE.BufferGeometry,
   cellM = 160,
@@ -44,7 +39,6 @@ export function chunkGeometry(
   return out
 }
 
-/** Bake the world matrix once and stop the per-frame matrix recompute. */
 export function freezeStatic(root: THREE.Object3D) {
   root.updateMatrixWorld(true)
   root.traverse((o) => {

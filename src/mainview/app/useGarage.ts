@@ -18,13 +18,7 @@ export function useGarage(
   const garageApiRef = useRef<{
     showCar: (id: string, tint?: number) => void
     paint: (color: number | null) => void
-    /**
-     * Turn the running menu/garage session into free roam without rebuilding
-     * the world. Returns false when it can't (other map, dyno up, ...), and the
-     * caller then falls back to a full rebuild behind the cover.
-     */
     enterFreeRoam: (mapId: string) => boolean
-    /** Same for a race; raceSetupRef must already hold the setup. */
     enterRace: (mapId: string) => Promise<boolean>
   } | null>(null)
   const selectCar = (id: string) => {

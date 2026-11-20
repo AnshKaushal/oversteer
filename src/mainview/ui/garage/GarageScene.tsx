@@ -57,7 +57,6 @@ export interface GarageSceneProps {
   gamepadNav?: boolean
 }
 
-/** One in-world screen: registered so the session can warp it onto the wall. */
 function Surface({
   id,
   focused,
@@ -154,10 +153,6 @@ const hudBtn =
 const arrowBtn =
   "pointer-events-auto absolute z-[90] top-1/2 -translate-y-1/2 border border-white/15 bg-black/45 p-3 text-white backdrop-blur-md transition-colors hover:bg-[#51a7d5] active:scale-95"
 
-/**
- * The garage as the menu: every setting lives on a screen in the room. Click a
- * hotspot (or use the d-pad) and the camera moves in on that screen.
- */
 export function GarageScene(p: GarageSceneProps) {
   const focus = useFocus()
   const hot = useHot()
@@ -180,7 +175,6 @@ export function GarageScene(p: GarageSceneProps) {
     },
     [],
   )
-  // Enter the dyno when its view is open; leaving (or switching car) stops it.
   const carId = p.carId
   useEffect(() => {
     if (focus !== "dyno") return

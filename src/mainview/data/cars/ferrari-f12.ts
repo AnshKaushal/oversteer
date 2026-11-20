@@ -424,7 +424,6 @@ export const ferrariF12: CarSpec = {
   },
   defaultTint: null,
   paintMatch: ["^Body_Paint"],
-  // Real F12berlinetta: 6.3 L V12, 740 PS, 8700 rpm, 3.1 s, over 340 km/h.
   tested: {
     zeroToHundredS: 3.3,
     topSpeedKmh: 340,

@@ -3,7 +3,6 @@ import * as THREE from "three"
 const SIZE = 2048
 const S = SIZE / 256
 
-/** Paints the road's asphalt (base, worn patches, grain) over a w×h canvas. */
 export function paintAsphalt(
   g: CanvasRenderingContext2D,
   w: number,
@@ -13,7 +12,6 @@ export function paintAsphalt(
   const density = (w * h) / (SIZE * SIZE)
   g.fillStyle = "#33363b"
   g.fillRect(0, 0, w, h)
-  // low-frequency tonal patches (worn / patched asphalt)
   for (let i = 0, n = Math.round(260 * density); i < n; i++) {
     const v = 46 + Math.random() * 10
     g.fillStyle = `rgba(${v},${v},${v + 4},0.22)`
@@ -22,7 +20,6 @@ export function paintAsphalt(
     g.arc(Math.random() * w, Math.random() * h, r, 0, Math.PI * 2)
     g.fill()
   }
-  // fine aggregate grain
   for (let i = 0, n = Math.round(260000 * density); i < n; i++) {
     const v = 32 + Math.random() * 40
     g.fillStyle = `rgb(${v},${v},${v + 4})`

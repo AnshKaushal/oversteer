@@ -1,10 +1,3 @@
-/**
- * Shared per-car test harness. Every physics script builds its rig from a
- * car in the registry, never from Vehicle's constructor defaults.
- *
- * A script run directly needs `CAR=<id>`. `scripts/run-per-car.ts` runs a
- * script once per registry car and reports each car separately.
- */
 import type * as RAPIER_ from "@dimforge/rapier3d-compat"
 import { Vehicle } from "../../src/mainview/physics/vehicle/Vehicle"
 import {
@@ -26,7 +19,6 @@ export function carById(id: string): CarDefinition {
   return def
 }
 
-/** The car this process tests, from the CAR env var. */
 export function activeCar(): CarDefinition {
   const id = process.env.CAR
   if (!id) {
@@ -37,7 +29,6 @@ export function activeCar(): CarDefinition {
   return carById(id)
 }
 
-/** World + flat ground + chassis + controller, all taken from the car spec. */
 export function makeRig(
   RAPIER: typeof RAPIER_,
   def: CarDefinition,

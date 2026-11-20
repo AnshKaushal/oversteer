@@ -282,19 +282,11 @@ export default function App() {
     label: string
     red: boolean
   } | null>(null)
-  // The wipe covers the screen until the rebuilt session reports ready.
   const [wipeBusy, setWipeBusy] = useState(false)
-  // `fn` (the actual scene/state switch) runs once the cover has landed, so
-  // the old screen never shows the new mode before the bars arrive.
   const coverFn = useRef<(() => void) | null>(null)
-  // Menu -> play keeps the cover up at least this long, even when the session
-  // is ready sooner (see `minCover` on cover()).
   const PLAY_COVER_MS = 2000
   const coverMinMs = useRef(0)
   const coverUntil = useRef(0)
-  // True from a menu -> play press until its cover releases, so a repeat press
-  // (double click, held key, pad Start) can't stack a second cover, which
-  // would fall through to a full rebuild.
   const startingPlayRef = useRef(false)
   const releaseWipe = () => {
     const done = () => {
@@ -318,7 +310,6 @@ export default function App() {
     setWipeBusy(true)
     setWipe((w) => ({ token: (w?.token ?? 0) + 1, label, red }))
   }
-  // Raising/lowering the dyno happens behind the loading cover.
   const coverRef = useRef(cover)
   coverRef.current = cover
   useEffect(() => {
@@ -335,11 +326,9 @@ export default function App() {
     fn?.()
   }
   const sessionTimer = useRef(0)
-  // True while a race is underway (running or paused, not yet finished).
   const raceLiveRef = useRef(false)
   raceLiveRef.current = race.active && !race.finished
   const rebuildSession = (delay = 300) => {
-    // Passive rebuilds (map/option changes) must never tear down a live race.
     if (delay > 0 && raceLiveRef.current) return
     window.clearTimeout(sessionTimer.current)
     sessionTimer.current = window.setTimeout(() => {
@@ -394,8 +383,6 @@ export default function App() {
         setNetConnected(false)
       },
       onRaceStartSignal: (startTimeMs, distanceM, rivals = 0, mapSpec) => {
-        // A late start signal must not drop the loading cover onto a race
-        // that is already being driven.
         if (raceLiveRef.current || startingPlayRef.current) return
         startingPlayRef.current = true
         if (mapSpec && getMap(mapSpec.id).features.multiplayer) {
@@ -505,8 +492,6 @@ export default function App() {
     startingPlayRef.current = true
     lockCanvas()
     cover("FREE ROAM", false, () => {
-      // Same map the menu already loaded: no rebuild. The session drops the
-      // garage and starts traffic itself; the cover is held for PLAY_COVER_MS.
       if (!startedRef.current && !loadingRef.current && !error) {
         startedRef.current = true
         if (garageApiRef.current?.enterFreeRoam(mapIdRef.current)) {
@@ -534,9 +519,6 @@ export default function App() {
   }
 
   const racePendingRef = useRef(false)
-  // Highway menu -> race: the session builds the grid behind the garage it is
-  // still showing, then flips to the race in place (no rebuild, no cover).
-  // Anything it can't do that way falls back to the covered rebuild.
   const startRace = () => {
     if (racePendingRef.current || startingPlayRef.current || startedRef.current)
       return
@@ -775,7 +757,7 @@ export default function App() {
     <div
       className={`relative w-screen h-screen overflow-hidden bg-black ${started && !paused && !race.finished ? "cursor-none" : ""} ${hideUi && started && !paused ? "[&>*:not([data-game-mount])]:!hidden" : ""}`}
     >
-      {/* In-world garage screens live under the (partly transparent) canvas. */}
+      {}
       <div
         id="garage-boards"
         className="pointer-events-none absolute inset-0 isolate z-0 overflow-hidden"

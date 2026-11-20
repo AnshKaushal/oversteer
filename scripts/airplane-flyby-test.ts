@@ -1,11 +1,3 @@
-/**
- * Checks the cinematic flyby: the aircraft has to cross the road on a
- * fixed line at an angle between 20 and 90 degrees, stay at a believable
- * height and speed, fade in and out, drop a shadow, and never wander
- * outside what the camera and the fog can actually show.
- *
- * Run: bun scripts/airplane-flyby-test.ts
- */
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import * as THREE from "three"
 import {
@@ -40,14 +32,12 @@ const CROSSINGS = [0, 400, 1500, -900, 6200]
 const FOG_FAR = 800
 const DEG = Math.PI / 180
 
-// 1. The path is at an angle to the road, between 20 and 90 degrees.
 for (const deg of ANGLES) {
   for (const side of [1, -1] as const) {
     for (const drift of [1, -1] as const) {
       const sCross = 700
       const path = makePath(sCross, deg * DEG, side, drift)
       const yaw = roadYaw(sCross)
-      // The road's direction of travel, and the path's.
       const tx = Math.sin(yaw)
       const tz = -Math.cos(yaw)
       const along = Math.abs(path.dx * tx + path.dz * tz)
@@ -61,8 +51,6 @@ for (const deg of ANGLES) {
   }
 }
 
-// 2. The path crosses the road: the aircraft is over the centreline at
-//    the middle of the pass.
 for (const deg of ANGLES) {
   const sCross = 540
   const path = makePath(sCross, deg * DEG, 1, 1)
@@ -75,7 +63,6 @@ for (const deg of ANGLES) {
   )
 }
 
-// 3. The path is fixed: the same path always produces the same line.
 {
   const path = makePath(900, 40 * DEG, 1, -1)
   const a = passState("takeoff", 120, path, 0)
@@ -87,7 +74,6 @@ for (const deg of ANGLES) {
   )
 }
 
-// 4. The nose points along the path.
 for (const deg of ANGLES) {
   const path = makePath(700, deg * DEG, -1, 1)
   const st = passState("cruise", 300, path, 0)
@@ -101,7 +87,6 @@ for (const deg of ANGLES) {
   )
 }
 
-// 5. Height and speed stay believable.
 for (const mode of MODES) {
   let minY = Infinity
   let maxY = -Infinity
@@ -118,7 +103,6 @@ for (const mode of MODES) {
     }
   }
   if (mode === "cruise") {
-    // The cloud layer tops out at 127 m, so a cruise has to be above it.
     check(
       minY > 130,
       "cruise flies above the cloud layer",
@@ -138,7 +122,6 @@ for (const mode of MODES) {
   )
 }
 
-// 6. Take-off climbs, landing descends, cruise holds height.
 const climb = (mode: FlybyMode) => {
   const path = makePath(300, 90 * DEG, 1, 1)
   const a = passState(mode, 0, path, 0).y
@@ -161,7 +144,6 @@ check(
   `${climb("cruise").toFixed(1)} m`,
 )
 
-// 7. The pitch matches the manoeuvre.
 const pitch = (mode: FlybyMode, t: number) => {
   const path = makePath(300, 90 * DEG, 1, 1)
   return (passState(mode, t, path, 0).pitch * 180) / Math.PI
@@ -184,8 +166,6 @@ check(
   `${pitch("landing", PASS_LENGTH).toFixed(2)} deg`,
 )
 
-// 8. The aircraft is never faded. It flies its line, on past the end of
-//    the path, and is simply switched off when it is gone.
 for (const mode of MODES) {
   const path = makePath(300, 60 * DEG, 1, 1)
   const st = passState(mode, 0, path, 0)
@@ -193,7 +173,6 @@ for (const mode of MODES) {
     (st as unknown as { opacity?: number }).opacity === undefined,
     `${mode} carries no opacity: it is never faded`,
   )
-  // Past the end of the path it keeps going in the same direction.
   const last = passState(mode, PASS_LENGTH, path, 0)
   const beyond = passState(mode, PASS_LENGTH + 300, path, 0)
   const dLast = Math.hypot(beyond.x - last.x, beyond.z - last.z)
@@ -204,8 +183,6 @@ for (const mode of MODES) {
   )
 }
 
-// 10. The shadow sits on the ground, offset along the sun, and fades with
-//     the aircraft's height.
 {
   const path = makePath(700, 60 * DEG, 1, 1)
   const st = passState("cruise", 200, path, 0)
@@ -242,7 +219,6 @@ for (const mode of MODES) {
   check(shadowState(st).alpha > 0, "the shadow is there while the aircraft is")
 }
 
-// 11. Hills in the way push the crossing along the road.
 {
   const hillS = 500
   const hillX = roadCenterX(hillS)
@@ -289,13 +265,10 @@ for (const mode of MODES) {
   )
 }
 
-// 11b. The whole aircraft has to clear the ground, wingtips included: a
-//      hill just off the line still gets in the way of a 52 m span.
 {
   const span = 52
   const clearance = 9
   const path = makePath(500, 90 * DEG, 1, 1)
-  // A ridge that only reaches up under the left wingtip.
   const px = -path.dz
   const pz = path.dx
   const ridgeX = path.x + px * (span / 2)
@@ -322,7 +295,6 @@ for (const mode of MODES) {
   )
 }
 
-// 11c. If every crossing along the road is blocked, there is no pass.
 {
   const everywhere: TerrainAt = () => 40
   const pathFor = (s: number) => makePath(s, 60 * DEG, 1, 1)
@@ -332,8 +304,6 @@ for (const mode of MODES) {
   check(some === 300, "a clear road still gives a crossing", `${some}`)
 }
 
-// 12. The chase camera can actually see it: the pass has to be framed, not
-//     parked off the edge of the screen.
 {
   const cam = new THREE.PerspectiveCamera(68, 16 / 9, 0.1, 2500)
   const carS = 300
@@ -347,7 +317,6 @@ for (const mode of MODES) {
 
   for (const deg of ANGLES) {
     for (const mode of MODES) {
-      // A cruise crosses further down the road, because it is high.
       const lead = mode === "cruise" ? CRUISE_LEAD : CROSS_LEAD
       const path = makePath(carS + lead, deg * DEG, 1, 1)
       let visible = 0
@@ -366,9 +335,6 @@ for (const mode of MODES) {
           solidAtCross = 1
         }
       }
-      // A square-on pass sweeps 400 m either side of the road, so most of
-      // it is behind or beside the camera; what matters is that the
-      // crossing itself is framed and solid.
       check(
         visible / total > 0.3,
         `a ${deg} degree ${mode} pass is on screen for a good part of its run`,
@@ -388,7 +354,6 @@ for (const mode of MODES) {
   }
 }
 
-// 13. The pass stays inside the fog and the camera's far plane.
 for (const deg of ANGLES) {
   const path = makePath(300, deg * DEG, 1, 1)
   let maxDist = 0
@@ -403,7 +368,6 @@ for (const deg of ANGLES) {
   )
 }
 
-// 14. Every aircraft: prepared size, facing and propellers.
 for (const spec of AIRCRAFT) {
   const buf = await Bun.file(`src/mainview/models/${spec.file}`).arrayBuffer()
   const gltf: any = await new GLTFLoader().parseAsync(buf, "")
@@ -418,10 +382,7 @@ for (const spec of AIRCRAFT) {
     `found ${props.length}`,
   )
 
-  // The props must spin about the thrust axis, which is the direction
-  // the nose points.
   {
-    // Where the nose points in the model's own space, before the yaw.
     const nose = new THREE.Vector3(-Math.sin(spec.yaw), 0, Math.cos(spec.yaw))
       .applyQuaternion(model.getWorldQuaternion(new THREE.Quaternion()))
       .normalize()
@@ -441,7 +402,6 @@ for (const spec of AIRCRAFT) {
   model.updateMatrixWorld(true)
   const box = new THREE.Box3().setFromObject(model)
   const size = box.getSize(new THREE.Vector3())
-  // The span ends up along X and the fuselage along Z.
   check(
     Math.abs(size.x - spec.span) < 0.6,
     `${spec.file} is scaled to a believable span`,
@@ -458,9 +418,6 @@ for (const spec of AIRCRAFT) {
     `${size.y.toFixed(1)} m tall`,
   )
 
-  // The nose must point along +Z now. The tail fin is the tallest part
-  // of the aircraft, so the highest points of the model have to be
-  // behind the middle.
   let finTop = -Infinity
   let finZ = 0
   let finN = 0
@@ -496,7 +453,6 @@ for (const spec of AIRCRAFT) {
     `the tall fin sits at z=${finZ.toFixed(1)}`,
   )
 
-  // The centre of mass is where the group origin is.
   const centre = box.getCenter(new THREE.Vector3())
   check(
     Math.abs(centre.x) < 0.4 &&
@@ -507,8 +463,6 @@ for (const spec of AIRCRAFT) {
   )
 }
 
-// 15. The traffic: three aircraft, each with a model, a speed and a set
-//     of manoeuvres.
 check(
   AIRCRAFT.length >= 3,
   "the sky has more than one kind of traffic",
@@ -533,7 +487,6 @@ check(
   )
 }
 
-// 16. The Cessna's propeller is cut out of its body, so it can turn.
 {
   const spec = AIRCRAFT.find((a) => a.prop === "merged")!
   const buf = await Bun.file(`src/mainview/models/${spec.file}`).arrayBuffer()
@@ -557,7 +510,6 @@ check(
     "the cut-out triangles became the propeller",
     `${bladeTris} triangles on the prop`,
   )
-  // The prop has to sit at the front of the aircraft, at the nose.
   const hub = props[0]!.node.getWorldPosition(new THREE.Vector3())
   const nose = new THREE.Vector3(0, 0, 1)
   check(
@@ -565,8 +517,6 @@ check(
     "the propeller is at the nose of the aircraft",
     `hub z=${hub.z.toFixed(2)}`,
   )
-  // And it has to be balanced: the blades have to sit on opposite sides
-  // of the hub, or the prop wobbles as it turns.
   const blade = props[0]!.node.children[0] as THREE.Mesh
   const bb = new THREE.Box3().setFromObject(blade)
   const straddleX = bb.min.x < hub.x && bb.max.x > hub.x

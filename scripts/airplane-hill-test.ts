@@ -1,12 +1,3 @@
-/**
- * Integration check for the flyby against the real world: the aircraft's
- * path has to clear the hills that the WorldManager actually generates.
- *
- * The WorldManager is driven headlessly with a stub canvas — the only
- * browser API it needs is the asphalt texture.
- *
- * Run: bun scripts/airplane-hill-test.ts
- */
 import * as THREE from "three"
 import { WorldManager, roadCenterX } from "../src/mainview/systems/WorldManager"
 import {
@@ -19,7 +10,6 @@ import {
   type FlybyMode,
 } from "../src/mainview/systems/AirplaneFlyby"
 
-// The asphalt texture is the only browser API the world needs.
 const ctx2d = { fillStyle: "", fillRect: () => {} }
 ;(globalThis as any).document = {
   createElement: () => ({
@@ -44,7 +34,6 @@ await wm.init(scene, "/")
 const carPos = new THREE.Vector3(roadCenterX(0), 0.7, 0)
 wm.update(0, carPos, 1)
 
-// The terrain query has to actually see the hills.
 {
   let onHill = 0
   let onRoad = 0
@@ -72,8 +61,6 @@ wm.update(0, carPos, 1)
   )
 }
 
-// Every crossing the flyby could pick has to have a path that clears the
-// terrain, and the picker has to find one.
 {
   const terrainAt = (x: number, z: number) => wm.terrainHeightAt(x, z)
   const modes: FlybyMode[] = ["takeoff", "landing", "cruise"]
@@ -95,7 +82,6 @@ wm.update(0, carPos, 1)
         if (pathBlocked(pathFor(base), mode, terrainAt)) blocked++
         const s = pickCrossing(base, mode, pathFor, terrainAt, base - 190, 66)
         if (s !== base) moved++
-        // Nothing clear along the road: the game waits and tries again.
         if (s === -1) {
           none++
           continue
@@ -104,7 +90,6 @@ wm.update(0, carPos, 1)
           stillBlocked++
           continue
         }
-        // How much clearance does the chosen path have?
         const yaw = Math.atan2(roadCenterX(s + 4) - roadCenterX(s - 4), 8)
         const steps = Math.max(16, Math.round(PASS_LENGTH / 15))
         for (let i = 0; i <= steps; i++) {
@@ -115,7 +100,6 @@ wm.update(0, carPos, 1)
           const z = p.z + (t - PASS_LENGTH / 2) * p.dz
           const h = wm.terrainHeightAt(x, z)
           const st = passState(mode, t, pathFor(s), 0)
-          // A landing rolls out on flat ground: no hill may rise into its path.
           if (mode === "landing") {
             if (h > Math.max(0.3, st.y - 4)) landingOnHill++
             continue
@@ -159,14 +143,9 @@ wm.update(0, carPos, 1)
   )
 }
 
-// The Globemaster is 52 m across and its belly hangs 9 m below the
-// flight path, so it needs more room than the transport. Every crossing
-// it is offered has to be clear for the whole aircraft.
 {
   const terrainAt = (x: number, z: number) => wm.terrainHeightAt(x, z)
   const SPAN = 52
-  // The take-off now starts a little higher, so a tall belly clearance is
-  // what it takes to meet the hills at all.
   const CLEARANCE = 20
   const DEG = Math.PI / 180
   let checked = 0
@@ -196,7 +175,6 @@ wm.update(0, carPos, 1)
         console.log("STILL", mode, deg, base, s)
         continue
       }
-      // Check the wingtips along the chosen path as well.
       const p = pathFor(s)
       const px = -p.dz
       const pz = p.dx

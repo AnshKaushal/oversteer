@@ -138,7 +138,6 @@ export function buildHills(
         const pv = kit.trees[Math.floor(rng() * kit.trees.length)]
         const m = new THREE.Mesh(pv.geometry, pv.material)
         m.castShadow = true
-        // trees stand straight up, they don't lean with the slope
         qy.setFromAxisAngle(up, rng() * Math.PI * 2)
         m.quaternion.copy(qy)
         m.position.copy(s.pos)

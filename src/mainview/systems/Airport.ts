@@ -371,7 +371,6 @@ export function runwayNumber(bearing: number): number {
   return Math.round(bearing / 10) % 36 || 36
 }
 
-/** Build the shared textures up front; returns them so they can be uploaded. */
 export function warmAirportTextures(): THREE.Texture[] {
   const keys: [string, () => THREE.Texture][] = [
     ["glow", makeLampGlow],
@@ -385,7 +384,6 @@ export function warmAirportTextures(): THREE.Texture[] {
   })
 }
 
-/** Runway number painted on its own so the big base texture is shared. */
 function makeNumberTexture(text: string): THREE.CanvasTexture {
   const c = document.createElement("canvas")
   c.width = 256

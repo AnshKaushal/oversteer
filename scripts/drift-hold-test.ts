@@ -24,7 +24,7 @@ const idle = {
 } as DriveInput
 
 const HZ = 120
-const TARGET = 28 // deg
+const TARGET = 28
 const DEG = 180 / Math.PI
 
 function betaOf(body: any): number {
@@ -34,7 +34,6 @@ function betaOf(body: any): number {
   const fz = 1 - 2 * (q.x * q.x + q.y * q.y)
   const rx = 1 - 2 * (q.y * q.y + q.z * q.z)
   const rz = 2 * (q.x * q.z - q.w * q.y)
-  // positive = nose points left of travel (car yawing right, tail out left)
   return Math.atan2(
     v.x * rx + v.z * rz,
     Math.max(1, Math.abs(v.x * fx + v.z * fz)),
@@ -67,10 +66,9 @@ function trial(gear: number, v0: number, dir: 1 | -1): Result {
   let spun = false
   for (let i = 0; i < total * HZ; i++) {
     const t = i / HZ
-    const b = betaOf(s.body) * dir * DEG // positive when drifting in `dir`
+    const b = betaOf(s.body) * dir * DEG
     let inp: DriveInput
     if (t < 0.6) {
-      // flick: turn in, brief handbrake mid-way
       inp = {
         ...idle,
         throttle: 1,
@@ -78,7 +76,6 @@ function trial(gear: number, v0: number, dir: 1 | -1): Result {
         handbrake: t > 0.25 && t < 0.45,
       }
     } else {
-      // hold: steer against slip to target beta, throttle modulates beta
       const throttle = Math.max(0.35, Math.min(1, 0.7 + (TARGET - b) / 30))
       const steer = dir * Math.max(-1, Math.min(1, -(b - 8) / 40))
       inp = { ...idle, throttle, steer }

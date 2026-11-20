@@ -429,7 +429,6 @@ export class RemoteCar {
     }
   }
 
-  /** Desired lamp state, re-applied whenever the visual (re)loads. */
   private lightsOn = false
 
   setHeadlights(on: boolean) {

@@ -1,10 +1,3 @@
-/**
- * Steady-state and transient handling per car, from the spec alone.
- *   bun scripts/handling-report.ts [car-id ...]
- * Skidpad sweep at 60 km/h (steady cornering, throttle holds speed): understeer
- * gradient in deg/g from road-wheel angle against lateral g. Step steer at
- * 80 km/h: yaw-rate rise time to 90 % and overshoot.
- */
 import {
   initPhysics,
   moveGroundBody,
@@ -59,7 +52,6 @@ function fresh(def: (typeof CARS)[number], kmh: number) {
   advance(r, idle, HZ / 2)
   return r
 }
-/** Throttle that holds the target speed. */
 const hold = (r: Rig, kmh: number, steer: number) => (): DriveInput => {
   const err = kmh / 3.6 - Math.abs(r.car.forwardSpeed)
   return {

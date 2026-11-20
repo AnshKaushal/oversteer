@@ -73,7 +73,6 @@ function Label({ label, hint }: { label: string; hint?: ReactNode }) {
   )
 }
 
-/** A row that just holds a label and an arbitrary right-hand control. */
 export function Row({
   label,
   hint,
