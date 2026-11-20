@@ -164,6 +164,10 @@ export class CircuitWorld implements MapWorld {
   setTimeOfDay(mode: TimeOfDayMode) {
     this.sky.setTimeOfDay(mode)
   }
+  setShadowFocus(dirX: number, dirZ: number) {
+    this.sky.setShadowFocus(dirX, dirZ)
+  }
+
   setShadowQuality(pct: number) {
     this.sky.setShadowQuality(pct)
   }

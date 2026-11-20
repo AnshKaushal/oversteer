@@ -1,3 +1,4 @@
+import { shadowTuning } from "../shadowTuning"
 import type { ClearZone } from "../Airport"
 import * as THREE from "three"
 import { SUN_SPRITE_SCALE } from "../sunDisc"
@@ -76,10 +77,10 @@ export function setTimeOfDay(this: WorldManager, mode: TimeOfDayMode) {
 export function setShadowQuality(this: WorldManager, pct: number) {
   const sun = this.sunLight
   if (!sun) return
-  const q = Math.min(100, Math.max(25, pct)) / 100
-  const size = Math.max(1024, Math.round((2048 * q) / 256) * 256)
-  const half = 50 + 20 * q
-  this.shadowTexel = (2 * half) / size
+  const t = shadowTuning(pct)
+  const { size, half } = t
+  this.shadowTexel = t.texel
+  this.shadowAhead = t.ahead
   const cam = sun.shadow.camera
   if (sun.shadow.mapSize.x !== size) {
     sun.shadow.map?.dispose()
@@ -87,7 +88,8 @@ export function setShadowQuality(this: WorldManager, pct: number) {
     sun.shadow.mapSize.set(size, size)
     sun.shadow.needsUpdate = true
   }
-  sun.shadow.radius = 2.5 + (1 - q) * 2
+  sun.shadow.radius = t.radius
+  sun.shadow.normalBias = t.normalBias
   cam.left = cam.bottom = -half
   cam.right = cam.top = half
   cam.updateProjectionMatrix()

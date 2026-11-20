@@ -147,6 +147,14 @@ export class WorldManager {
   }
 
   shadowTexel = 0.1
+  shadowAhead = 0
+  shadowDirX = 0
+  shadowDirZ = 0
+  readonly shadowFocusPos = new THREE.Vector3()
+  setShadowFocus(dirX: number, dirZ: number) {
+    this.shadowDirX = dirX
+    this.shadowDirZ = dirZ
+  }
   readonly lightRight = new THREE.Vector3()
   readonly lightUp = new THREE.Vector3()
   readonly snapped = new THREE.Vector3()

@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { shadowTuning } from "../../systems/shadowTuning"
 import {
   createSunDisc,
   setSunBlur,
@@ -30,6 +31,15 @@ export class SkyRig {
   private readonly right = new THREE.Vector3()
   private readonly up = new THREE.Vector3()
   private readonly snapped = new THREE.Vector3()
+  private readonly focusPos = new THREE.Vector3()
+  private shadowAhead = 0
+  private dirX = 0
+  private dirZ = 0
+
+  setShadowFocus(dirX: number, dirZ: number) {
+    this.dirX = dirX
+    this.dirZ = dirZ
+  }
 
   constructor(
     private readonly group: THREE.Group,
@@ -241,10 +251,10 @@ export class SkyRig {
   }
 
   setShadowQuality(pct: number) {
-    const q = Math.min(100, Math.max(25, pct)) / 100
-    const size = Math.max(1024, Math.round((4096 * q) / 256) * 256)
-    const half = 40 + 20 * q
-    this.shadowTexel = (2 * half) / size
+    const t = shadowTuning(pct)
+    const { size, half } = t
+    this.shadowTexel = t.texel
+    this.shadowAhead = t.ahead
     const sun = this.sun
     const cam = sun.shadow.camera
     if (sun.shadow.mapSize.x !== size) {
@@ -253,7 +263,8 @@ export class SkyRig {
       sun.shadow.mapSize.set(size, size)
       sun.shadow.needsUpdate = true
     }
-    sun.shadow.radius = 1.5 + (1 - q) * 2
+    sun.shadow.radius = t.radius
+    sun.shadow.normalBias = t.normalBias
     cam.left = cam.bottom = -half
     cam.right = cam.top = half
     cam.updateProjectionMatrix()
@@ -273,7 +284,13 @@ export class SkyRig {
   }
 
   update(carPos: THREE.Vector3) {
-    const f = this.snapToShadowGrid(carPos)
+    const f = this.snapToShadowGrid(
+      this.focusPos.set(
+        carPos.x + this.dirX * this.shadowAhead,
+        carPos.y,
+        carPos.z + this.dirZ * this.shadowAhead,
+      ),
+    )
     this.sun.position.set(
       f.x + this.sunOffset.x,
       f.y + this.sunOffset.y,

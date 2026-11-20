@@ -49,7 +49,13 @@ export function update(
     this.sunLight ??
     ((this.group as any)._sun as THREE.DirectionalLight | undefined)
   if (sun) {
-    const f = this.snapToShadowGrid(carPos)
+    const f = this.snapToShadowGrid(
+      this.shadowFocusPos.set(
+        carPos.x + this.shadowDirX * this.shadowAhead,
+        carPos.y,
+        carPos.z + this.shadowDirZ * this.shadowAhead,
+      ),
+    )
     sun.position.set(
       f.x + this.sunOffset.x,
       f.y + this.sunOffset.y,
@@ -112,6 +118,9 @@ export function update(
   }
 }
 
+const _rayOrigin = new THREE.Vector3()
+const _rayDown = new THREE.Vector3(0, -1, 0)
+
 export function terrainHeightAt(
   this: WorldManager,
   x: number,
@@ -124,7 +133,7 @@ export function terrainHeightAt(
     const r = hill.radius * 1.4
     if (dx * dx + dz * dz > r * r) continue
     hill.mesh.updateWorldMatrix(true, false)
-    this.hillRay.set(new THREE.Vector3(x, 400, z), new THREE.Vector3(0, -1, 0))
+    this.hillRay.set(_rayOrigin.set(x, 400, z), _rayDown)
     const hit = this.hillRay.intersectObject(hill.mesh, false)
     if (hit.length > 0 && hit[0].point.y > h) h = hit[0].point.y
   }

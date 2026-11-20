@@ -43,6 +43,8 @@ export interface MapWorld {
   sunDirection(): { x: number; y: number; z: number }
   setTimeOfDay(mode: TimeOfDayMode): void
   setShadowQuality(pct: number): void
+  /** Unit horizontal view direction; shifts the shadow area ahead of the car. */
+  setShadowFocus(dirX: number, dirZ: number): void
   setPropShadows(on: boolean): void
   setVegetation(percent: number): void
   setStreetLights(show: boolean, power: boolean): void
