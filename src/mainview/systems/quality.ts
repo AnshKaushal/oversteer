@@ -69,12 +69,24 @@ export class AutoQuality {
   static readonly TARGET_MS = 1000 / 55
   static readonly UP_MS = 1000 / 90
 
-  tick(frameMs: number, scale: number, ceiling: number): number | null {
+  tick(
+    frameMs: number,
+    scale: number,
+    ceiling: number,
+    capMs = 0,
+  ): number | null {
     if (frameMs <= 0) return null
-    if (frameMs > AutoQuality.TARGET_MS) {
+    // With a frame cap every frame takes >= capMs, so "fast" can't be judged
+    // by an absolute frame time: judge against the cap itself.
+    const target = capMs
+      ? Math.max(AutoQuality.TARGET_MS, capMs * 1.12)
+      : AutoQuality.TARGET_MS
+    const upMs = capMs ? capMs * 1.03 : AutoQuality.UP_MS
+    const upNeeded = capMs ? 60 : 24
+    if (frameMs > target) {
       this.slow++
       this.fast = 0
-    } else if (frameMs < AutoQuality.UP_MS) {
+    } else if (frameMs < upMs) {
       this.fast++
       this.slow = 0
     } else {
@@ -84,7 +96,7 @@ export class AutoQuality {
       this.slow = 0
       return Math.max(AutoQuality.MIN_SCALE, scale - 5)
     }
-    if (this.fast >= 24 && scale < ceiling) {
+    if (this.fast >= upNeeded && scale < ceiling) {
       this.fast = 0
       return Math.min(ceiling, scale + 5)
     }

@@ -187,7 +187,6 @@ export function startSession(ctx: SessionCtx): () => void {
           getCar(carIdRef.current).modelFile ?? "bmw_m3.glb",
           "garage.glb",
           "street_light.glb",
-          "low_poly_tree_pack.glb",
           ...AIRCRAFT.map((a) => a.file),
         ])
       }
@@ -631,6 +630,9 @@ export function startSession(ctx: SessionCtx): () => void {
       const skid = new Skidmarks()
       scene.add(skid.mesh)
       const skidP = new THREE.Vector3()
+      const viewDir = new THREE.Vector3()
+      let shadowDX = 0
+      let shadowDZ = 0
       const smokeSpots: THREE.Vector3[] = []
       let smokeAcc = 0
       let smokeHeat = 0
@@ -722,6 +724,27 @@ export function startSession(ctx: SessionCtx): () => void {
         for (let i = 0; i < sharpCand.length && i < MAX_SHARP; i++)
           sharp.push(sharpCand[i].g)
         return sharp
+      }
+      // Reused every frame; AI drivers only read it during drive().
+      const trafficPool: TrafficEntry[] = []
+      let trafficPoolFrame = -1
+      let trafficFrameId = 0
+      const fillTraffic = (): TrafficEntry[] => {
+        if (trafficPoolFrame === trafficFrameId) return trafficPool
+        trafficPoolFrame = trafficFrameId
+        const n = allBodies.length
+        for (let i = 0; i < n; i++) {
+          const b = allBodies[i]
+          const p = b.translation()
+          const e = trafficPool[i]
+          if (e) {
+            e.body = b
+            e.x = p.x
+            e.z = p.z
+          } else trafficPool[i] = { body: b, x: p.x, z: p.z }
+        }
+        trafficPool.length = n
+        return trafficPool
       }
       const NO_SPIN: readonly number[] = []
       // True while the player is pinned on the grid before green.
@@ -842,6 +865,10 @@ export function startSession(ctx: SessionCtx): () => void {
       const loop = (now: number) => {
         if (disposed) return
         raf = requestAnimationFrame(loop)
+        // Optional frame cap: skip the whole frame (sim time accumulates in dt)
+        // so fanless machines can hold a lower, cooler duty cycle.
+        const cap = settingsRef.current.fpsCap
+        if (cap && now - last < 1000 / cap - 3) return
         skyEnv.refresh(scene)
         const loopT0 = performance.now()
         spike.enabled = hud.shown()
@@ -973,15 +1000,13 @@ export function startSession(ctx: SessionCtx): () => void {
           const racing =
             !raceActive || (released && headsUp <= 0 && countdown <= 0)
           if (raceActive && racing && !raceFinished) raceElapsed += dt
+          trafficFrameId++
           const steps = pushFrameTime(stepper, dt)
           if (steps === 0) input.requeue(inp)
           netDiagPhysicsTick(steps, stepper.droppedTotal)
           if (raceActive) {
             const pp = body.translation()
-            const traffic: TrafficEntry[] = allBodies.map((b) => {
-              const p = b.translation()
-              return { body: b, x: p.x, z: p.z }
-            })
+            const traffic = fillTraffic()
             for (const rival of rivals) {
               rival.car.autoShiftEnabled = racing
               rival.cached =
@@ -1002,10 +1027,7 @@ export function startSession(ctx: SessionCtx): () => void {
           }
           if (trafficCars.length > 0) {
             const tpp = body.translation()
-            const tEntries: TrafficEntry[] = allBodies.map((b) => {
-              const p = b.translation()
-              return { body: b, x: p.x, z: p.z }
-            })
+            const tEntries = fillTraffic()
             for (let ti = 0; ti < trafficCars.length; ti++) {
               const tc = trafficCars[ti]
               tc.car.autoShiftEnabled = true
@@ -1468,6 +1490,16 @@ export function startSession(ctx: SessionCtx): () => void {
           }
         }
         spike.ph("npcLights")
+        // Push the shadow area toward what the camera is looking at so the
+        // crisp part of the map isn't wasted behind the car.
+        camera.getWorldDirection(viewDir)
+        const hl = Math.hypot(viewDir.x, viewDir.z)
+        if (hl > 0.2) {
+          const k = 1 - Math.exp(-dt * 2)
+          shadowDX += (viewDir.x / hl - shadowDX) * k
+          shadowDZ += (viewDir.z / hl - shadowDZ) * k
+          wm.setShadowFocus(shadowDX, shadowDZ)
+        }
         wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))
         spike.ph("world")
         lapTimer?.update(
@@ -1598,6 +1630,9 @@ export function startSession(ctx: SessionCtx): () => void {
           settingsRef.current.antiAliasing ?? "smaa",
           settingsRef.current.motionBlur ?? 0,
           sharpRoots(),
+          settingsRef.current.upscaler === false
+            ? 1
+            : settingsRef.current.renderScale / 100,
         )
         if (photoState.pending) {
           photoState.pending = false

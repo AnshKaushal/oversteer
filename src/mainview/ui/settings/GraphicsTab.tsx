@@ -85,6 +85,12 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
           viewport={viewport}
           onSelect={(id: ResolutionId) => set({ resolution: id })}
         />
+        <Toggle
+          label="Smart upscaling"
+          hint="Renders below native and reconstructs with a sharpening upscaler. Much crisper than a plain stretch at the same cost"
+          checked={settings.upscaler !== false}
+          onChange={(v) => set({ upscaler: v })}
+        />
         <Slider
           label="Render scale"
           value={settings.renderScale}
@@ -129,6 +135,17 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
           max={100}
           format={(v) => (v === 0 ? "Off" : String(v))}
           onChange={(v) => set({ motionBlur: v })}
+        />
+        <Choice
+          label="Frame rate limit"
+          options={[
+            { id: 0, label: "Off" },
+            { id: 60, label: "60" },
+            { id: 45, label: "45" },
+            { id: 30, label: "30" },
+          ]}
+          value={settings.fpsCap ?? 0}
+          onChange={(id) => set({ fpsCap: id })}
         />
         <Toggle
           label="Auto-adjust scale"

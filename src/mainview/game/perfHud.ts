@@ -100,7 +100,13 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
     if (stats.windowTick && settingsRef.current.autoQuality) {
       const cur = settingsRef.current.renderScale
       const ceil = settingsRef.current.qualityPreset === "low" ? 60 : 100
-      const nextScale = autoQ.tick(stats.frameMs, cur, ceil)
+      const cap = settingsRef.current.fpsCap
+      const nextScale = autoQ.tick(
+        stats.frameMs,
+        cur,
+        ceil,
+        cap ? 1000 / cap : 0,
+      )
       if (nextScale !== null)
         handleUpdateSettingsRef.current({
           ...settingsRef.current,

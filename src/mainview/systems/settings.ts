@@ -120,6 +120,10 @@ export const FOG_INTENSITY: Record<FogLevel, number | undefined> = {
 export interface AppSettings {
   resolution: ResolutionId
   renderScale: number
+  /** Render below native and upscale with a sharpening pass (default on). */
+  upscaler?: boolean
+  /** Max frames per second; 0/undefined = uncapped (display refresh). */
+  fpsCap?: number
   shadows: boolean
   shadowQuality: number
   timeOfDay?: TimeOfDayMode
@@ -266,7 +270,7 @@ export function applyRendererResolution(
     settings.resolution,
     mountW,
     mountH,
-    settings.renderScale,
+    settings.upscaler === false ? settings.renderScale : 100,
   )
 
   if (settings.resolution === "native") {
