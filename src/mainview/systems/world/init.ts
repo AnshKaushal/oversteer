@@ -2,7 +2,6 @@ import { Puddles } from "../Puddles"
 import { StreetLights } from "../StreetLights"
 import * as THREE from "three"
 import {
-  USE_CUSTOM_PROPS,
   cloudMaterial,
   makeCloudGeometries,
   makeRockGeometries,
@@ -22,8 +21,6 @@ import {
 import { makeRibbonGeometry } from "../world/ribbon"
 import { makeAsphaltTexture } from "../world/asphalt"
 import { PropCategory, PropVariant } from "../world/types"
-import { TREE_NODES, CLOUD_NODES } from "../world/nodes"
-import { bakeInstanced, bakeSplit } from "../world/bake"
 import type { WorldManager } from "../WorldManager"
 
 export async function init(
@@ -192,172 +189,36 @@ export async function init(
     this.roadSegs.push({ mesh: m, s0: -999999 })
   }
 
-  let glbRoot: THREE.Object3D | null = null
-  try {
-    const glb = await this.loader.loadAsync(
-      `${baseUrl}models/low_poly_tree_pack.glb`,
-    )
-    glbRoot = glb.scene
-    glbRoot.updateMatrixWorld(true)
-  } catch (e) {
-    console.warn("low_poly_tree_pack.glb failed to load, using fallback", e)
-  }
-
-  if (glbRoot) {
-    const nodeByName = new Map<string, THREE.Object3D>()
-    glbRoot.traverse((o) => {
-      nodeByName.set(o.name, o)
-    })
-
-    const buildVariant = (
-      category: PropCategory,
-      names: string[],
-      targetH: number,
-      maxInstances: number,
-      opts?: { uniformScale?: number },
-    ) => {
-      if (USE_CUSTOM_PROPS && (category === "tree" || category === "cloud")) {
-        const mat = category === "cloud" ? cloudMaterial() : propMaterial()
-        const geos =
-          category === "tree" ? makeTreeGeometries() : makeCloudGeometries()
-        for (const g of geos) {
-          const im = new THREE.InstancedMesh(g, mat, maxInstances)
-          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-          im.count = 0
-          im.castShadow = category !== "cloud"
-          im.name = `prop-${category}`
-          im.receiveShadow = category !== "cloud"
-          im.frustumCulled = false
-          if (category === "tree") this.applyShadowFade(im)
-          this.group.add(im)
-          if (category === "cloud")
-            this.cloudVariants.push({ im, category, targetH })
-          else {
-            const pv: PropVariant = { im, category, targetH }
-            if (category === "tree") {
-              this.addFarTwin(pv)
-              this.addShadowProxy(pv)
-            }
-            this.propVariants.push(pv)
-          }
-        }
-        return
-      }
-      for (const name of names) {
-        const node = nodeByName.get(name)
-        if (!node) {
-          console.warn(`prop node not found: ${name}`)
-          continue
-        }
-        node.updateMatrixWorld(true)
-        const im = bakeInstanced(node, maxInstances, targetH, opts)
-        if (im) {
-          im.castShadow = category !== "cloud" && category !== "grass"
-          im.name = `prop-${category}`
-          im.receiveShadow = category !== "cloud"
-          im.frustumCulled = false
-          if (category === "tree") this.applyShadowFade(im)
-          this.group.add(im)
-          if (category === "cloud") {
-            this.cloudVariants.push({ im, category, targetH })
-          } else {
-            const pv: PropVariant = { im, category, targetH }
-            if (category === "tree") {
-              this.addFarTwin(pv)
-              this.addShadowProxy(pv)
-            }
-            this.propVariants.push(pv)
-          }
-        }
-      }
-    }
-
-    buildVariant("tree", TREE_NODES, 6.5, 1200)
-    buildVariant("cloud", CLOUD_NODES, 14.0, this.NUM_CLOUDS)
-
-    const bakeNodes = (names: string[]): THREE.Group | null => {
-      const g = new THREE.Group()
-      let found = false
-      for (const nm of names) {
-        const n = nodeByName.get(nm)
-        if (n) {
-          g.add(n.clone())
-          found = true
-        } else console.warn(`prop node not found: ${nm}`)
-      }
-      if (!found) return null
-      g.updateMatrixWorld(true)
-      return g
-    }
-    const pushIM = (
-      im: THREE.InstancedMesh | null,
-      category: PropCategory,
-      targetH: number,
-      shadow: boolean,
-    ) => {
-      if (!im) return
-      im.castShadow = shadow
+  const addProp = (
+    category: PropCategory,
+    geos: THREE.BufferGeometry[],
+    mat: THREE.Material,
+    targetH: number,
+    maxInstances: number,
+  ) => {
+    for (const g of geos) {
+      const im = new THREE.InstancedMesh(g, mat, maxInstances)
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      im.count = 0
+      im.castShadow = category !== "cloud"
       im.name = `prop-${category}`
       im.receiveShadow = category !== "cloud"
       im.frustumCulled = false
-      if (category !== "grass") this.applyShadowFade(im)
       this.group.add(im)
       const pv: PropVariant = { im, category, targetH }
-      this.propVariants.push(pv)
-      if (shadow && category !== "grass" && category !== "cloud")
-        this.addShadowProxy(pv)
-    }
-
-    const g111 = bakeNodes(["Object_111"])
-    if (g111) {
-      if (USE_CUSTOM_PROPS) {
-        const rmat = propMaterial()
-        for (const g of makeRockGeometries()) {
-          const im = new THREE.InstancedMesh(g, rmat, 150)
-          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-          im.count = 0
-          pushIM(im, "rock", 0.8, true)
-        }
-      } else
-        for (const im of bakeSplit(g111, 6, 150, { uniformScale: 0.012 }))
-          pushIM(im, "rock", 0.8, true)
-    }
-    const barrel = bakeNodes(["Object_113", "Object_114"])
-    if (barrel) {
-      pushIM(bakeInstanced(barrel, 100, 1.5), "barrel", 1.5, true)
-    }
-    const log = bakeNodes(["Object_111", "Object_112"])
-    if (log) {
-      pushIM(
-        bakeInstanced(log, 100, 0, { uniformScale: 0.006 }),
-        "log",
-        0.4,
-        true,
-      )
-    }
-  } else {
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.25, 0.4, 2.4, 6),
-      new THREE.MeshStandardMaterial({ color: 0x5a3a22 }),
-    )
-    trunk.position.y = 1.2
-    const top = new THREE.Mesh(
-      new THREE.ConeGeometry(2.2, 5.5, 7),
-      new THREE.MeshStandardMaterial({ color: 0x2d5a22, flatShading: true }),
-    )
-    top.position.y = 5
-    const fallback = new THREE.Group()
-    fallback.add(trunk, top)
-    fallback.updateMatrixWorld(true)
-    const im = bakeInstanced(fallback, this.maxProps, 6.5)
-    if (im) {
-      im.castShadow = true
-      im.frustumCulled = false
+      if (category === "cloud") {
+        this.cloudVariants.push(pv)
+        continue
+      }
       this.applyShadowFade(im)
-      this.group.add(im)
-      this.propVariants.push({ im, category: "tree", targetH: 6.5 })
+      if (category === "tree") this.addFarTwin(pv)
+      this.addShadowProxy(pv)
+      this.propVariants.push(pv)
     }
   }
+  addProp("tree", makeTreeGeometries(), propMaterial(), 6.5, 1200)
+  addProp("cloud", makeCloudGeometries(), cloudMaterial(), 14.0, this.NUM_CLOUDS)
+  addProp("rock", makeRockGeometries(), propMaterial(), 0.8, 150)
 
   this.hills.forEach((h, i) =>
     this.dressHill(h, i * 311 + 3, h.radius > 90 ? 10 : 20),

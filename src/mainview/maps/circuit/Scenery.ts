@@ -1,15 +1,7 @@
 import * as THREE from "three"
-import { createGLTFLoader } from "../../systems/gltf"
-import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
-import {
-  CLOUD_NODES,
-  TREE_NODES,
-  bakeInstanced,
-} from "../../systems/WorldManager"
 import { makeHillGeometry, sampleSurface } from "../../systems/Hills"
 import {
-  USE_CUSTOM_PROPS,
   cloudMaterial,
   makeCloudGeometries,
   makeTreeFarGeometry,
@@ -36,75 +28,26 @@ const kitCache = new Map<string, Promise<PropKit | null>>()
 export function loadPropKit(baseUrl: string): Promise<PropKit | null> {
   let p = kitCache.get(baseUrl)
   if (!p) {
-    p = bakePropKit(baseUrl)
+    p = bakePropKit()
     kitCache.set(baseUrl, p)
   }
   return p
 }
 
-async function bakePropKit(baseUrl: string): Promise<PropKit | null> {
-  if (USE_CUSTOM_PROPS) {
-    const mat = propMaterial()
-    const wrap = (gs: THREE.BufferGeometry[]): Proto[] =>
-      gs.map((geometry) => ({
-        geometry,
-        material: mat,
-        far: makeTreeFarGeometry(),
-      }))
-    return {
-      trees: wrap(makeTreeGeometries()),
-      clouds: makeCloudGeometries().map((geometry) => ({
-        geometry,
-        material: cloudMaterial(),
-      })),
-    }
-  }
-  try {
-    const glb = await createGLTFLoader().loadAsync(
-      `${baseUrl}models/low_poly_tree_pack.glb`,
-    )
-    const root = glb.scene
-    root.updateMatrixWorld(true)
-    const byName = new Map<string, THREE.Object3D>()
-    root.traverse((o) => byName.set(o.name, o))
-    const simplifier = new SimplifyModifier()
-    const bake = async (
-      names: string[],
-      targetH: number,
-      lod = false,
-    ): Promise<Proto[]> => {
-      const out: Proto[] = []
-      for (const n of names) {
-        const node = byName.get(n)
-        if (!node) continue
-        node.updateMatrixWorld(true)
-        const im = bakeInstanced(node, 1, targetH)
-        if (im) {
-          const g = im.geometry
-          const tris =
-            (g.index ? g.index.count : g.attributes.position.count) / 3
-          let low: THREE.BufferGeometry | undefined
-          if (lod && tris > 1500) {
-            try {
-              low = await simplifier.modify(
-                g,
-                Math.floor(g.attributes.position.count * 0.88),
-              )
-            } catch (e) {
-              console.warn("tree LOD failed", e)
-            }
-          }
-          out.push({ geometry: g, material: im.material, lod: low })
-        }
-      }
-      return out
-    }
-    const trees = await bake(TREE_NODES, 6.5, true)
-    const clouds = await bake(CLOUD_NODES, 14)
-    return trees.length ? { trees, clouds } : null
-  } catch (e) {
-    console.warn("low_poly_tree_pack.glb failed to load", e)
-    return null
+async function bakePropKit(): Promise<PropKit | null> {
+  const mat = propMaterial()
+  const wrap = (gs: THREE.BufferGeometry[]): Proto[] =>
+    gs.map((geometry) => ({
+      geometry,
+      material: mat,
+      far: makeTreeFarGeometry(),
+    }))
+  return {
+    trees: wrap(makeTreeGeometries()),
+    clouds: makeCloudGeometries().map((geometry) => ({
+      geometry,
+      material: cloudMaterial(),
+    })),
   }
 }
 

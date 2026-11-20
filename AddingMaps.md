@@ -48,5 +48,5 @@ retries, ending on an ellipse if nothing passes.
 - Rivals use `CircuitDriver` (pure pursuit plus curvature-based speed planning), supplied by `MapInstance.rivalDriver`.
 - Race progress on a loop is cumulative distance (`CircuitInfo.progressTracker()`); race "distance" buttons count laps (laps × track length).
 - `GameMap.gapM` supplies the live race gap; the circuit uses a signed difference.
-- Scenery reuses `low_poly_tree_pack.glb` (trees, clouds) and the shared hills in `systems/Hills.ts`; hills are placed outside the track corridor with colliders. A procedural tree fallback is used if the GLB fails to load.
+- Scenery uses procedural low-poly trees and clouds (`systems/lowPolyProps.ts`) and the shared hills in `systems/Hills.ts`; hills are placed outside the track corridor with colliders. A procedural tree fallback is used if the GLB fails to load.
 - Multiplayer: `START_RACE` carries the map spec; the circuit seed is `startTimeMs`, so every peer builds the same track. `NET.protocolVersion` is 3.

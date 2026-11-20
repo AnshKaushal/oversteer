@@ -2,8 +2,6 @@ import * as THREE from "three"
 import { HILL_FADE_FROM, HILL_FADE_TO } from "./world/constants"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 
-export const USE_CUSTOM_PROPS = true
-
 type RGB = [number, number, number]
 
 function part(
