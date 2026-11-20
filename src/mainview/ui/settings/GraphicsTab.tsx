@@ -87,7 +87,7 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
         />
         <Toggle
           label="Smart upscaling"
-          hint="Renders below native and reconstructs with a sharpening upscaler. Much crisper than a plain stretch at the same cost"
+          hint="Renders below native and reconstructs the image with an FSR 1-style edge-adaptive upscaler plus sharpening. Much crisper than a plain stretch at the same cost"
           checked={settings.upscaler !== false}
           onChange={(v) => set({ upscaler: v })}
         />
