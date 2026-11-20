@@ -5,6 +5,7 @@ import { FinalPass } from "./finalPass"
 import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js"
 import { MotionBlurPass } from "./motionBlur"
 import { UpscalePass } from "./upscalePass"
+import { TemporalUpscalePass } from "./temporalUpscale"
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js"
 
 export type AAMode = "off" | "fxaa" | "smaa" | "msaa"
@@ -21,6 +22,10 @@ export class AntiAlias {
   private upOn = false
   private scale = 1
   private upPass: UpscalePass | null = null
+  private tPass: TemporalUpscalePass | null = null
+  private tOn = false
+  private sceneDepth: THREE.DepthTexture | null = null
+  private lastCam = new THREE.Vector3()
   private blurPass: MotionBlurPass | null = null
   private composer: EffectComposer | null = null
   private finalPass: FinalPass | null = null
@@ -36,31 +41,42 @@ export class AntiAlias {
     private camera: THREE.Camera,
   ) {}
 
-  private build(mode: AAMode, blur: boolean, up: boolean) {
+  private build(mode: AAMode, blur: boolean, up: boolean, temporal: boolean) {
     this.composer?.dispose()
     this.blurPass?.dispose()
     this.finalPass = null
     this.composer = null
     this.blurPass = null
     this.upPass = null
+    this.tPass?.dispose()
+    this.tPass = null
+    this.tOn = temporal
     this.mode = mode
     this.blurOn = blur
     this.upOn = up
-    if (mode === "off" && !blur && !up) return
+    if (mode === "off" && !blur && !up && !temporal) return
     this.renderer.getDrawingBufferSize(this.v)
     const iw = Math.max(1, Math.round(this.v.x * this.scale))
     const ih = Math.max(1, Math.round(this.v.y * this.scale))
     const target = new THREE.WebGLRenderTarget(iw, ih, {
       type: THREE.HalfFloatType,
-      samples: mode === "msaa" ? 2 : 0,
+      samples: mode === "msaa" && !temporal ? 2 : 0,
     })
-    if (blur) {
+    if (blur || temporal) {
       target.depthTexture = new THREE.DepthTexture(iw, ih)
       target.depthTexture.type = THREE.UnsignedIntType
     }
     const c = new EffectComposer(this.renderer, target)
     c.setPixelRatio(1)
-    c.addPass(new RenderPass(this.scene, this.camera))
+    const rp = new RenderPass(this.scene, this.camera)
+    const rpRender = rp.render.bind(rp)
+    // The scene is drawn into whichever composer buffer is "read" this
+    // frame; remember its depth texture for the temporal resolve.
+    rp.render = (r, w, rb, ...rest) => {
+      this.sceneDepth = rb.depthTexture
+      rpRender(r, w, rb, ...rest)
+    }
+    c.addPass(rp)
     if (blur) {
       this.blurPass = new MotionBlurPass(
         this.scene,
@@ -71,9 +87,16 @@ export class AntiAlias {
     }
     this.finalPass = new FinalPass()
     c.addPass(this.finalPass)
-    if (mode === "fxaa") c.addPass(new FXAAPass())
+    if (temporal) {
+      // Temporal accumulation is also the anti-aliasing.
+      this.tPass = new TemporalUpscalePass(
+        this.camera as THREE.PerspectiveCamera,
+        () => this.sceneDepth,
+      )
+      c.addPass(this.tPass)
+    } else if (mode === "fxaa") c.addPass(new FXAAPass())
     else if (mode === "smaa") c.addPass(new SMAAPass())
-    if (up) {
+    if (up && !temporal) {
       this.upPass = new UpscalePass()
       c.addPass(this.upPass)
     }
@@ -98,12 +121,18 @@ export class AntiAlias {
     blur = 0,
     keepSharp: THREE.Object3D | readonly THREE.Object3D[] | null = null,
     scale = 1,
+    temporal = false,
   ) {
     const on = blur > 0
     const up = scale < 0.995
     this.scale = up ? Math.max(0.4, scale) : 1
-    if (mode !== this.mode || on !== this.blurOn || up !== this.upOn)
-      this.build(mode, on, up)
+    if (
+      mode !== this.mode ||
+      on !== this.blurOn ||
+      up !== this.upOn ||
+      temporal !== this.tOn
+    )
+      this.build(mode, on, up, temporal)
     if (this.blurPass) {
       this.blurPass.strength = (blur / 100) * 1.5
       this.blurPass.maskRoots = !keepSharp
@@ -128,26 +157,37 @@ export class AntiAlias {
       this.h = ih
       this.composer.setSize(iw, ih)
       this.upPass?.setSizes(iw, ih, this.v.x, this.v.y)
+      this.tPass?.setSizes(iw, ih, this.v.x, this.v.y)
     }
     if (this.finalPass) {
       // Without the upscaler the canvas is CSS-stretched when the render
       // scale is below 100%: sharpen to compensate. The upscale pass sharpens
       // at output resolution itself.
-      const ratio = this.upPass
+      const ratio = this.upPass || this.tPass
         ? 1
         : this.renderer.domElement.clientWidth / this.v.x
-      this.finalPass.sharpness = this.upPass
+      this.finalPass.sharpness = this.upPass || this.tPass
         ? 0
         : ratio > 1.02
           ? Math.min(1, 0.25 + (ratio - 1) * 1.5)
           : 0.15
     }
+    let restore: (() => void) | undefined
+    if (this.tPass) {
+      const cam = this.camera.position
+      // Camera cut (reset, teleport, view change): old history is wrong.
+      if (cam.distanceToSquared(this.lastCam) > 64) this.tPass.reset()
+      this.lastCam.copy(cam)
+      restore = this.tPass.beginFrame()
+    }
     this.composer.render()
+    restore?.()
   }
 
   dispose() {
     this.composer?.dispose()
     this.blurPass?.dispose()
     this.upPass?.dispose()
+    this.tPass?.dispose()
   }
 }

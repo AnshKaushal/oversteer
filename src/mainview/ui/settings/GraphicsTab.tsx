@@ -85,11 +85,25 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
           viewport={viewport}
           onSelect={(id: ResolutionId) => set({ resolution: id })}
         />
-        <Toggle
-          label="Smart upscaling"
-          hint="Renders below native and reconstructs the image with an FSR 1-style edge-adaptive upscaler plus sharpening. Much crisper than a plain stretch at the same cost"
-          checked={settings.upscaler !== false}
-          onChange={(v) => set({ upscaler: v })}
+        <Choice
+          label="Upscaler"
+          options={[
+            { id: "off", label: "Off" },
+            { id: "spatial", label: "Spatial" },
+            { id: "temporal", label: "Temporal (beta)" },
+          ]}
+          value={
+            settings.upscaler === false
+              ? "off"
+              : (settings.upscaleMode ?? "spatial")
+          }
+          onChange={(id) =>
+            set(
+              id === "off"
+                ? { upscaler: false }
+                : { upscaler: true, upscaleMode: id as "spatial" | "temporal" },
+            )
+          }
         />
         <Slider
           label="Render scale"

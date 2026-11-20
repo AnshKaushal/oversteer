@@ -122,6 +122,8 @@ export interface AppSettings {
   renderScale: number
   /** Render below native and upscale with a sharpening pass (default on). */
   upscaler?: boolean
+  /** Which upscaler runs when rendering below native (default spatial). */
+  upscaleMode?: "spatial" | "temporal"
   /** Max frames per second; 0/undefined = uncapped (display refresh). */
   fpsCap?: number
   shadows: boolean

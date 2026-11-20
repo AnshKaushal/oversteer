@@ -1633,6 +1633,8 @@ export function startSession(ctx: SessionCtx): () => void {
           settingsRef.current.upscaler === false
             ? 1
             : settingsRef.current.renderScale / 100,
+          settingsRef.current.upscaler !== false &&
+            settingsRef.current.upscaleMode === "temporal",
         )
         if (photoState.pending) {
           photoState.pending = false
