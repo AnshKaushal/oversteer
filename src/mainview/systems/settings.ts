@@ -139,6 +139,9 @@ export interface AppSettings {
   rumble?: boolean
   cameraSpeed?: number
   motionBlur?: number
+  bloom?: number
+  ambientOcclusion?: number
+  wetReflections?: number
   antiAliasing?: "off" | "fxaa" | "smaa" | "msaa"
   speedTimer?: boolean
   speedRuns?: { from: number; to: number }[]

@@ -12,6 +12,7 @@ export const BRAKE_HEAT = new THREE.Color(0xff3d38)
 
 const HEAT_MIX = 1.8
 const LAMP_PEAK = 2.0
+const RUNNING_PEAK = 1.25
 
 export function applyBrakeHeat(
   l: BrakeLight,
@@ -19,9 +20,12 @@ export function applyBrakeHeat(
   headlightsOn: boolean = false,
   power: number = 1,
 ) {
-  const base = headlightsOn ? power : 0.0
+  const g = l.glow
+  const run = headlightsOn
+    ? (power * RUNNING_PEAK) / Math.max(g.r, g.g, g.b, 1e-3)
+    : 0.0
   const brakeGain = 9.0
-  l.mat.emissiveIntensity = (base + brakeGain * heat) * (l.gain ?? 1)
+  l.mat.emissiveIntensity = run + brakeGain * heat * (l.gain ?? 1)
   l.mat.emissive.copy(l.glow)
   if (!l.flat) l.mat.emissive.lerp(BRAKE_HEAT, heat * HEAT_MIX)
   const e = l.mat.emissive

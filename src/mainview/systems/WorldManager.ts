@@ -226,8 +226,9 @@ export class WorldManager {
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
     around?: (on: boolean) => void,
+    quality?: number,
   ) {
-    this.puddles?.renderReflection(renderer, scene, camera, around)
+    this.puddles?.renderReflection(renderer, scene, camera, around, quality)
   }
 
   puddleAt(x: number, z: number): number {

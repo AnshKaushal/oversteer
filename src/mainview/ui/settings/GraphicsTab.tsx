@@ -4,7 +4,11 @@ import {
   calculateResolution,
 } from "../../systems/settings"
 import { AA_MODES } from "../../systems/antialias"
-import { QUALITY_PRESETS, applyPreset } from "../../systems/quality"
+import {
+  QUALITY_PRESETS,
+  EFFECT_OPTIONS,
+  applyPreset,
+} from "../../systems/quality"
 import { moveToDisplay } from "../../systems/updater"
 import { currentDisplayId, useDisplays } from "../DisplayPicker"
 import { Choice, Section, Slider, Toggle } from "./controls"
@@ -167,6 +171,22 @@ export function GraphicsTab({ settings, onUpdateSettings }: TabProps) {
           checked={!!settings.autoQuality}
           onChange={(v) => set({ autoQuality: v })}
         />
+      </Section>
+
+      <Section title="Effects">
+        {EFFECT_OPTIONS.map((o) => (
+          <Slider
+            key={o.key}
+            label={o.label}
+            hint={o.hint}
+            value={settings[o.key] ?? o.def}
+            min={0}
+            max={100}
+            step={5}
+            format={(v) => (v === 0 ? "Off" : String(v))}
+            onChange={(v) => set({ [o.key]: v })}
+          />
+        ))}
       </Section>
     </>
   )

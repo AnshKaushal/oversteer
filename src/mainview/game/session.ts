@@ -677,6 +677,10 @@ export function startSession(ctx: SessionCtx): () => void {
       const MAX_SHARP = 5
       const sharp: THREE.Object3D[] = []
       const sharpCand: { d: number; g: THREE.Object3D }[] = []
+      const fx = () => ({
+        bloom: settingsRef.current.bloom,
+        ao: settingsRef.current.ambientOcclusion,
+      })
       const sharpRoots = (): THREE.Object3D[] => {
         sharp.length = 0
         const pv = playerVisualRef.current?.group
@@ -797,6 +801,9 @@ export function startSession(ctx: SessionCtx): () => void {
             settingsRef.current.antiAliasing ?? "smaa",
             settingsRef.current.motionBlur ?? 0,
             sharpRoots(),
+            1,
+            false,
+            fx(),
           )
           if (garage) {
             const gg = garage.group
@@ -806,6 +813,9 @@ export function startSession(ctx: SessionCtx): () => void {
                 settingsRef.current.antiAliasing ?? "smaa",
                 settingsRef.current.motionBlur ?? 0,
                 sharpRoots(),
+                1,
+                false,
+                fx(),
               )
             } finally {
               gg.visible = true
@@ -967,6 +977,9 @@ export function startSession(ctx: SessionCtx): () => void {
             settingsRef.current.antiAliasing ?? "smaa",
             settingsRef.current.motionBlur ?? 0,
             sharpRoots(),
+            1,
+            false,
+            fx(),
           )
           return
         }
@@ -1604,8 +1617,12 @@ export function startSession(ctx: SessionCtx): () => void {
 
         spike.ph("camera+misc")
         const renderT0 = performance.now()
-        wm.renderReflections?.(renderer!, scene, camera, (on) =>
-          rain.setReflectionPass(on),
+        wm.renderReflections?.(
+          renderer!,
+          scene,
+          camera,
+          (on) => rain.setReflectionPass(on),
+          settingsRef.current.wetReflections ?? 40,
         )
         ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
           settingsRef.current.antiAliasing ?? "smaa",
@@ -1616,6 +1633,7 @@ export function startSession(ctx: SessionCtx): () => void {
             : settingsRef.current.renderScale / 100,
           settingsRef.current.upscaler !== false &&
             settingsRef.current.upscaleMode === "temporal",
+          fx(),
         )
         if (photoState.pending) {
           photoState.pending = false
@@ -1641,6 +1659,9 @@ export function startSession(ctx: SessionCtx): () => void {
               settingsRef.current.antiAliasing ?? "smaa",
               settingsRef.current.motionBlur ?? 0,
               sharpRoots(),
+              1,
+              false,
+              fx(),
             )
             const url = el.toDataURL("image/png")
             void savePhoto(url).then((f) => photoSaved(!!f, f ?? ""))

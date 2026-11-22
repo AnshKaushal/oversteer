@@ -1,6 +1,6 @@
 import * as THREE from "three"
 import { FrameStats, drawFrameGraph } from "../diagnostics/FrameStats"
-import { AutoQuality } from "../systems/quality"
+import { AutoQuality, autoCeiling } from "../systems/quality"
 import { WORLD } from "../data/world"
 import { perfGraph, perfOverlay } from "../app/helpers"
 import type { SessionCtx } from "./sessionCtx"
@@ -98,20 +98,15 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
     statsEl.style.display = showStats ? "block" : "none"
     graphEl.style.display = showStats ? "block" : "none"
     if (stats.windowTick && settingsRef.current.autoQuality) {
-      const cur = settingsRef.current.renderScale
-      const ceil = settingsRef.current.qualityPreset === "low" ? 60 : 100
-      const cap = settingsRef.current.fpsCap
-      const nextScale = autoQ.tick(
+      const cur = settingsRef.current
+      const ceil = autoCeiling(cur.qualityPreset)
+      const patch = autoQ.tick(
         stats.frameMs,
         cur,
         ceil,
-        cap ? 1000 / cap : 0,
+        cur.fpsCap ? 1000 / cur.fpsCap : 0,
       )
-      if (nextScale !== null)
-        handleUpdateSettingsRef.current({
-          ...settingsRef.current,
-          renderScale: nextScale,
-        })
+      if (patch) handleUpdateSettingsRef.current({ ...cur, ...patch })
     }
     if (showStats) {
       if (now - graphAt > 100) {

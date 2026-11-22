@@ -63,7 +63,7 @@ void main() {
       vec3 c = c4.rgb;
       vec2 d = (vec2(p) + 0.5 + jitter) - q;
       // Gaussian reconstruction, radius tied to the upscale ratio.
-      float w = exp(-2.3 * dot(d, d));
+      float w = exp(-3.2 * dot(d, d));
       acc += c * w; accA += c4.a * w; wsum += w;
       m1 += c; m2 += c * c;
       mn = min(mn, c); mx = max(mx, c);
@@ -98,7 +98,7 @@ void main() {
       float clipped = clamp(length(h - hc) * 6.0, 0.0, 1.0);
       float motion = length((puv - gl_FragCoord.xy / outSize) * outSize);
       // Less history when it was clamped hard or the pixel moved a lot.
-      a = clamp(0.08 + clipped * 0.4 + motion * motionK, 0.08, 1.0);
+      a = clamp(0.1 + clipped * 0.4 + motion * motionK, 0.1, 1.0);
       res = mix(hc, curC, a);
       resA = mix(h4.a, curA, a);
     }
@@ -148,6 +148,7 @@ const halton = (i: number, b: number) => {
   return r
 }
 const PHASES = 16
+const JITTER_SCALE = 0.85
 
 export class TemporalUpscalePass extends Pass {
   private readonly resMat: THREE.RawShaderMaterial
@@ -226,7 +227,10 @@ export class TemporalUpscalePass extends Pass {
 
   beginFrame(): () => void {
     const i = this.frame % PHASES
-    this.jitter.set(halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5)
+    this.jitter.set(
+      (halton(i + 1, 2) - 0.5) * JITTER_SCALE,
+      (halton(i + 1, 3) - 0.5) * JITTER_SCALE,
+    )
     const e = this.camera.projectionMatrix.elements
     const e8 = e[8],
       e9 = e[9]

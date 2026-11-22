@@ -11,7 +11,6 @@ const MAX_CHANCE = 0.52
 const ROAD_Y = 0.018
 const GRASS_Y = 0.012
 const MIRROR_Y = 0
-const REFLECT_SCALE = 0.4
 const REFLECT_FAR = 400
 const REFLECT_MIN_WET = 0.05
 
@@ -255,17 +254,20 @@ export class Puddles {
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
     around?: (on: boolean) => void,
+    quality = 40,
   ) {
     this.reflUniforms.uReflOn.value = 0
     if (
+      quality <= 0 ||
       !this.mesh.visible ||
       this.mesh.count === 0 ||
       this.wet < REFLECT_MIN_WET
     )
       return
     renderer.getDrawingBufferSize(this.size)
-    const w = Math.max(2, Math.floor(this.size.x * REFLECT_SCALE))
-    const h = Math.max(2, Math.floor(this.size.y * REFLECT_SCALE))
+    const scale = 0.2 + (0.5 * Math.min(100, quality)) / 100
+    const w = Math.max(2, Math.floor(this.size.x * scale))
+    const h = Math.max(2, Math.floor(this.size.y * scale))
     if (
       !this.reflTarget ||
       this.reflTarget.width !== w ||

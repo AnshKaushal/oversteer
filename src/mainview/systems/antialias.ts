@@ -6,6 +6,8 @@ import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js"
 import { MotionBlurPass } from "./motionBlur"
 import { UpscalePass } from "./upscalePass"
 import { TemporalUpscalePass } from "./temporalUpscale"
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js"
+import { DepthAOPass } from "./depthAO"
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js"
 
 export type AAMode = "off" | "fxaa" | "smaa" | "msaa"
@@ -16,7 +18,56 @@ export const AA_MODES: { id: AAMode; label: string }[] = [
   { id: "msaa", label: "MSAA" },
 ]
 
+// Rendering below native resolution makes the GPU pick blurrier texture mips.
+// A small negative LOD bias on diffuse maps gives that detail back for free
+// (standard practice with temporal upscalers).
+const MIP_BIAS = -0.4
+THREE.ShaderChunk.map_fragment = THREE.ShaderChunk.map_fragment.replace(
+  "texture2D( map, vMapUv )",
+  `texture2D( map, vMapUv, ${MIP_BIAS.toFixed(2)} )`,
+)
+
+const BLOOM_THRESHOLD = 1.1
+const BLOOM_RADIUS = 0.5
+const BLOOM_CAP = 2.2
+
+// Pre-filter that only lets lamps bloom. Sunlit diffuse surfaces (white and
+// yellow road lines) reach ~2 in HDR, so a plain brightness threshold makes
+// them glow. Instead a pixel's bloom source is the larger of:
+//  - how far a neutral/white pixel exceeds NEUTRAL_LIFT (headlamps, sun disc,
+//    far brighter than any lit surface), and
+//  - its red excess (tail lamps, which are saturated and so too dim by
+//    brightness alone).
+// Output is capped so very bright lamps cannot blow the glow out.
+const BLOOM_NEUTRAL_LIFT = 1.7
+const BLOOM_PREFILTER = `
+uniform sampler2D tDiffuse;
+uniform vec3 defaultColor;
+uniform float defaultOpacity;
+uniform float luminosityThreshold;
+uniform float smoothWidth;
+varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(tDiffuse, vUv);
+  float m = max(t.r, max(t.g, t.b));
+  float red = t.r - max(t.g, t.b);
+  float v = max(m - ${BLOOM_NEUTRAL_LIFT.toFixed(2)}, red);
+  float a = smoothstep(luminosityThreshold, luminosityThreshold + smoothWidth, v);
+  vec4 lit = vec4(t.rgb * (min(m, ${BLOOM_CAP.toFixed(2)}) / max(m, 1e-4)), t.a);
+  gl_FragColor = mix(vec4(defaultColor, defaultOpacity), lit, a);
+}
+`
+
+export interface Effects {
+  bloom?: number
+  ao?: number
+}
+
 export class AntiAlias {
+  private bloomOn = false
+  private aoOn = false
+  private bloomPass: UnrealBloomPass | null = null
+  private aoPass: DepthAOPass | null = null
   private mode: AAMode | null = null
   private blurOn = false
   private upOn = false
@@ -40,7 +91,14 @@ export class AntiAlias {
     private camera: THREE.Camera,
   ) {}
 
-  private build(mode: AAMode, blur: boolean, up: boolean, temporal: boolean) {
+  private build(
+    mode: AAMode,
+    blur: boolean,
+    up: boolean,
+    temporal: boolean,
+    bloom: boolean,
+    ao: boolean,
+  ) {
     this.composer?.dispose()
     this.blurPass?.dispose()
     this.finalPass = null
@@ -49,11 +107,17 @@ export class AntiAlias {
     this.upPass = null
     this.tPass?.dispose()
     this.tPass = null
+    this.bloomPass?.dispose()
+    this.bloomPass = null
+    this.aoPass?.dispose()
+    this.aoPass = null
+    this.bloomOn = bloom
+    this.aoOn = ao
     this.tOn = temporal
     this.mode = mode
     this.blurOn = blur
     this.upOn = up
-    if (mode === "off" && !blur && !up && !temporal) return
+    if (mode === "off" && !blur && !up && !temporal && !bloom && !ao) return
     this.renderer.getDrawingBufferSize(this.v)
     const iw = Math.max(1, Math.round(this.v.x * this.scale))
     const ih = Math.max(1, Math.round(this.v.y * this.scale))
@@ -61,7 +125,7 @@ export class AntiAlias {
       type: THREE.HalfFloatType,
       samples: mode === "msaa" && !temporal ? 2 : 0,
     })
-    if (blur || temporal) {
+    if (blur || temporal || ao) {
       target.depthTexture = new THREE.DepthTexture(iw, ih)
       target.depthTexture.type = THREE.UnsignedIntType
     }
@@ -74,6 +138,13 @@ export class AntiAlias {
       rpRender(r, w, rb, ...rest)
     }
     c.addPass(rp)
+    if (ao) {
+      this.aoPass = new DepthAOPass(
+        this.camera as THREE.PerspectiveCamera,
+        () => this.sceneDepth,
+      )
+      c.addPass(this.aoPass)
+    }
     if (blur) {
       this.blurPass = new MotionBlurPass(
         this.scene,
@@ -81,6 +152,17 @@ export class AntiAlias {
         target.depthTexture!,
       )
       c.addPass(this.blurPass)
+    }
+    if (bloom) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(iw, ih),
+        0,
+        BLOOM_RADIUS,
+        BLOOM_THRESHOLD,
+      )
+      this.bloomPass.materialHighPassFilter.fragmentShader = BLOOM_PREFILTER
+      this.bloomPass.materialHighPassFilter.needsUpdate = true
+      c.addPass(this.bloomPass)
     }
     this.finalPass = new FinalPass()
     c.addPass(this.finalPass)
@@ -116,17 +198,27 @@ export class AntiAlias {
     keepSharp: THREE.Object3D | readonly THREE.Object3D[] | null = null,
     scale = 1,
     temporal = false,
+    fx: Effects = {},
   ) {
     const on = blur > 0
+    const bloomV = fx.bloom ?? 0
+    const aoV = fx.ao ?? 0
     const up = scale < 0.995
     this.scale = up ? Math.max(0.4, scale) : 1
     if (
       mode !== this.mode ||
       on !== this.blurOn ||
       up !== this.upOn ||
-      temporal !== this.tOn
+      temporal !== this.tOn ||
+      bloomV > 0 !== this.bloomOn ||
+      aoV > 0 !== this.aoOn
     )
-      this.build(mode, on, up, temporal)
+      this.build(mode, on, up, temporal, bloomV > 0, aoV > 0)
+    if (this.bloomPass) this.bloomPass.strength = (bloomV / 100) * 0.9
+    if (this.aoPass) {
+      this.aoPass.intensity = aoV / 100
+      this.aoPass.animate = temporal
+    }
     if (this.blurPass) {
       this.blurPass.strength = (blur / 100) * 1.5
       this.blurPass.maskRoots = !keepSharp
@@ -191,5 +283,7 @@ export class AntiAlias {
     this.blurPass?.dispose()
     this.upPass?.dispose()
     this.tPass?.dispose()
+    this.bloomPass?.dispose()
+    this.aoPass?.dispose()
   }
 }
