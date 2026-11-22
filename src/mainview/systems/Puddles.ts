@@ -10,11 +10,12 @@ const MAX_CHANCE = 0.52
 
 const ROAD_Y = 0.018
 const GRASS_Y = 0.012
+const EDGE_Y = 0.028
 const MIRROR_Y = 0
 const REFLECT_FAR = 400
 const REFLECT_MIN_WET = 0.05
 
-export type PuddleSurface = "road" | "grass" | null
+export type PuddleSurface = "road" | "edge" | "grass" | null
 
 export type PuddleSurfaceFn = (x: number, z: number, r: number) => PuddleSurface
 
@@ -105,6 +106,7 @@ export class Puddles {
     uTime: { value: 0 },
     uRainAmt: { value: 0 },
     uCar: { value: new THREE.Vector3() },
+    uRoadWet: { value: 0 },
   }
   private clock = 0
   private carSpeed = 0
@@ -179,6 +181,56 @@ export class Puddles {
     this.mesh.receiveShadow = false
     this.mesh.visible = false
     parent.add(this.mesh)
+  }
+
+  applyRoadReflection(mat: THREE.MeshStandardMaterial) {
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uRefl = this.reflUniforms.uRefl
+      sh.uniforms.uReflMat = this.reflUniforms.uReflMat
+      sh.uniforms.uReflOn = this.reflUniforms.uReflOn
+      sh.uniforms.uRoadWet = this.reflUniforms.uRoadWet
+      sh.vertexShader = sh.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform mat4 uReflMat;\nvarying vec4 vReflUv;\nvarying vec2 vRoadXZ;",
+        )
+        .replace(
+          "#include <project_vertex>",
+          "#include <project_vertex>\nvec4 rwp = modelMatrix * vec4(transformed, 1.0);\nvReflUv = uReflMat * rwp;\nvRoadXZ = rwp.xz;",
+        )
+      sh.fragmentShader = sh.fragmentShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform sampler2D uRefl;\nuniform float uReflOn;\nuniform float uRoadWet;\nvarying vec4 vReflUv;\nvarying vec2 vRoadXZ;\nfloat rh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat rn(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  f = f * f * (3.0 - 2.0 * f);\n  return mix(mix(rh(i), rh(i + vec2(1.0, 0.0)), f.x), mix(rh(i + vec2(0.0, 1.0)), rh(i + vec2(1.0, 1.0)), f.x), f.y);\n}\nfloat wetPatch(vec2 p, float wet) {\n  float n = rn(p * vec2(0.22, 0.07)) * 0.55 + rn(p * vec2(0.7, 0.28) + 9.0) * 0.3 + rn(p * vec2(2.1, 1.1) + 21.0) * 0.15;\n  float t = 1.0 - wet * 0.55;\n  return smoothstep(t, t + 0.16, n);\n}",
+        )
+        .replace(
+          "#include <roughnessmap_fragment>",
+          `#include <roughnessmap_fragment>
+          float roadPatch = wetPatch(vRoadXZ, uRoadWet);
+          roughnessFactor = mix(roughnessFactor, 0.1, roadPatch * uRoadWet);`,
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+          if (uReflOn > 0.5 && uRoadWet > 0.01) {
+            vec4 ruv = vReflUv;
+            float sm = 0.012 * ruv.w;
+            vec3 refl = texture2DProj(uRefl, ruv).rgb * 0.36;
+            refl += texture2DProj(uRefl, ruv + vec4(0.0, sm, 0.0, 0.0)).rgb * 0.22;
+            refl += texture2DProj(uRefl, ruv - vec4(0.0, sm, 0.0, 0.0)).rgb * 0.22;
+            refl += texture2DProj(uRefl, ruv + vec4(sm * 0.6, sm * 2.0, 0.0, 0.0)).rgb * 0.10;
+            refl += texture2DProj(uRefl, ruv - vec4(sm * 0.6, sm * 2.0, 0.0, 0.0)).rgb * 0.10;
+            float ndv = clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0);
+            float fres = 0.04 + 0.96 * pow(1.0 - ndv, 4.0);
+            totalEmissiveRadiance += refl * (0.18 + 0.82 * fres) * roadPatch * uRoadWet * 0.9;
+          }`,
+        )
+    }
+    mat.needsUpdate = true
+  }
+
+  get wetness(): number {
+    return this.wet
   }
 
   setSky(fogColor: number) {
@@ -338,6 +390,7 @@ export class Puddles {
     this.carSpeed += (spd - this.carSpeed) * Math.min(1, dt * 6)
     this.reflUniforms.uTime.value = this.clock
     this.reflUniforms.uRainAmt.value = Math.min(1, this.target * this.wet * 1.5)
+    this.reflUniforms.uRoadWet.value = Math.min(1, this.wet * 1.4)
     this.reflUniforms.uCar.value.set(carPos.x, carPos.z, this.carSpeed)
 
     if (this.wet < this.target)
@@ -383,14 +436,15 @@ export class Puddles {
         )
           surf = null
         if (!surf) continue
-        const road = surf === "road"
+        const edge = surf === "edge"
+        const road = surf === "road" || edge
         spots.push({
           x,
           z,
           r,
           stretch: road ? stretch * 1.5 : stretch,
           yaw: road ? (hash(i, j, 6) - 0.5) * 0.5 : hash(i, j, 6) * Math.PI,
-          y: road ? ROAD_Y : GRASS_Y,
+          y: edge ? EDGE_Y : road ? ROAD_Y : GRASS_Y,
           road,
           rank,
         })

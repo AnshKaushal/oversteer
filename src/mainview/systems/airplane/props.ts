@@ -102,12 +102,18 @@ export function extractFans(
     const ids = [index.getX(t * 3), index.getX(t * 3 + 1), index.getX(t * 3 + 2)]
     let zc = 0
     let xc = 0
+    let lo = Infinity
+    let hi = -Infinity
     for (const i of ids) {
       v.fromBufferAttribute(pos, i)
       zc += v.z / 3
       xc += v.x / 3
+      lo = Math.min(lo, v.z)
+      hi = Math.max(hi, v.z)
     }
-    if (zc >= fan.zMin && zc <= fan.zMax) sides[xc < 0 ? "l" : "r"].push(...ids)
+    const inSlab =
+      zc >= fan.zMin && zc <= fan.zMax && lo >= fan.zMin - 10 && hi <= fan.zMax + 25
+    if (inSlab) sides[xc < 0 ? "l" : "r"].push(...ids)
     else keep.push(...ids)
   }
   const byCentre: { ids: number[]; c: THREE.Vector3 }[] = []
@@ -129,35 +135,6 @@ export function extractFans(
       if (r <= fan.radius) spin.push(ids[k], ids[k + 1], ids[k + 2])
       else back.push(ids[k], ids[k + 1], ids[k + 2])
     }
-    if (spin.length === 0) continue
-    const remap = new Map<number, number>()
-    const list: number[] = []
-    const tris: number[] = []
-    for (const i of spin) {
-      let n = remap.get(i)
-      if (n === undefined) {
-        n = list.length
-        remap.set(i, n)
-        list.push(i)
-      }
-      tris.push(n)
-    }
-    const g = new THREE.BufferGeometry()
-    for (const name of Object.keys(geo.attributes)) {
-      const attr = geo.attributes[name] as THREE.BufferAttribute
-      const sz = attr.itemSize
-      const arr = new Float32Array(list.length * sz)
-      for (let i = 0; i < list.length; i++)
-        for (let q = 0; q < sz; q++) arr[i * sz + q] = attr.array[list[i] * sz + q]
-      g.setAttribute(name, new THREE.BufferAttribute(arr, sz, attr.normalized))
-    }
-    g.setIndex(tris)
-    g.translate(-c.x, -c.y, -c.z)
-    const pivot = new THREE.Group()
-    pivot.position.copy(c)
-    pivot.add(new THREE.Mesh(g, src.material))
-    src.add(pivot)
-    out.push({ node: pivot, axis: new THREE.Vector3(0, 0, 1) })
   }
   geo.setIndex([...keep, ...back])
   return out

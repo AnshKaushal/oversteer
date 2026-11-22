@@ -8,7 +8,11 @@ import { createGLTFLoader } from "./gltf"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import { WORLD_CONFIG } from "../constants/world"
 import { SkyDome } from "./SkyDome"
-import { type TimeOfDayMode, TIME_OF_DAY_PRESETS } from "../constants/timeOfDay"
+import {
+  type TimeOfDayMode,
+  TIME_OF_DAY_PRESETS,
+  type TimeOfDayPreset,
+} from "../constants/timeOfDay"
 import {
   roadCenterX,
   roadYaw,
@@ -60,6 +64,7 @@ import { update, terrainHeightAt } from "./world/update"
 import { createPhysicsGround } from "./world/physics"
 import {
   setTimeOfDay,
+  setSkyPreset,
   setShadowQuality,
   setClearZones,
 } from "./world/timeOfDay"
@@ -83,6 +88,7 @@ export class WorldManager {
   terrainHeightAt = terrainHeightAt
   createPhysicsGround = createPhysicsGround
   setTimeOfDay = setTimeOfDay
+  setSkyPreset = setSkyPreset
   setShadowQuality = setShadowQuality
   setClearZones = setClearZones
   addFarTwin = addFarTwin
@@ -129,6 +135,8 @@ export class WorldManager {
   readonly SHADOW_FADE_RADIUS = 70
   shadowFadeMat: THREE.MeshDepthMaterial | null = null
   timeOfDay: TimeOfDayMode = "day"
+  preset: TimeOfDayPreset = TIME_OF_DAY_PRESETS.day
+  lampsLit = false
   streetLights: StreetLights | null = null
   streetLightsShown = true
   streetLightsPower = true
@@ -182,7 +190,7 @@ export class WorldManager {
   }
 
   setLightning(f: number) {
-    const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
+    const preset = this.preset
     if (!preset) return
     this.puddles?.setFlash(f)
     if (this.hemiLight)
@@ -235,12 +243,26 @@ export class WorldManager {
     return this.puddles?.coverageAt(x, z) ?? 0
   }
 
-  puddleSurface(x: number, z: number, r: number): "road" | "grass" | null {
+  puddleSurface(
+    x: number,
+    z: number,
+    r: number,
+  ): "road" | "edge" | "grass" | null {
     const road = WORLD_CONFIG.road
     const s = -z
     const tx = (roadCenterX(s + 2) - roadCenterX(s - 2)) / 4
     const across = Math.abs(x - roadCenterX(s)) / Math.hypot(tx, 1)
     if (across + r <= road.width / 2) return "road"
+    if (across - r < road.width / 2 && across + r > road.width / 2) {
+      if (across + r > road.width / 2 + road.shoulderWidth + 2.5) return null
+      for (const hill of this.hills) {
+        const dx = x - hill.mesh.position.x
+        const dz = z - hill.mesh.position.z
+        const reach = hill.radius * 1.4 + r + 2
+        if (dx * dx + dz * dz < reach * reach) return null
+      }
+      return "edge"
+    }
     if (across - r < (road.width + 2 * road.shoulderWidth) / 2 + 1) return null
     for (const hill of this.hills) {
       const dx = x - hill.mesh.position.x
@@ -285,7 +307,7 @@ export class WorldManager {
     this.streetLightsShown = show
     this.streetLightsPower = power
     this.streetLights?.setEnabled(show)
-    this.streetLights?.setLit(power && this.timeOfDay !== "day")
+    this.streetLights?.setLit(power && this.lampsLit)
   }
 
   drawDistance = 5000
@@ -317,6 +339,7 @@ export class WorldManager {
   carPos = new THREE.Vector3()
   hills: Hill[] = []
   puddles: Puddles | null = null
+  roadWetShown = -1
   hillRay = new THREE.Raycaster()
   get segRange() {
     const fog = this.sceneRef?.fog

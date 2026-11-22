@@ -1,16 +1,15 @@
 import { LIGHTNING_TINT } from "./constants"
 import * as THREE from "three"
-import { setSunBlur } from "../sunDisc"
+import { horizonFade, setSunBlur, setSunOpacity } from "../sunDisc"
 import {
-  type TimeOfDayMode,
-  TIME_OF_DAY_PRESETS,
+  type TimeOfDayPreset,
 } from "../../constants/timeOfDay"
 import type { WorldManager } from "../WorldManager"
 
 export function hazedSky(
   this: WorldManager,
   out: THREE.Color,
-  preset: (typeof TIME_OF_DAY_PRESETS)[TimeOfDayMode],
+  preset: TimeOfDayPreset,
 ) {
   out.setHex(preset.skyColor)
   if (!this.fogEnabled) return out
@@ -23,7 +22,7 @@ export function syncDome(this: WorldManager, flash = 0) {
   const fog = scene?.fog
   if (!this.skyDome || !scene || !(fog instanceof THREE.Fog)) return
   const top = new THREE.Color()
-  this.hazedSky(top, TIME_OF_DAY_PRESETS[this.timeOfDay])
+  this.hazedSky(top, this.preset)
   const hor = fog.color.clone()
   if (flash > 0) top.lerp(LIGHTNING_TINT, flash * 0.55)
   this.skyDome.setColors(top, hor)
@@ -37,13 +36,10 @@ export function withinFog(this: WorldManager, d: number): boolean {
 export function applyStars(this: WorldManager) {
   const sp = this.starsPoints
   if (!sp) return
-  const m = this.timeOfDay
   const haze = this.fogEnabled
     ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7))
     : 0
-  const a =
-    (m === "night" ? 0.95 : m === "sunrise" || m === "evening" ? 0.95 : 0) *
-    (1 - haze)
+  const a = this.preset.starAlpha * (1 - haze)
   sp.visible = a > 0
   const smat = sp.material as THREE.PointsMaterial
   smat.opacity = a
@@ -52,7 +48,7 @@ export function applyStars(this: WorldManager) {
 export function applyFogRange(this: WorldManager) {
   const fog = this.sceneRef?.fog
   if (!(fog instanceof THREE.Fog)) return
-  const preset = TIME_OF_DAY_PRESETS[this.timeOfDay]
+  const preset = this.preset
   if (this.sceneRef?.background instanceof THREE.Color)
     this.hazedSky(this.sceneRef.background, preset)
   this.cloudLastCarS = -999999
@@ -61,8 +57,11 @@ export function applyFogRange(this: WorldManager) {
     const haze = this.fogEnabled
       ? Math.min(1, Math.max(0, (this.fogIntensity - 0.5) / 1.7))
       : 0
-    ;(this.sunVisual.material as THREE.SpriteMaterial).opacity =
-      1 - 0.6 * haze * haze
+    setSunOpacity(
+      this.sunVisual,
+      1 - 0.6 * haze * haze,
+      horizonFade(this.sunOffset),
+    )
     setSunBlur(this.sunVisual, haze)
   }
   if (!this.fogEnabled) {

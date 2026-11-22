@@ -12,6 +12,7 @@ import { GraphicsTab } from "../settings/GraphicsTab"
 import { WorldTab } from "../settings/WorldTab"
 import { InterfaceTab } from "../settings/InterfaceTab"
 import { UpdatesTab } from "../settings/UpdatesTab"
+import { ControlsGuide } from "../ControlsGuide"
 import { useMenuGamepadNav } from "../useMenuGamepadNav"
 
 export interface SettingsScreenProps {
@@ -25,6 +26,7 @@ const TABS = [
   { id: "graphics", label: "Graphics" },
   { id: "world", label: "World" },
   { id: "interface", label: "Interface" },
+  { id: "controls", label: "Controls" },
   { id: "updates", label: "Updates" },
 ] as const
 type TabId = (typeof TABS)[number]["id"]
@@ -39,6 +41,12 @@ export function SettingsScreen({
   onClose,
 }: SettingsScreenProps) {
   const [tab, setTab] = useState<TabId>("graphics")
+  const [confirmReset, setConfirmReset] = useState(false)
+  useEffect(() => {
+    if (!confirmReset) return
+    const t = setTimeout(() => setConfirmReset(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirmReset])
   const rootRef = useRef<HTMLDivElement>(null)
 
   const stepTab = useCallback((d: -1 | 1) => {
@@ -121,7 +129,7 @@ export function SettingsScreen({
         className="pointer-events-none absolute inset-y-0 left-0 w-full md:w-[60%]"
         style={{
           background:
-            "linear-gradient(90deg, rgba(11,14,20,0.92) 0%, rgba(11,14,20,0.6) 55%, rgba(11,14,20,0) 100%)",
+            "linear-gradient(90deg, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.6) 55%, rgba(10,10,10,0) 100%)",
         }}
       />
       <div ref={rootRef} className="absolute inset-0">
@@ -143,11 +151,13 @@ export function SettingsScreen({
 
           <div className="mt-7 flex items-center gap-3 border-b border-white/10">
             <span className={`${PAD_CHIP} hidden sm:block`}>LB</span>
-            <div className="flex flex-1 flex-wrap gap-x-7">
+            <div role="tablist" aria-label="Settings sections" className="flex flex-1 flex-wrap gap-x-7">
               {TABS.map(({ id, label }) => (
                 <button
                   key={id}
                   data-set-tab
+                  role="tab"
+                  aria-selected={tab === id}
                   onClick={() => setTab(id)}
                   className={`relative py-3 text-[13px] font-semibold uppercase tracking-[0.18em] outline-none transition-colors ${
                     tab === id
@@ -189,6 +199,11 @@ export function SettingsScreen({
                 onUpdateSettings={onUpdateSettings}
               />
             </div>
+            <div data-panel="controls" className={panel("controls")}>
+              <div data-set-row className="px-4 pb-6">
+                <ControlsGuide />
+              </div>
+            </div>
             <div data-panel="updates" className={panel("updates")}>
               <UpdatesTab />
             </div>
@@ -200,16 +215,20 @@ export function SettingsScreen({
           >
             <button
               onClick={onClose}
-              className="-skew-x-12 bg-[#51a7d5] px-8 py-2.5 text-[13px] font-bold uppercase tracking-[0.14em] text-[#0b0e14] outline-none transition-colors hover:bg-[#51a7d5] focus-visible:bg-[#51a7d5]"
+              className="-skew-x-12 bg-[#51a7d5] px-8 py-2.5 text-[13px] font-bold uppercase tracking-[0.14em] text-[#0a0a0a] outline-none transition-colors hover:bg-[#51a7d5] focus-visible:bg-[#51a7d5]"
             >
               <span className="block skew-x-12">Back</span>
             </button>
             <button
-              onClick={() => onUpdateSettings(DEFAULT_SETTINGS)}
+              onClick={() => {
+                if (!confirmReset) return setConfirmReset(true)
+                setConfirmReset(false)
+                onUpdateSettings(DEFAULT_SETTINGS)
+              }}
               className="flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white/55 outline-none transition-colors hover:text-white focus-visible:text-white"
             >
               <RotateCcw size={14} />
-              Reset defaults
+              {confirmReset ? "Press again to reset everything" : "Reset defaults"}
             </button>
           </div>
         </div>

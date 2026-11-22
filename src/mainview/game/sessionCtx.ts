@@ -76,5 +76,6 @@ export interface SessionCtx {
   setSpeedLines: (v: number, strength: number) => void
   paintFor: (id: string) => number | undefined
   applyTimeOfDay: (mode: TimeOfDayMode) => void
+  applySkyRef: Ref<(force?: boolean) => void>
   startGame: () => void
 }

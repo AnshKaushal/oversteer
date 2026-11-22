@@ -63,7 +63,7 @@ void main() {
       vec3 c = c4.rgb;
       vec2 d = (vec2(p) + 0.5 + jitter) - q;
       // Gaussian reconstruction, radius tied to the upscale ratio.
-      float w = exp(-3.2 * dot(d, d));
+      float w = exp(-4.2 * dot(d, d));
       acc += c * w; accA += c4.a * w; wsum += w;
       m1 += c; m2 += c * c;
       mn = min(mn, c); mx = max(mx, c);
@@ -100,7 +100,7 @@ void main() {
       float clipped = clamp(length(h - hc) * 4.0, 0.0, 1.0);
       float motion = length((puv - gl_FragCoord.xy / outSize) * outSize);
       // Less history when it was clamped hard or the pixel moved a lot.
-      a = clamp(0.07 + clipped * 0.35 + motion * motionK, 0.07, 1.0);
+      a = clamp(0.1 + clipped * 0.35 + motion * motionK, 0.1, 1.0);
       res = mix(hc, curC, a);
       resA = mix(h4.a, curA, a);
     }
@@ -192,12 +192,12 @@ export class TemporalUpscalePass extends Pass {
       invVPu: { value: new THREE.Matrix4() },
       prevVPu: { value: new THREE.Matrix4() },
       histOn: { value: 0 },
-      motionK: { value: 0.01 },
+      motionK: { value: 0.035 },
     })
     this.rcasMat = mk(RCAS_FRAG, {
       tDiffuse: { value: null },
       outSize: { value: new THREE.Vector2(1, 1) },
-      rcasCon: { value: Math.pow(2, -(RCAS_SHARPNESS + 0.6)) },
+      rcasCon: { value: Math.pow(2, -(RCAS_SHARPNESS + 0.2)) },
     })
     this.resQuad = new FullScreenQuad(this.resMat)
     this.rcasQuad = new FullScreenQuad(this.rcasMat)

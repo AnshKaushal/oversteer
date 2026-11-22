@@ -3,7 +3,7 @@ import type { DriveInput } from "../systems/InputManager"
 import * as THREE from "three"
 import { createChassisBody } from "../physics/core/PhysicsSystem"
 import { Vehicle } from "../physics/vehicle/Vehicle"
-import { isLowLight } from "../constants/timeOfDay"
+import { conditions } from "../physics/core/Conditions"
 import { CarVisual } from "../systems/CarVisual"
 import {
   AIDriver,
@@ -53,7 +53,6 @@ export interface SpawnEnv {
   rivalCount: any
   scene: any
   startedRef: any
-  timeOfDayRef: any
   trafficRef: any
   world: any
   deferTraffic?: boolean
@@ -81,7 +80,6 @@ export async function spawnField(env: SpawnEnv) {
     rivalCount,
     scene,
     startedRef,
-    timeOfDayRef,
     trafficRef,
     world,
   } = env
@@ -164,7 +162,8 @@ export async function spawnField(env: SpawnEnv) {
       console.warn("rival model failed", e)
     }
     vis.setBeamsEnabled(false)
-    vis.setHeadlights(isLowLight(timeOfDayRef.current))
+    vis.setHeadlights(conditions.lowLight)
+    if (conditions.stormHazards) vis.setIndicator("hazard")
     scene.add(vis.group)
     rivals.push({
       car: rc,
@@ -254,7 +253,8 @@ export async function spawnField(env: SpawnEnv) {
     } catch (e) {
       console.warn("traffic model failed", e)
     }
-    tvis.setHeadlights(isLowLight(timeOfDayRef.current))
+    tvis.setHeadlights(conditions.lowLight)
+    if (conditions.stormHazards) tvis.setIndicator("hazard")
     if (env.precompile) {
       try {
         await env.precompile(tvis.group)

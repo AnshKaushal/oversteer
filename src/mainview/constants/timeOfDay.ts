@@ -1,30 +1,63 @@
 import type { WeatherId } from "../data/surfaces"
 
-export type TimeOfDayMode =
-  | "sunrise"
-  | "day"
-  | "evening"
-  | "night"
-  | "rainy"
-  | "stormy"
+export type DayPhase = "sunrise" | "day" | "evening" | "night"
+export type SkyWeather = "clear" | "rain" | "storm"
+export type TimeOfDayMode = DayPhase | `${DayPhase}-rain` | `${DayPhase}-storm`
 
-export const TIME_OF_DAY_MODES: readonly TimeOfDayMode[] = [
+export const DAY_PHASES: readonly DayPhase[] = [
   "sunrise",
   "day",
   "evening",
   "night",
-  "rainy",
-  "stormy",
+] as const
+export const SKY_WEATHERS: readonly SkyWeather[] = [
+  "clear",
+  "rain",
+  "storm",
 ] as const
 
-export const TIME_OF_DAY_LABELS: Record<TimeOfDayMode, string> = {
+export const DAY_PHASE_LABELS: Record<DayPhase, string> = {
   sunrise: "Sunrise",
   day: "Day",
   evening: "Evening",
   night: "Night",
-  rainy: "Rainy",
-  stormy: "Stormy",
 }
+export const SKY_WEATHER_LABELS: Record<SkyWeather, string> = {
+  clear: "Clear",
+  rain: "Rain",
+  storm: "Storm",
+}
+
+export function composeMode(phase: DayPhase, weather: SkyWeather): TimeOfDayMode {
+  return weather === "clear" ? phase : `${phase}-${weather}`
+}
+
+export function phaseOf(mode: TimeOfDayMode): DayPhase {
+  return mode.split("-")[0] as DayPhase
+}
+
+export function weatherOf(mode: TimeOfDayMode): SkyWeather {
+  const w = mode.split("-")[1]
+  return w === "rain" || w === "storm" ? w : "clear"
+}
+
+export function normalizeMode(raw: unknown): TimeOfDayMode {
+  if (raw === "rainy") return "day-rain"
+  if (raw === "stormy") return "day-storm"
+  return typeof raw === "string" && raw in TIME_OF_DAY_PRESETS
+    ? (raw as TimeOfDayMode)
+    : "day"
+}
+
+export function modeLabel(mode: TimeOfDayMode): string {
+  const w = weatherOf(mode)
+  const base = DAY_PHASE_LABELS[phaseOf(mode)]
+  return w === "clear" ? base : `${base} · ${SKY_WEATHER_LABELS[w]}`
+}
+
+export const TIME_OF_DAY_MODES: readonly TimeOfDayMode[] = DAY_PHASES.flatMap(
+  (p) => SKY_WEATHERS.map((w) => composeMode(p, w)),
+)
 
 export interface TimeOfDayPreset {
   id: TimeOfDayMode
@@ -45,9 +78,11 @@ export interface TimeOfDayPreset {
   rain: number
   lightning: boolean
   weather: WeatherId
+  starAlpha: number
+  moon: boolean
 }
 
-export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
+export const BASE_PRESETS: Record<DayPhase, TimeOfDayPreset> = {
   sunrise: {
     id: "sunrise",
     name: "Sunrise",
@@ -67,6 +102,8 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     rain: 0,
     lightning: false,
     weather: "dry",
+    starAlpha: 0.95,
+    moon: false,
   },
   day: {
     id: "day",
@@ -87,6 +124,8 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     rain: 0,
     lightning: false,
     weather: "dry",
+    starAlpha: 0,
+    moon: false,
   },
   evening: {
     id: "evening",
@@ -107,6 +146,8 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     rain: 0,
     lightning: false,
     weather: "dry",
+    starAlpha: 0.95,
+    moon: false,
   },
   night: {
     id: "night",
@@ -127,47 +168,163 @@ export const TIME_OF_DAY_PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     rain: 0,
     lightning: false,
     weather: "dry",
+    starAlpha: 0.95,
+    moon: true,
   },
-  rainy: {
-    id: "rainy",
-    name: "Rainy",
-    skyColor: 0x3a424a,
-    horizonColor: 0x59636b,
-    fogColor: 0x474f57,
-    fogNear: 45,
-    fogFar: 520,
-    sunColor: 0xa8b4c0,
-    sunIntensity: 1.3,
-    sunPosition: { x: 120, y: 150, z: 60 },
-    hemiSkyColor: 0x8794a0,
-    hemiGroundColor: 0x3a4a36,
-    hemiIntensity: 1.5,
-    groundColor: 0x27381e,
-    isLowLight: true,
+}
+
+const WEATHER_LOOK: Record<
+  Exclude<SkyWeather, "clear">,
+  {
+    desat: number
+    dim: number
+    sun: number
+    hemi: number
+    fogNear: number
+    fogFar: number
+    rain: number
+    lightning: boolean
+    weather: WeatherId
+  }
+> = {
+  rain: {
+    desat: 0.65,
+    dim: 0.68,
+    sun: 0.35,
+    hemi: 0.9,
+    fogNear: 0.65,
+    fogFar: 0.55,
     rain: 0.55,
     lightning: false,
     weather: "wet",
   },
-  stormy: {
-    id: "stormy",
-    name: "Stormy",
-    skyColor: 0x2a3038,
-    horizonColor: 0x4a525c,
-    fogColor: 0x353c45,
-    fogNear: 30,
-    fogFar: 400,
-    sunColor: 0x9aa8b8,
-    sunIntensity: 1.1,
-    sunPosition: { x: 80, y: 130, z: 40 },
-    hemiSkyColor: 0x76808c,
-    hemiGroundColor: 0x34422f,
-    hemiIntensity: 1.4,
-    groundColor: 0x263b1f,
-    isLowLight: true,
+  storm: {
+    desat: 0.8,
+    dim: 0.5,
+    sun: 0.2,
+    hemi: 0.8,
+    fogNear: 0.45,
+    fogFar: 0.42,
     rain: 1,
     lightning: true,
     weather: "storm",
   },
+}
+
+function grade(hex: number, desat: number, dim: number): number {
+  const r = (hex >> 16) & 255
+  const g = (hex >> 8) & 255
+  const b = hex & 255
+  const l = 0.299 * r + 0.587 * g + 0.114 * b
+  const mix = (c: number) =>
+    Math.max(0, Math.min(255, Math.round((c + (l - c) * desat) * dim)))
+  return (mix(r) << 16) | (mix(g) << 8) | mix(b)
+}
+
+export type WeatherLook = (typeof WEATHER_LOOK)[keyof typeof WEATHER_LOOK]
+export const RAIN_LOOK = WEATHER_LOOK.rain
+export const STORM_LOOK = WEATHER_LOOK.storm
+
+export function gradePreset(
+  base: TimeOfDayPreset,
+  k: WeatherLook,
+): TimeOfDayPreset {
+  const g = (c: number) => grade(c, k.desat, k.dim)
+  return {
+    ...base,
+    skyColor: g(base.skyColor),
+    horizonColor: g(base.horizonColor),
+    fogColor: g(base.fogColor),
+    fogNear: Math.round(base.fogNear * k.fogNear),
+    fogFar: Math.round(base.fogFar * k.fogFar),
+    sunColor: grade(base.sunColor, k.desat, 0.9),
+    sunIntensity: base.sunIntensity * k.sun,
+    hemiSkyColor: g(base.hemiSkyColor),
+    hemiGroundColor: g(base.hemiGroundColor),
+    hemiIntensity: base.hemiIntensity * k.hemi,
+    groundColor: g(base.groundColor),
+    isLowLight: true,
+    rain: k.rain,
+    lightning: k.lightning,
+    weather: k.weather,
+  }
+}
+
+export function lerpHex(a: number, b: number, t: number): number {
+  const ch = (sh: number) => {
+    const x = (a >> sh) & 255
+    const y = (b >> sh) & 255
+    return Math.round(x + (y - x) * t)
+  }
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0)
+}
+
+export function lerpPreset(
+  a: TimeOfDayPreset,
+  b: TimeOfDayPreset,
+  t: number,
+): TimeOfDayPreset {
+  if (t <= 0) return a
+  if (t >= 1) return b
+  const n = (x: number, y: number) => x + (y - x) * t
+  const h = (x: number, y: number) => lerpHex(x, y, t)
+  const hi = t < 0.5 ? a : b
+  return {
+    ...hi,
+    skyColor: h(a.skyColor, b.skyColor),
+    horizonColor: h(a.horizonColor, b.horizonColor),
+    fogColor: h(a.fogColor, b.fogColor),
+    fogNear: n(a.fogNear, b.fogNear),
+    fogFar: n(a.fogFar, b.fogFar),
+    sunColor: h(a.sunColor, b.sunColor),
+    sunIntensity: n(a.sunIntensity, b.sunIntensity),
+    sunPosition: {
+      x: n(a.sunPosition.x, b.sunPosition.x),
+      y: n(a.sunPosition.y, b.sunPosition.y),
+      z: n(a.sunPosition.z, b.sunPosition.z),
+    },
+    hemiSkyColor: h(a.hemiSkyColor, b.hemiSkyColor),
+    hemiGroundColor: h(a.hemiGroundColor, b.hemiGroundColor),
+    hemiIntensity: n(a.hemiIntensity, b.hemiIntensity),
+    groundColor: h(a.groundColor, b.groundColor),
+    rain: n(a.rain, b.rain),
+    starAlpha: n(a.starAlpha, b.starAlpha),
+  }
+}
+
+function build(phase: DayPhase, weather: SkyWeather): TimeOfDayPreset {
+  const base = BASE_PRESETS[phase]
+  const id = composeMode(phase, weather)
+  if (weather === "clear") return { ...base, id }
+  const k = WEATHER_LOOK[weather]
+  const g = (c: number) => grade(c, k.desat, k.dim)
+  return {
+    ...base,
+    id,
+    skyColor: g(base.skyColor),
+    horizonColor: g(base.horizonColor),
+    fogColor: g(base.fogColor),
+    fogNear: Math.round(base.fogNear * k.fogNear),
+    fogFar: Math.round(base.fogFar * k.fogFar),
+    sunColor: grade(base.sunColor, k.desat, 0.9),
+    sunIntensity: base.sunIntensity * k.sun,
+    hemiSkyColor: g(base.hemiSkyColor),
+    hemiGroundColor: g(base.hemiGroundColor),
+    hemiIntensity: base.hemiIntensity * k.hemi,
+    groundColor: g(base.groundColor),
+    isLowLight: true,
+    rain: k.rain,
+    lightning: k.lightning,
+    weather: k.weather,
+  }
+}
+
+export const TIME_OF_DAY_PRESETS = Object.fromEntries(
+  TIME_OF_DAY_MODES.map((m) => [m, build(phaseOf(m), weatherOf(m))]),
+) as Record<TimeOfDayMode, TimeOfDayPreset>
+
+export function lampsOn(mode: TimeOfDayMode): boolean {
+  return phaseOf(mode) !== "day" || weatherOf(mode) !== "clear"
 }
 
 export function isLowLight(mode: TimeOfDayMode): boolean {

@@ -1,7 +1,9 @@
 import { ArrowRight } from "lucide-react"
 import { EASE, Screen } from "../anim"
-import { useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { ControlsGuide } from "../ControlsGuide"
 import { useMenuGamepadNav } from "../useMenuGamepadNav"
+import { useMenuKeyNav } from "../useMenuKeyNav"
 import {
   TRAFFIC_OPTIONS,
   type RaceSnapshot,
@@ -38,7 +40,27 @@ export function PauseScreen({
   gamepadNav = true,
 }: PauseScreenProps) {
   const rootRef = useRef<HTMLDivElement>(null)
-  useMenuGamepadNav(open && gamepadNav, rootRef, resumeGame)
+  const [showControls, setShowControls] = useState(false)
+  const [confirm, setConfirm] = useState<"restart" | "quit" | null>(null)
+  useEffect(() => {
+    if (!open) {
+      setShowControls(false)
+      setConfirm(null)
+    }
+  }, [open])
+  useMenuGamepadNav(
+    open && gamepadNav,
+    rootRef,
+    confirm
+      ? () => setConfirm(null)
+      : showControls
+        ? () => setShowControls(false)
+        : resumeGame,
+  )
+  useMenuKeyNav(open && !confirm, rootRef)
+  const racing = race.active && !race.finished
+  const guard = (kind: "restart" | "quit", run: () => void) => () =>
+    racing ? setConfirm(kind) : run()
 
   const mode = netConnected
     ? `Online · ${netPeers.length + 1} player${netPeers.length === 0 ? "" : "s"}`
@@ -53,9 +75,14 @@ export function PauseScreen({
     primary?: boolean
   }[] = [
     { label: "Resume", hint: "P", onClick: resumeGame, primary: true },
-    { label: "Restart", hint: "", onClick: restart },
+    { label: "Restart", hint: "", onClick: guard("restart", restart) },
+    {
+      label: "Controls",
+      hint: "",
+      onClick: () => setShowControls((v) => !v),
+    },
     { label: "Settings", hint: "", onClick: () => setShowSettings(true) },
-    { label: "Quit to start", hint: "", onClick: quitToMenu },
+    { label: "Main menu", hint: "", onClick: guard("quit", quitToMenu) },
   ]
 
   return (
@@ -80,7 +107,7 @@ export function PauseScreen({
         className="pointer-events-none absolute inset-y-0 left-0 w-full md:w-[60%]"
         style={{
           background:
-            "linear-gradient(90deg, rgba(11,14,20,0.92) 0%, rgba(11,14,20,0.6) 55%, rgba(11,14,20,0) 100%)",
+            "linear-gradient(90deg, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.6) 55%, rgba(10,10,10,0) 100%)",
         }}
       />
       <div
@@ -113,15 +140,72 @@ export function PauseScreen({
                   {it.label}
                 </span>
 
-                <ArrowRight
-                  size={22}
-                  strokeWidth={2.5}
-                  className="transition-transform duration-150 group-hover:translate-x-1"
-                />
+                <span className="flex items-center gap-4">
+                  {it.hint && (
+                    <span
+                      className={`border px-2 py-0.5 text-[12px] font-bold tracking-widest ${
+                        it.primary
+                          ? "border-[#0a0a0a]/40 group-hover:border-[#0a0a0a]/40"
+                          : "border-[#efefef]/40 group-hover:border-[#0a0a0a]/40"
+                      }`}
+                    >
+                      {it.hint}
+                    </span>
+                  )}
+                  <ArrowRight
+                    size={22}
+                    strokeWidth={2.5}
+                    className="transition-transform duration-150 group-hover:translate-x-1"
+                  />
+                </span>
               </span>
             </button>
           ))}
         </div>
+
+        {confirm && (
+          <div
+            role="alertdialog"
+            aria-label="Confirm"
+            className="mt-[3px] w-full bg-[#0a0a0a] p-6 md:w-[560px]"
+          >
+            <p className="text-[18px] font-extrabold uppercase tracking-tight">
+              {confirm === "restart"
+                ? "Restart and lose this race?"
+                : "Leave and lose this race?"}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-[3px]">
+              <button
+                autoFocus
+                onClick={() => setConfirm(null)}
+                className="bg-[#51a7d5] py-3 text-[14px] font-extrabold uppercase tracking-[0.1em] text-[#0a0a0a] outline-none transition-colors hover:bg-[#efefef] focus-visible:bg-[#efefef]"
+              >
+                Keep racing
+              </button>
+              <button
+                onClick={() => {
+                  const k = confirm
+                  setConfirm(null)
+                  if (k === "restart") restart()
+                  else quitToMenu()
+                }}
+                className="bg-[#efefef] py-3 text-[14px] font-extrabold uppercase tracking-[0.1em] text-[#0a0a0a] outline-none transition-colors hover:bg-[#51a7d5] focus-visible:bg-[#51a7d5]"
+              >
+                {confirm === "restart" ? "Restart" : "Leave"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showControls && (
+          <div
+            role="region"
+            aria-label="Controls"
+            className="mt-[3px] w-full bg-[#0a0a0a] p-6 md:absolute md:right-16 md:top-1/2 md:mt-0 md:max-h-[80vh] md:w-[640px] md:-translate-y-1/2 md:overflow-y-auto md:p-8"
+          >
+            <ControlsGuide />
+          </div>
+        )}
 
         <div
           data-pause-foot

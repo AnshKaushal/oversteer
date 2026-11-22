@@ -34,21 +34,15 @@ import { applyTuning, loadTuning } from "../data/tuning"
 import { Vehicle } from "../physics/vehicle/Vehicle"
 import { createMap, type LinearRoad } from "../maps"
 import {
-  TIME_OF_DAY_MODES,
-  TIME_OF_DAY_PRESETS,
-  isLowLight,
+  DAY_PHASES,
+  composeMode,
+  phaseOf,
+  weatherOf,
 } from "../constants/timeOfDay"
+import { skyClock, saveClock } from "../systems/sky/SkyClock"
 
 const MAX_RIVAL_BEAMS = 0
 
-const SMOKE_LIGHT: Partial<Record<string, number>> = {
-  day: 1,
-  sunrise: 0.8,
-  evening: 0.6,
-  rainy: 0.55,
-  stormy: 0.4,
-  night: 0.2,
-}
 import { CarVisual } from "../systems/CarVisual"
 import { electricalPower } from "../systems/carLights"
 import { AirplaneFlyby } from "../systems/AirplaneFlyby"
@@ -92,6 +86,7 @@ export function startSession(ctx: SessionCtx): () => void {
     activeRivalsRef,
     activeTrafficRef,
     applyTimeOfDay,
+    applySkyRef,
     cameraRef,
     carIdRef,
     circuitOptsRef,
@@ -197,14 +192,11 @@ export function startSession(ctx: SessionCtx): () => void {
       const baseUrl = base.endsWith("/") ? base : base + "/"
       await wm.init(scene, baseUrl)
       mark("world init")
-      wm.setTimeOfDay(timeOfDayRef.current)
+      applySkyRef.current(true)
       applyFog(wm, settingsRef.current)
       const rain = new RainEffect(scene)
       rainRef.current = rain
-      rain.setConditions(
-        TIME_OF_DAY_PRESETS[timeOfDayRef.current].rain,
-        TIME_OF_DAY_PRESETS[timeOfDayRef.current].lightning,
-      )
+      applySkyRef.current(true)
       if (disposed) {
         try {
           world.free()
@@ -220,7 +212,7 @@ export function startSession(ctx: SessionCtx): () => void {
       if (flyby) {
         flyby.setClearZonesHandler((zones) => wm.setClearZones(zones))
         flyby.setSunSource(() => wm.sunDirection())
-        flyby.setTimeOfDay(timeOfDayRef.current)
+        flyby.setLamps(skyClock.state.lamps)
         const upload = (o: THREE.Object3D) =>
           o.traverse((c) => {
             const m = (c as THREE.Mesh).material as
@@ -249,7 +241,7 @@ export function startSession(ctx: SessionCtx): () => void {
       const net = multiplayerRef.current
       if (net) {
         net.setLocalCarId(carIdRef.current)
-        net.setHeadlights(isLowLight(timeOfDayRef.current))
+        net.setHeadlights(conditions.lowLight)
         net.attachScene(scene, baseUrl, world, R)
       }
 
@@ -321,7 +313,6 @@ export function startSession(ctx: SessionCtx): () => void {
         rivalCount,
         scene,
         startedRef,
-        timeOfDayRef,
         trafficRef,
         world,
       })
@@ -396,7 +387,8 @@ export function startSession(ctx: SessionCtx): () => void {
       } catch (e) {
         console.warn("player model failed, continuing with fallback wheels", e)
       }
-      visual.setHeadlights(isLowLight(timeOfDayRef.current))
+      visual.setHeadlights(conditions.lowLight)
+      if (conditions.stormHazards) visual.setIndicator("hazard")
       mark("spawnField done")
       if (disposed) {
         try {
@@ -460,7 +452,8 @@ export function startSession(ctx: SessionCtx): () => void {
                 scene.remove(visual.group)
                 visual = next
                 playerVisualRef.current = next
-                next.setHeadlights(isLowLight(timeOfDayRef.current))
+                next.setHeadlights(conditions.lowLight)
+                if (conditions.stormHazards) next.setIndicator("hazard")
                 scene.add(visual.group)
               })
               .catch((e) => {
@@ -536,7 +529,6 @@ export function startSession(ctx: SessionCtx): () => void {
               rivalCount: rb.rivalCount,
               scene,
               startedRef,
-              timeOfDayRef,
               trafficRef,
               world,
             })
@@ -758,6 +750,9 @@ export function startSession(ctx: SessionCtx): () => void {
       const _fw = new THREE.Vector3()
 
       let lightningWasOn = false
+      let skyApplyAcc = 0
+      let skySaveAcc = 0
+      let lampsShown = skyClock.state.lamps
       const boardPts: THREE.Vector3[] = []
       let padAbsApplied = false
       const e0 = { lastMovementX: 0, lastMovementY: 0 }
@@ -925,10 +920,15 @@ export function startSession(ctx: SessionCtx): () => void {
           }
         }
         if (inp.toggleTimeOfDayPressed) {
-          const cur = timeOfDayRef.current
-          const nextIdx =
-            (TIME_OF_DAY_MODES.indexOf(cur) + 1) % TIME_OF_DAY_MODES.length
-          applyTimeOfDay(TIME_OF_DAY_MODES[nextIdx])
+          if (skyClock.cfg.timeLive) {
+            skyClock.skipHours(3)
+            applySkyRef.current(true)
+          } else {
+            const cur = timeOfDayRef.current
+            const nextIdx =
+              (DAY_PHASES.indexOf(phaseOf(cur)) + 1) % DAY_PHASES.length
+            applyTimeOfDay(composeMode(DAY_PHASES[nextIdx], weatherOf(cur)))
+          }
         }
         if (inp.toggleHeadlightsPressed) {
           const vis = playerVisualRef.current
@@ -1424,7 +1424,7 @@ export function startSession(ctx: SessionCtx): () => void {
         if (trafficCars.length > 0) trafficUpkeep.update(dt, bp)
 
         spike.ph("race+traffic")
-        const lowLightNow = isLowLight(timeOfDayRef.current)
+        const lowLightNow = conditions.lowLight
         if (lowLightNow && npcSpotPool.length > 0) {
           const nearCandidates: { body: RAPIER.RigidBody; d: number }[] = []
           for (const r of rivals) {
@@ -1496,6 +1496,23 @@ export function startSession(ctx: SessionCtx): () => void {
           shadowDZ += (viewDir.z / hl - shadowDZ) * k
           wm.setShadowFocus(shadowDX, shadowDZ)
         }
+        skyClock.update(dt)
+        if (!pausedRef.current) {
+          for (const r of activeRivalsRef.current)
+            if (r.visual.indicatorMode !== "off") r.visual.updateIndicators(dt)
+          for (const t of activeTrafficRef.current)
+            if (t.visual.indicatorMode !== "off") t.visual.updateIndicators(dt)
+        }
+        skyApplyAcc += dt
+        if (skyApplyAcc >= 0.2 || skyClock.state.lamps !== lampsShown) {
+          skyApplyAcc = 0
+          lampsShown = skyClock.state.lamps
+          applySkyRef.current()
+        }
+        if ((skySaveAcc += dt) > 5) {
+          skySaveAcc = 0
+          saveClock()
+        }
         wm.update(-bp.z, carPos, grassTargetFor(car.forwardSpeed, raceActive))
         spike.ph("world")
         lapTimer?.update(
@@ -1505,7 +1522,7 @@ export function startSession(ctx: SessionCtx): () => void {
           startedRef.current && !pausedRef.current,
         )
         spike.ph("world-post")
-        if (TIME_OF_DAY_PRESETS[timeOfDayRef.current].rain > 0) {
+        if (skyClock.state.rain > 0 || lightningWasOn) {
           const flash = rain.update(dt, camera.position)
           if (flash > 0 || lightningWasOn) wm.setLightning(flash)
           lightningWasOn = flash > 0
@@ -1568,7 +1585,7 @@ export function startSession(ctx: SessionCtx): () => void {
         } else {
           smokeHeat = 0
         }
-        smoke.setLight(SMOKE_LIGHT[timeOfDayRef.current] ?? 1)
+        smoke.setLight(skyClock.state.smokeLight)
         smoke.update(dt)
 
         const nowS = now / 1000

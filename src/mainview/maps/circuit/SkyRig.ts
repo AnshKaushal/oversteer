@@ -2,7 +2,9 @@ import * as THREE from "three"
 import { shadowTuning } from "../../systems/shadowTuning"
 import {
   createSunDisc,
+  horizonFade,
   setSunBlur,
+  setSunOpacity,
   SUN_SPRITE_SCALE,
 } from "../../systems/sunDisc"
 import {
@@ -22,7 +24,7 @@ export class SkyRig {
   private stars!: THREE.Points
   private dome!: SkyDome
   private scene: THREE.Scene | null = null
-  private mode: TimeOfDayMode = "day"
+  private preset: TimeOfDayPreset = TIME_OF_DAY_PRESETS.day
   private fogEnabled = true
   private fogIntensity = 1
   private drawDistance = 5000
@@ -129,16 +131,15 @@ export class SkyRig {
 
   private applySunHaze() {
     const h = this.haze()
-    ;(this.sunVisual.material as THREE.SpriteMaterial).opacity = 1 - 0.6 * h * h
+    setSunOpacity(this.sunVisual, 1 - 0.6 * h * h, horizonFade(this.sunOffset))
     setSunBlur(this.sunVisual, h)
   }
 
   private applyStars() {
-    const m = this.mode
-    const sunrise = m === "sunrise"
-    const a =
-      (m === "night" || sunrise || m === "evening" ? 1 : 0) *
-      (1 - this.haze() * (sunrise ? 0.5 : 1))
+    const pr = this.preset
+    const sunrise =
+      pr === TIME_OF_DAY_PRESETS[pr.id] && pr.id.startsWith("sunrise")
+    const a = (pr.starAlpha / 0.95) * (1 - this.haze() * (sunrise ? 0.5 : 1))
     const mat = this.stars.material as THREE.PointsMaterial
     this.stars.visible = a > 0
     mat.opacity = a
@@ -153,7 +154,7 @@ export class SkyRig {
   private applyFogRange() {
     const fog = this.scene?.fog
     if (!(fog instanceof THREE.Fog)) return
-    const p = TIME_OF_DAY_PRESETS[this.mode]
+    const p = this.preset
     if (this.scene?.background instanceof THREE.Color) {
       this.hazedSky(this.scene.background, p)
     }
@@ -196,9 +197,12 @@ export class SkyRig {
   }
 
   setTimeOfDay(mode: TimeOfDayMode) {
-    this.mode = mode
     const p = TIME_OF_DAY_PRESETS[mode]
-    if (!p) return
+    if (p) this.setSkyPreset(p)
+  }
+
+  setSkyPreset(p: TimeOfDayPreset) {
+    this.preset = p
     this.sunOffset.set(p.sunPosition.x, p.sunPosition.y, p.sunPosition.z)
     this.sun.color.setHex(p.sunColor)
     this.sun.intensity = p.sunIntensity
@@ -208,7 +212,7 @@ export class SkyRig {
     const mat = this.sunVisual.material as THREE.SpriteMaterial
     this.sunVisual.visible = p.rain === 0
     const k = SKY_DISK_DISTANCE / this.sunOffset.length()
-    if (mode === "night") {
+    if (p.moon) {
       mat.color.setHex(0xdde6ff)
       this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * 0.55 * k)
     } else {
@@ -228,8 +232,7 @@ export class SkyRig {
   }
 
   setLightning(f: number) {
-    const p = TIME_OF_DAY_PRESETS[this.mode]
-    if (!p) return
+    const p = this.preset
     this.hemi.intensity = p.hemiIntensity + f * 3.2
     this.sun.intensity = p.sunIntensity + f * 2.5
     const scene = this.scene
@@ -303,6 +306,11 @@ export class SkyRig {
       carPos.x + this.sunOffset.x * k,
       this.sunOffset.y * k,
       carPos.z + this.sunOffset.z * k,
+    )
+    setSunOpacity(
+      this.sunVisual,
+      (this.sunVisual.userData.baseOpacity as number | undefined) ?? 1,
+      horizonFade(this.sunOffset),
     )
     this.dome.follow(carPos.x, carPos.z)
     if (this.stars.visible)

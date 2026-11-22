@@ -181,6 +181,7 @@ export async function init(
     m.material.map = tex.clone()
     m.material.map!.repeat.set(1, 1)
     m.material.map!.needsUpdate = true
+    this.puddles?.applyRoadReflection(m.material)
     m.receiveShadow = true
     m.frustumCulled = true
     this.group.add(m)
@@ -225,7 +226,7 @@ export async function init(
   this.streetLights = new StreetLights(this.group, roadCenterX)
   await this.streetLights.load(baseUrl)
   this.streetLights.setEnabled(this.streetLightsShown)
-  this.streetLights.setLit(this.streetLightsPower && this.timeOfDay !== "day")
+  this.streetLights.setLit(this.streetLightsPower && this.lampsLit)
 
   this.initClouds()
   this.update(0, new THREE.Vector3(0, 0, 0))

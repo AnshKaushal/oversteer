@@ -8,8 +8,13 @@ import {
   trafficCountFor,
 } from "../../systems/RaceTypes"
 import {
-  TIME_OF_DAY_LABELS,
-  TIME_OF_DAY_MODES,
+  composeMode,
+  DAY_PHASES,
+  DAY_PHASE_LABELS,
+  phaseOf,
+  SKY_WEATHERS,
+  SKY_WEATHER_LABELS,
+  weatherOf,
 } from "../../constants/timeOfDay"
 import type { CarDefinition } from "../../data/schema"
 import { useTuning } from "../../data/tuning"
@@ -154,12 +159,27 @@ export function RaceBoard(p: GarageSceneProps) {
           <div>
             <Label>Time of day</Label>
             <Seg
-              options={TIME_OF_DAY_MODES.map((m) => ({
-                id: m,
-                label: TIME_OF_DAY_LABELS[m],
+              options={DAY_PHASES.map((ph) => ({
+                id: ph,
+                label: DAY_PHASE_LABELS[ph],
               }))}
-              value={p.timeOfDay ?? "day"}
-              onChange={p.onTimeOfDay}
+              value={phaseOf(p.timeOfDay ?? "day")}
+              onChange={(ph) =>
+                p.onTimeOfDay(composeMode(ph, weatherOf(p.timeOfDay ?? "day")))
+              }
+            />
+          </div>
+          <div>
+            <Label>Weather</Label>
+            <Seg
+              options={SKY_WEATHERS.map((w) => ({
+                id: w,
+                label: SKY_WEATHER_LABELS[w],
+              }))}
+              value={weatherOf(p.timeOfDay ?? "day")}
+              onChange={(w) =>
+                p.onTimeOfDay(composeMode(phaseOf(p.timeOfDay ?? "day"), w))
+              }
             />
           </div>
         </div>

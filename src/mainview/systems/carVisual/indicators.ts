@@ -606,13 +606,7 @@ export function buildIndicators(this: CarVisual) {
 export function setIndicator(this: CarVisual, mode: IndicatorMode) {
   this.indicatorMode = mode
   this.indicatorClock = 0
-  const frontCovered = (left: boolean) =>
-    this.indicatorOverlays.some((o) => o.front && o.left === left && !o.amber)
-  const uncovered =
-    mode !== "off" &&
-    ((mode !== "right" && !frontCovered(true)) ||
-      (mode !== "left" && !frontCovered(false)))
-  this.headlightDim = uncovered ? 0.12 : 1
+  this.headlightDim = 1
   this.applyLamps()
   this.updateIndicators(0)
 }

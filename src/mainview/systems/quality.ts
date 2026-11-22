@@ -82,7 +82,7 @@ const BUNDLES: Record<QualityPreset, Bundle> = {
     wetReflections: 25,
   },
   high: {
-    renderScale: 85,
+    renderScale: 90,
     upscaler: true,
     upscaleMode: "temporal",
     shadows: true,
@@ -96,7 +96,7 @@ const BUNDLES: Record<QualityPreset, Bundle> = {
     wetReflections: 40,
   },
   ultra: {
-    renderScale: 75,
+    renderScale: 85,
     upscaler: true,
     upscaleMode: "temporal",
     shadows: true,

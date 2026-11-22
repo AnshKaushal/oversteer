@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import type { TimeOfDayMode } from "../constants/timeOfDay"
+import { normalizeMode, type TimeOfDayMode } from "../constants/timeOfDay"
 
 export type ResolutionId = string
 
@@ -126,6 +126,11 @@ export interface AppSettings {
   shadows: boolean
   shadowQuality: number
   timeOfDay?: TimeOfDayMode
+  timeLive?: boolean
+  weatherLive?: boolean
+  clockSpeed?: number
+  weatherFrequency?: "calm" | "normal" | "wild"
+  clockHud?: boolean
   dashStyle?: "modern" | "classic" | "single"
   fog?: FogLevel
   perfOverlay?: boolean
@@ -153,6 +158,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shadows: true,
   shadowQuality: 100,
   timeOfDay: "day",
+  timeLive: true,
+  weatherLive: true,
+  clockSpeed: 1,
+  weatherFrequency: "normal",
+  clockHud: true,
   dashStyle: "modern",
   fog: "normal",
   perfOverlay: false,
@@ -183,6 +193,7 @@ export function loadSettings(): AppSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      timeOfDay: normalizeMode(parsed.timeOfDay),
     }
   } catch {
     return DEFAULT_SETTINGS

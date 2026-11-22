@@ -41,3 +41,15 @@ export function setSunBlur(sprite: THREE.Sprite, haze: number) {
   ctx.fillRect(0, 0, SIZE, SIZE)
   tex.needsUpdate = true
 }
+
+export function horizonFade(offset: { x: number; y: number; z: number }): number {
+  const len = Math.hypot(offset.x, offset.y, offset.z) || 1
+  const e = offset.y / len
+  const t = Math.min(1, Math.max(0, (e + 0.02) / 0.1))
+  return t * t * (3 - 2 * t)
+}
+
+export function setSunOpacity(sprite: THREE.Sprite, base: number, fade: number) {
+  sprite.userData.baseOpacity = base
+  ;(sprite.material as THREE.SpriteMaterial).opacity = base * fade
+}

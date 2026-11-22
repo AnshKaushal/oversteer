@@ -10,7 +10,7 @@ import {
 } from "./Airport"
 import { warmStructureTextures } from "./AirportStructures"
 import type { TireSmoke } from "./TireSmoke"
-import { type TimeOfDayMode } from "../constants/timeOfDay"
+import { lampsOn, type TimeOfDayMode } from "../constants/timeOfDay"
 import {
   CROSS_LEAD,
   PASS_HALF,
@@ -160,7 +160,7 @@ export class AirplaneFlyby {
         const mats = this.prepareFade(model)
         model.traverse((o) => {
           const mesh = o as THREE.Mesh
-          if (mesh.isMesh) mesh.castShadow = true
+          if (mesh.isMesh) mesh.castShadow = false
         })
 
         if (this.disposed) return false
@@ -365,8 +365,8 @@ export class AirplaneFlyby {
 
     this.updateShadow(st, ac.span, carX, carS)
 
-    const turn = (16 + f.speed * 0.2) * dt
-    for (const p of ac.props) {
+    const turn = (16 + f.speed * 0.2) * Math.min(dt, 0.05)
+    for (const p of ac.spec.prop === "fan" ? [] : ac.props) {
       p.node.quaternion.multiply(
         new THREE.Quaternion().setFromAxisAngle(p.axis, turn),
       )
@@ -621,7 +621,11 @@ export class AirplaneFlyby {
   }
 
   setTimeOfDay(mode: TimeOfDayMode) {
-    this.lampsLit = mode !== "day"
+    this.setLamps(lampsOn(mode))
+  }
+
+  setLamps(on: boolean) {
+    this.lampsLit = on
     if (this.airport) this.airport.view.lit = this.lampsLit
     for (const v of this.retiring) v.lit = this.lampsLit
     for (const ac of this.aircraft) {

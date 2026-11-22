@@ -2,8 +2,8 @@ import { photoState, setPhotoFov, requestPhoto } from "./game/photoMode"
 import { useMapSelection } from "./app/useMapSelection"
 import { setDynoCoverHook } from "./systems/garageFocus"
 import { useGarage } from "./app/useGarage"
-import { conditions } from "./physics/core/Conditions"
-import { DEFAULT_WEATHER } from "./data/surfaces"
+import { ClockHud } from "./ui/ClockHud"
+import { configureSky, restoreClock, skyClock } from "./systems/sky/SkyClock"
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { onLoadProgress } from "./systems/loadProgress"
@@ -12,9 +12,7 @@ import { SpeedTimerHud } from "./ui/SpeedTimerHud"
 import { listMaps, getMap, randomSeed, type MapWorld } from "./maps"
 import {
   type TimeOfDayMode,
-  TIME_OF_DAY_PRESETS,
-  effectiveWeather,
-  isLowLight,
+  normalizeMode,
 } from "./constants/timeOfDay"
 import { CarVisual } from "./systems/CarVisual"
 import { AirplaneFlyby } from "./systems/AirplaneFlyby"
@@ -102,7 +100,7 @@ export default function App() {
     let msgT: ReturnType<typeof setTimeout> | undefined
     const onSaved = (e: Event) => {
       const d = (e as CustomEvent<{ ok: boolean; where: string }>).detail
-      setPhotoMsg(d.ok ? `Photo saved · ${d.where}` : "Could not save photo")
+      setPhotoMsg(d.ok ? `Photo saved · ${d.where}` : "Could not save the photo. Try again.")
       clearTimeout(msgT)
       msgT = setTimeout(() => setPhotoMsg(null), 3500)
     }
@@ -166,18 +164,54 @@ export default function App() {
   settingsRef.current = settings
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDayMode>(
-    () => settings.timeOfDay ?? "day",
+    () => normalizeMode(settings.timeOfDay),
   )
   const timeOfDayRef = useRef<TimeOfDayMode>(timeOfDay)
   timeOfDayRef.current = timeOfDay
-  conditions.weather = effectiveWeather(DEFAULT_WEATHER, timeOfDay)
-  conditions.timeOfDay = timeOfDay
+  useState(() => {
+    restoreClock()
+    configureSky(settings, timeOfDay)
+  })
   const wmRef = useRef<MapWorld | null>(null)
   const flybyRef = useRef<AirplaneFlyby | null>(null)
   const rainRef = useRef<RainEffect | null>(null)
   const playerVisualRef = useRef<CarVisual | null>(null)
   const activeRivalsRef = useRef<{ visual: CarVisual }[]>([])
   const activeTrafficRef = useRef<{ visual: CarVisual }[]>([])
+
+  const applyLamps = (on: boolean) => {
+    playerVisualRef.current?.setHeadlights(on)
+    for (const r of activeRivalsRef.current) r.visual.setHeadlights(on)
+    for (const t of activeTrafficRef.current) t.visual.setHeadlights(on)
+    multiplayerRef.current?.setHeadlights(on)
+  }
+  const hazardsShownRef = useRef(false)
+  const applyStormHazards = (on: boolean) => {
+    if (hazardsShownRef.current === on) return
+    hazardsShownRef.current = on
+    const set = (v: CarVisual | null | undefined) => {
+      if (!v) return
+      if (on) v.setIndicator("hazard")
+      else if (v.indicatorMode === "hazard") v.setIndicator("off")
+    }
+    set(playerVisualRef.current)
+    for (const r of activeRivalsRef.current) set(r.visual)
+    for (const t of activeTrafficRef.current) set(t.visual)
+  }
+  const lampsShownRef = useRef<boolean | null>(null)
+  const applySky = (force = false) => {
+    const st = skyClock.state
+    wmRef.current?.setSkyPreset(st.preset, st.lamps)
+    flybyRef.current?.setLamps(st.lamps)
+    rainRef.current?.setConditions(st.rain, st.preset.lightning)
+    applyStormHazards(st.preset.lightning)
+    if (force || lampsShownRef.current !== st.lamps) {
+      lampsShownRef.current = st.lamps
+      applyLamps(st.lamps)
+    }
+  }
+  const applySkyRef = useRef(applySky)
+  applySkyRef.current = applySky
 
   const applyTimeOfDay = (mode: TimeOfDayMode) => {
     setTimeOfDay(mode)
@@ -187,21 +221,8 @@ export default function App() {
       saveSettings(next)
       return next
     })
-    wmRef.current?.setTimeOfDay(mode)
-    flybyRef.current?.setTimeOfDay(mode)
-    rainRef.current?.setConditions(
-      TIME_OF_DAY_PRESETS[mode].rain,
-      TIME_OF_DAY_PRESETS[mode].lightning,
-    )
-    const lowLight = isLowLight(mode)
-    playerVisualRef.current?.setHeadlights(lowLight)
-    for (const r of activeRivalsRef.current) {
-      r.visual.setHeadlights(lowLight)
-    }
-    for (const t of activeTrafficRef.current) {
-      t.visual.setHeadlights(lowLight)
-    }
-    multiplayerRef.current?.setHeadlights(lowLight)
+    configureSky(settingsRef.current, mode)
+    applySky(true)
   }
 
   useEffect(() => {
@@ -231,6 +252,9 @@ export default function App() {
     if (wmRef.current) applyFog(wmRef.current, next)
     if (next.timeOfDay && next.timeOfDay !== timeOfDayRef.current) {
       applyTimeOfDay(next.timeOfDay)
+    } else {
+      configureSky(next, timeOfDayRef.current)
+      applySky(true)
     }
   }
 
@@ -379,7 +403,7 @@ export default function App() {
         setNetConnected(!!net.roomId)
       },
       onJoinError: (msg) => {
-        setJoinError(msg)
+        setJoinError(`${msg} Check the room code and your connection, then try again.`)
         setNetConnected(false)
       },
       onRaceStartSignal: (startTimeMs, distanceM, rivals = 0, mapSpec) => {
@@ -674,6 +698,7 @@ export default function App() {
     activeRivalsRef,
     activeTrafficRef,
     applyTimeOfDay,
+    applySkyRef,
     cameraRef,
     carIdRef,
     circuitOptsRef,
@@ -780,7 +805,10 @@ export default function App() {
         <div className="pointer-events-none absolute inset-0 z-50 bg-white/80" />
       )}
       {photoMsg && (
-        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 border border-white/20 bg-black/75 px-4 py-1.5 text-[12px] text-white backdrop-blur">
+        <div
+          role="status"
+          className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#0a0a0a] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.1em] text-[#efefef]"
+        >
           {photoMsg}
         </div>
       )}
@@ -890,6 +918,7 @@ export default function App() {
         />
       )}
       <ControllerToast message={padNotice} />
+      <ClockHud active={hudOn && settings.clockHud !== false} />
       <SettingsScreen
         open={showSettings}
         settings={settings}

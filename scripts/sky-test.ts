@@ -23,43 +23,52 @@ check(
   TIME_OF_DAY_MODES.every((m) => TIME_OF_DAY_PRESETS[m]?.id === m),
 )
 check(
-  "rainy and stormy are modes",
-  TIME_OF_DAY_MODES.includes("rainy") && TIME_OF_DAY_MODES.includes("stormy"),
+  "rain and storm combine with every time of day",
+  ["sunrise", "day", "evening", "night"].every(
+    (t) =>
+      TIME_OF_DAY_MODES.includes(`${t}-rain` as never) &&
+      TIME_OF_DAY_MODES.includes(`${t}-storm` as never),
+  ),
 )
 check(
-  "only the new skies rain",
+  "only the rain and storm skies rain",
   TIME_OF_DAY_MODES.every(
     (m) =>
-      TIME_OF_DAY_PRESETS[m].rain > 0 === (m === "rainy" || m === "stormy"),
+      TIME_OF_DAY_PRESETS[m].rain > 0 === (m.endsWith("-rain") || m.endsWith("-storm")),
   ),
 )
 check(
-  "only stormy has lightning",
+  "only storm skies have lightning",
   TIME_OF_DAY_MODES.every(
-    (m) => TIME_OF_DAY_PRESETS[m].lightning === (m === "stormy"),
+    (m) => TIME_OF_DAY_PRESETS[m].lightning === m.endsWith("-storm"),
   ),
 )
 check(
-  "rain and storms turn headlights on",
-  isLowLight("rainy") && isLowLight("stormy"),
+  "rain and storms turn headlights on, at any time of day",
+  isLowLight("day-rain") && isLowLight("day-storm") && isLowLight("night-rain"),
 )
 check(
-  "storm fog is tighter than rain, rain tighter than day",
-  TIME_OF_DAY_PRESETS.stormy.fogFar < TIME_OF_DAY_PRESETS.rainy.fogFar &&
-    TIME_OF_DAY_PRESETS.rainy.fogFar < TIME_OF_DAY_PRESETS.day.fogFar,
+  "storm fog is tighter than rain, rain tighter than clear",
+  TIME_OF_DAY_PRESETS["day-storm"].fogFar < TIME_OF_DAY_PRESETS["day-rain"].fogFar &&
+    TIME_OF_DAY_PRESETS["day-rain"].fogFar < TIME_OF_DAY_PRESETS.day.fogFar,
+)
+check(
+  "a rainy night is darker than a rainy day",
+  TIME_OF_DAY_PRESETS["night-rain"].skyColor <
+    TIME_OF_DAY_PRESETS["day-rain"].skyColor,
 )
 
 check(
   "a rainy sky makes dry weather wet",
-  effectiveWeather("dry", "rainy") === "wet",
+  effectiveWeather("dry", "evening-rain") === "wet",
 )
 check(
   "a stormy sky makes dry weather storm",
-  effectiveWeather("dry", "stormy") === "storm",
+  effectiveWeather("dry", "night-storm") === "storm",
 )
 check(
   "chosen weather that is worse wins",
-  effectiveWeather("storm", "rainy") === "storm",
+  effectiveWeather("storm", "day-rain") === "storm",
 )
 check(
   "a clear sky leaves the chosen weather",

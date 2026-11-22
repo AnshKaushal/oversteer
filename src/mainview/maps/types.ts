@@ -1,7 +1,10 @@
 import type * as THREE from "three"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { SurfaceId } from "../data/surfaces"
-import type { TimeOfDayMode } from "../constants/timeOfDay"
+import type {
+  TimeOfDayMode,
+  TimeOfDayPreset,
+} from "../constants/timeOfDay"
 import type { ClearZone } from "../systems/Airport"
 import type { AIProfile, RaceDriver } from "../systems/AIDriver"
 
@@ -42,6 +45,7 @@ export interface MapWorld {
   puddleAt(x: number, z: number): number
   sunDirection(): { x: number; y: number; z: number }
   setTimeOfDay(mode: TimeOfDayMode): void
+  setSkyPreset(preset: TimeOfDayPreset, lamps: boolean): void
   setShadowQuality(pct: number): void
   setShadowFocus(dirX: number, dirZ: number): void
   setPropShadows(on: boolean): void

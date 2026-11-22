@@ -3,7 +3,10 @@ import { chunkGeometry, freezeStatic } from "./chunking"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
 import type { SurfaceId } from "../../data/surfaces"
-import type { TimeOfDayMode } from "../../constants/timeOfDay"
+import type {
+  TimeOfDayMode,
+  TimeOfDayPreset,
+} from "../../constants/timeOfDay"
 import { registerSurface } from "../../physics/core/Surfaces"
 import type { ClearZone } from "../../systems/Airport"
 import type { MapWorld } from "../types"
@@ -136,6 +139,11 @@ export class CircuitWorld implements MapWorld {
         ;(this.ground.material as THREE.MeshStandardMaterial).color.setHex(
           p.groundColor,
         )
+        const tint = new THREE.Color(p.groundColor).multiply(
+          HILL_BASE_INV(),
+        )
+        for (const h of this.hills)
+          (h.mesh.material as THREE.MeshStandardMaterial).color.copy(tint)
       }
     })
   }
@@ -163,6 +171,9 @@ export class CircuitWorld implements MapWorld {
 
   setTimeOfDay(mode: TimeOfDayMode) {
     this.sky.setTimeOfDay(mode)
+  }
+  setSkyPreset(preset: TimeOfDayPreset, _lamps: boolean) {
+    this.sky.setSkyPreset(preset)
   }
   setShadowFocus(dirX: number, dirZ: number) {
     this.sky.setShadowFocus(dirX, dirZ)
@@ -676,4 +687,9 @@ export class CircuitWorld implements MapWorld {
       c.mesh.castShadow = this.propShadows && d < TREE_SHADOW_M
     }
   }
+}
+
+function HILL_BASE_INV() {
+  const b = new THREE.Color(0x44602f)
+  return new THREE.Color(1 / b.r, 1 / b.g, 1 / b.b)
 }

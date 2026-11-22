@@ -1,3 +1,4 @@
+import { horizonFade, setSunOpacity } from "../sunDisc"
 import * as THREE from "three"
 import { WORLD_CONFIG } from "../../constants/world"
 import {
@@ -20,6 +21,18 @@ export function update(
   this.carPos.copy(carPos)
   this.syncShadowCasters()
   this.puddles?.update(carPos)
+  const wetNow = Math.min(1, (this.puddles?.wetness ?? 0) * 1.4)
+  if (Math.abs(wetNow - this.roadWetShown) > 0.004) {
+    this.roadWetShown = wetNow
+    const dark = 1 - 0.5 * wetNow
+    const rough = 1 - 0.35 * wetNow
+    for (const seg of this.roadSegs) {
+      const m = seg.mesh.material as THREE.MeshStandardMaterial
+      m.color.setScalar(dark)
+      m.roughness = rough
+      m.envMapIntensity = 1 + 0.5 * wetNow
+    }
+  }
   if (Number.isFinite(this.lastCarS)) {
     const delta = carS - this.lastCarS
     if (delta > 1e-3) this.travelDir = 1
@@ -70,6 +83,11 @@ export function update(
       carPos.x + this.sunOffset.x * k,
       this.sunOffset.y * k,
       carPos.z + this.sunOffset.z * k,
+    )
+    setSunOpacity(
+      this.sunVisual,
+      (this.sunVisual.userData.baseOpacity as number | undefined) ?? 1,
+      horizonFade(this.sunOffset),
     )
   }
   this.skyDome?.follow(carPos.x, carPos.z)

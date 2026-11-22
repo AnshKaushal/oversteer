@@ -4,17 +4,29 @@ import * as THREE from "three"
 import { SUN_SPRITE_SCALE } from "../sunDisc"
 import {
   type TimeOfDayMode,
+  type TimeOfDayPreset,
   TIME_OF_DAY_PRESETS,
+  lampsOn,
 } from "../../constants/timeOfDay"
 import { SKY_DISK_DISTANCE } from "../world/constants"
 import { setPavedZones } from "../world/ribbon"
 import type { WorldManager } from "../WorldManager"
 
 export function setTimeOfDay(this: WorldManager, mode: TimeOfDayMode) {
-  this.timeOfDay = mode
-  this.streetLights?.setLit(this.streetLightsPower && mode !== "day")
   const preset = TIME_OF_DAY_PRESETS[mode]
   if (!preset) return
+  this.timeOfDay = mode
+  this.setSkyPreset(preset, lampsOn(mode))
+}
+
+export function setSkyPreset(
+  this: WorldManager,
+  preset: TimeOfDayPreset,
+  lamps: boolean,
+) {
+  this.preset = preset
+  this.lampsLit = lamps
+  this.streetLights?.setLit(this.streetLightsPower && lamps)
 
   this.puddles?.setSky(preset.fogColor)
   this.puddles?.setRain(preset.rain)
@@ -40,7 +52,7 @@ export function setTimeOfDay(this: WorldManager, mode: TimeOfDayMode) {
     const mat = this.sunVisual.material as THREE.SpriteMaterial
     this.sunVisual.visible = preset.rain === 0
     const k = SKY_DISK_DISTANCE / this.sunOffset.length()
-    if (mode === "night") {
+    if (preset.moon) {
       mat.color.setHex(0xdde6ff)
       this.sunVisual.scale.setScalar(SUN_SPRITE_SCALE * 0.55 * k)
     } else {
@@ -68,6 +80,12 @@ export function setTimeOfDay(this: WorldManager, mode: TimeOfDayMode) {
     const gMat = this.ground.material as THREE.MeshStandardMaterial
     if (gMat && gMat.color) {
       gMat.color.setHex(preset.groundColor)
+    }
+    const hillTint = new THREE.Color(preset.groundColor).multiply(
+      HILL_BASE_INV(),
+    )
+    for (const h of this.hills) {
+      ;(h.mesh.material as THREE.MeshStandardMaterial).color.copy(hillTint)
     }
   }
 
@@ -132,4 +150,9 @@ export function setClearZones(this: WorldManager, zones: ClearZone[]) {
     }
     this.segColliders.delete(k)
   }
+}
+
+function HILL_BASE_INV() {
+  const b = new THREE.Color(0x44602f)
+  return new THREE.Color(1 / b.r, 1 / b.g, 1 / b.b)
 }
