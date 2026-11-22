@@ -105,9 +105,9 @@ export function shadowFadeMaterial(
         "#include <project_vertex>",
         `#include <project_vertex>
         #ifdef USE_INSTANCING
-          vShadowWpos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+          vShadowWpos = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         #else
-          vShadowWpos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+          vShadowWpos = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         #endif`,
       )
     sh.fragmentShader = sh.fragmentShader

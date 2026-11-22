@@ -21,6 +21,7 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
   let breakdown = ""
   let cpuMax = 0
   let renderMax = 0
+  let gpuMax = 0
 
   const onStatsKey = (e: KeyboardEvent) => {
     if (e.code === "F3") f3Flip = !f3Flip
@@ -90,23 +91,24 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
     loopT0: number,
     renderT0: number,
     renderT1: number,
+    gpuMs: number | null = null,
   ) => {
+    gpuMax = gpuMs === null ? 0 : Math.max(gpuMax * 0.985, gpuMs)
     cpuMax = Math.max(cpuMax * 0.985, renderT0 - loopT0)
     renderMax = Math.max(renderMax * 0.985, renderT1 - renderT0)
     stats.frame(now, dtMs, steps, stepMs)
     const showStats = shown()
     statsEl.style.display = showStats ? "block" : "none"
     graphEl.style.display = showStats ? "block" : "none"
-    if (stats.windowTick && settingsRef.current.autoQuality) {
+    if (settingsRef.current.autoQuality) {
       const cur = settingsRef.current
-      const ceil = autoCeiling(cur.qualityPreset)
       const patch = autoQ.tick(
-        stats.frameMs,
+        { cpuMs: renderT1 - loopT0, gpuMs, frameMs: dtMs, now },
         cur,
-        ceil,
+        autoCeiling(cur.qualityPreset),
         cur.fpsCap ? 1000 / cur.fpsCap : 0,
       )
-      if (patch) handleUpdateSettingsRef.current({ ...cur, ...patch })
+      if (patch) handleUpdateSettingsRef.current({ ...cur, ...patch }, true)
     }
     if (showStats) {
       if (now - graphAt > 100) {
@@ -187,7 +189,7 @@ export function createPerfHud(scene: THREE.Scene, ctx: SessionCtx) {
       const ri = rendererRef.current!.info.render
       if (now - overlayAt > 250) {
         overlayAt = now
-        statsEl.textContent = `${basicMat ? "[F4 basic materials]\n" : ""}${shadowsOff ? "[F5 shadows off]\n" : ""}${stats.text()}\n${ri.calls} draw calls, ${(ri.triangles / 1000).toFixed(0)}k tris, ${objCount} scene objects\n${breakdown}\nlogic max ${cpuMax.toFixed(1)} ms, render submit max ${renderMax.toFixed(1)} ms`
+        statsEl.textContent = `${basicMat ? "[F4 basic materials]\n" : ""}${shadowsOff ? "[F5 shadows off]\n" : ""}${stats.text()}\n${ri.calls} draw calls, ${(ri.triangles / 1000).toFixed(0)}k tris, ${objCount} scene objects\n${breakdown}\nlogic max ${cpuMax.toFixed(1)} ms, render submit max ${renderMax.toFixed(1)} ms${gpuMs === null ? "" : `, gpu ${gpuMs.toFixed(1)} ms (max ${gpuMax.toFixed(1)})`}`
         graphEl.style.marginTop = `${statsEl.offsetHeight + 4}px`
       }
     }

@@ -1,3 +1,4 @@
+import { registerDynamicCaster } from "./shadowCache"
 import * as THREE from "three"
 import { enableLampChannels, type LampChannels } from "./carVisual/lampChannels"
 import type * as RAPIER from "@dimforge/rapier3d-compat"
@@ -98,7 +99,9 @@ export class CarVisual {
   glossy = true
   mergeStatic = mergeStatic
   mergeInto = mergeInto
-  group = Object.assign(new THREE.Group(), { name: "car" })
+  group = registerDynamicCaster(
+    Object.assign(new THREE.Group(), { name: "car" }),
+  )
   wheels: {
     mesh: THREE.Object3D
     front: boolean
@@ -218,6 +221,8 @@ export class CarVisual {
       if (o.isMesh) {
         o.castShadow = this.castShadow
         o.receiveShadow = true
+        const ms = Array.isArray(o.material) ? o.material : [o.material]
+        for (const m of ms) if (m) m.shadowSide = THREE.DoubleSide
       }
     })
 

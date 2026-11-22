@@ -165,6 +165,14 @@ export class AntiAlias {
       c.addPass(this.bloomPass)
     }
     this.finalPass = new FinalPass()
+    if (this.aoPass) {
+      const ao = this.aoPass
+      this.finalPass.getAO = () => {
+        const tex = ao.texture
+        const depth = ao.depthTexture
+        return tex && depth ? { tex, depth } : null
+      }
+    }
     c.addPass(this.finalPass)
     if (temporal) {
       this.tPass = new TemporalUpscalePass(
@@ -179,14 +187,16 @@ export class AntiAlias {
       c.addPass(this.upPass)
     }
     this.composer = c
-    const gl = this.renderer.getContext()
-    for (const pass of c.passes) {
-      const orig = pass.render.bind(pass)
-      pass.render = (...args: Parameters<typeof pass.render>) => {
-        orig(...args)
-        const err = gl.getError()
-        if (err && !this.firstGlError)
-          this.firstGlError = `${pass.constructor.name} -> ${err}`
+    if (import.meta.env.DEV) {
+      const gl = this.renderer.getContext()
+      for (const pass of c.passes) {
+        const orig = pass.render.bind(pass)
+        pass.render = (...args: Parameters<typeof pass.render>) => {
+          orig(...args)
+          const err = gl.getError()
+          if (err && !this.firstGlError)
+            this.firstGlError = `${pass.constructor.name} -> ${err}`
+        }
       }
     }
     this.w = this.h = 0
@@ -227,7 +237,7 @@ export class AntiAlias {
           ? [keepSharp]
           : [...keepSharp]
     }
-    if (!this.firstGlError) {
+    if (import.meta.env.DEV && !this.firstGlError) {
       const pre = this.renderer.getContext().getError()
       if (pre) this.firstGlError = `before-frame -> ${pre}`
     }

@@ -236,11 +236,28 @@ export default function App() {
     })
   }, [])
 
-  const handleUpdateSettingsRef = useRef<(s: AppSettings) => void>(() => {})
-  handleUpdateSettingsRef.current = (next) => handleUpdateSettings(next)
-  const handleUpdateSettings = (next: AppSettings) => {
+  const handleUpdateSettingsRef = useRef<
+    (s: AppSettings, auto?: boolean) => void
+  >(() => {})
+  handleUpdateSettingsRef.current = (next, auto) =>
+    handleUpdateSettings(next, auto)
+  const autoOrigRef = useRef<Partial<AppSettings>>({})
+  const handleUpdateSettings = (next: AppSettings, auto = false) => {
+    const orig = autoOrigRef.current as Record<string, unknown>
+    const cur = settingsRef.current as unknown as Record<string, unknown>
+    const nx = next as unknown as Record<string, unknown>
+    if (auto) {
+      for (const k of Object.keys(nx))
+        if (nx[k] !== cur[k] && !(k in orig)) orig[k] = cur[k]
+    } else {
+      for (const k of Object.keys(orig)) if (nx[k] !== cur[k]) delete orig[k]
+      if (!next.autoQuality && Object.keys(orig).length) {
+        next = { ...next, ...(orig as Partial<AppSettings>) }
+        autoOrigRef.current = {}
+      }
+    }
     setSettings(next)
-    saveSettings(next)
+    saveSettings({ ...next, ...autoOrigRef.current })
     if (rendererRef.current && cameraRef.current && mountRef.current) {
       applyRendererResolution(
         rendererRef.current,

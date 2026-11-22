@@ -9,6 +9,8 @@ import * as THREE from "three"
 import { CameraRig } from "./cameraRig"
 import { createPointerLock } from "./pointerLock"
 import { createPerfHud } from "./perfHud"
+import { GpuTimer } from "../systems/gpuTimer"
+import { ShadowCache } from "../systems/shadowCache"
 import { spawnField } from "./spawnField"
 import { LapTimer } from "./lapTimer"
 import { TrafficUpkeep } from "./trafficUpkeep"
@@ -645,6 +647,9 @@ export function startSession(ctx: SessionCtx): () => void {
       const stepper = createFixedStepper()
       let substepTick = 0
       const hud = createPerfHud(scene, ctx)
+      const gpuTimer = new GpuTimer(renderer!.getContext())
+      const shadowCache = new ShadowCache()
+      shadowCache.install(renderer!)
       let prevImpactGrip = 1
       let prevGear: number | null = null
       let gearRumbleUntil = 0
@@ -1634,12 +1639,16 @@ export function startSession(ctx: SessionCtx): () => void {
 
         spike.ph("camera+misc")
         const renderT0 = performance.now()
+        gpuTimer.begin()
         wm.renderReflections?.(
           renderer!,
           scene,
           camera,
           (on) => rain.setReflectionPass(on),
           settingsRef.current.wetReflections ?? 40,
+          settingsRef.current.upscaler === false
+            ? 1
+            : settingsRef.current.renderScale / 100,
         )
         ;(aa = aa ?? new AntiAlias(renderer!, scene, camera)).render(
           settingsRef.current.antiAliasing ?? "smaa",
@@ -1688,6 +1697,8 @@ export function startSession(ctx: SessionCtx): () => void {
             applyRendererResolution(r, camera, mount, settingsRef.current)
           }
         }
+        gpuTimer.end()
+        gpuTimer.poll()
         const renderT1 = performance.now()
         spike.ph("render")
         hud.frame(
@@ -1698,6 +1709,7 @@ export function startSession(ctx: SessionCtx): () => void {
           loopT0,
           renderT0,
           renderT1,
+          gpuTimer.ms,
         )
         spike.ph("overlay")
         frameSteps = 0
@@ -1738,6 +1750,8 @@ export function startSession(ctx: SessionCtx): () => void {
         skyEnv.dispose()
         window.removeEventListener("resize", onResize)
         hud.dispose()
+        gpuTimer.dispose()
+        shadowCache.dispose()
         lock.dispose()
         input.detach()
         try {

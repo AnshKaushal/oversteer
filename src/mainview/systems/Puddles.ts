@@ -99,6 +99,7 @@ export class Puddles {
     new THREE.Vector3(0, 1, 0),
     -MIRROR_Y,
   )
+  private readonly reflPlanes = [this.reflPlane]
   private readonly reflUniforms = {
     uRefl: { value: null as THREE.Texture | null },
     uReflMat: { value: new THREE.Matrix4() },
@@ -264,7 +265,7 @@ export class Puddles {
     const wasVisible = this.mesh.visible
     this.mesh.visible = false
     renderer.shadowMap.autoUpdate = false
-    renderer.clippingPlanes = [this.reflPlane]
+    renderer.clippingPlanes = this.reflPlanes
     renderer.setRenderTarget(rt)
     try {
       renderer.render(scene, camera)
@@ -289,7 +290,7 @@ export class Puddles {
     const prevTarget = renderer.getRenderTarget()
     const prevClip = renderer.clippingPlanes
     try {
-      renderer.clippingPlanes = [this.reflPlane]
+      renderer.clippingPlanes = this.reflPlanes
       renderer.setRenderTarget(rt)
       renderer.render(new THREE.Scene(), camera)
       await renderer.compileAsync(scene, camera)
@@ -307,6 +308,7 @@ export class Puddles {
     camera: THREE.PerspectiveCamera,
     around?: (on: boolean) => void,
     quality = 40,
+    internalScale = 1,
   ) {
     this.reflUniforms.uReflOn.value = 0
     if (
@@ -318,8 +320,9 @@ export class Puddles {
       return
     renderer.getDrawingBufferSize(this.size)
     const scale = 0.2 + (0.5 * Math.min(100, quality)) / 100
-    const w = Math.max(2, Math.floor(this.size.x * scale))
-    const h = Math.max(2, Math.floor(this.size.y * scale))
+    const k = scale * Math.min(1, Math.max(0.4, internalScale))
+    const w = Math.max(2, Math.floor(this.size.x * k))
+    const h = Math.max(2, Math.floor(this.size.y * k))
     if (
       !this.reflTarget ||
       this.reflTarget.width !== w ||
@@ -361,7 +364,7 @@ export class Puddles {
     const prevAuto = renderer.shadowMap.autoUpdate
     this.mesh.visible = false
     renderer.shadowMap.autoUpdate = false
-    renderer.clippingPlanes = [this.reflPlane]
+    renderer.clippingPlanes = this.reflPlanes
     renderer.setRenderTarget(this.reflTarget)
     renderer.clear()
     around?.(true)

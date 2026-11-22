@@ -224,6 +224,7 @@ export async function init(
   )
 
   this.streetLights = new StreetLights(this.group, roadCenterX)
+  this.streetLights.blocked = (x, z) => this.inClearZone(x, z)
   await this.streetLights.load(baseUrl)
   this.streetLights.setEnabled(this.streetLightsShown)
   this.streetLights.setLit(this.streetLightsPower && this.lampsLit)

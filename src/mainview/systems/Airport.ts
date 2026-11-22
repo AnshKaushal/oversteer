@@ -1,3 +1,4 @@
+import { freezeStatic } from "../maps/circuit/chunking"
 import * as THREE from "three"
 import { LampSet } from "./AirportLamps"
 import { makeBloomTexture } from "./GlowTexture"
@@ -90,7 +91,7 @@ const SERVICE_OFFSET = 32
 const TOWER_A = -200
 const TOWER_B = 44
 const TOWER_HALF = 6.5
-const ROAD_JOIN = 6.5
+const ROAD_JOIN = 7.6
 
 function nearestRoad(
   x: number,
@@ -569,15 +570,52 @@ function buildLamps(layout: AirportLayout, extra: LocalLamp[]) {
   }
 }
 
-const MOUTH_EXTRA = 6
-const MOUTH_LENGTH = 16
+const MOUTH_RADIUS = 7
+const MOUTH_LEAD = 0.4
+const RIBBON_STEP = 2
 
-function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
+function resample(pts: { x: number; z: number }[]): { x: number; z: number }[] {
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++)
+    cum.push(
+      cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z),
+    )
+  const total = cum[cum.length - 1]
+  const at: number[] = [0, MOUTH_LEAD]
+  for (let a = 1; a <= 12; a++) {
+    const phi = ((a / 12) * Math.PI) / 2
+    at.push(MOUTH_LEAD + MOUTH_RADIUS * (1 - Math.cos(phi)))
+  }
+  for (
+    let d = MOUTH_LEAD + MOUTH_RADIUS + RIBBON_STEP;
+    d < total;
+    d += RIBBON_STEP
+  )
+    at.push(d)
+  at.push(total)
+  const out: { x: number; z: number }[] = []
+  let k = 1
+  for (const d of at) {
+    if (d > total) break
+    while (k < cum.length - 1 && cum[k] < d) k++
+    const span = Math.max(cum[k] - cum[k - 1], 1e-6)
+    const u = Math.min(1, Math.max(0, (d - cum[k - 1]) / span))
+    out.push({
+      x: pts[k - 1].x + (pts[k].x - pts[k - 1].x) * u,
+      z: pts[k - 1].z + (pts[k].z - pts[k - 1].z) * u,
+    })
+  }
+  return out
+}
+
+function roadRibbon(path: { x: number; z: number }[]): THREE.BufferGeometry {
+  const pts = resample(path)
   const n = pts.length
   const pos: number[] = []
   const nor: number[] = []
   const uv: number[] = []
   const idx: number[] = []
+  const R = MOUTH_RADIUS
   let run = 0
   for (let i = 0; i < n; i++) {
     if (i > 0)
@@ -589,21 +627,33 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
     const k = 1 / Math.max(Math.hypot(tx, tz), 1e-6)
     const px = -tz * k
     const pz = tx * k
-    const f = Math.max(0, 1 - run / MOUTH_LENGTH)
-    const half = CONNECTOR_WIDTH / 2 + MOUTH_EXTRA * f * f
+    const d = Math.min(R, Math.max(0, run - MOUTH_LEAD))
+    const extra = d >= R ? 0 : R - Math.sqrt(R * R - (R - d) * (R - d))
+    const inner = CONNECTOR_WIDTH / 2
+    const outer = inner + extra
     pos.push(
-      pts[i].x + px * half,
+      pts[i].x + px * outer,
       0,
-      pts[i].z + pz * half,
-      pts[i].x - px * half,
+      pts[i].z + pz * outer,
+      pts[i].x + px * inner,
       0,
-      pts[i].z - pz * half,
+      pts[i].z + pz * inner,
+      pts[i].x - px * inner,
+      0,
+      pts[i].z - pz * inner,
+      pts[i].x - px * outer,
+      0,
+      pts[i].z - pz * outer,
     )
-    nor.push(0, 1, 0, 0, 1, 0)
-    uv.push(run / 12, 0, run / 12, 1)
+    for (let q = 0; q < 4; q++) nor.push(0, 1, 0)
+    const u = run / 12
+    uv.push(u, -1, u, 0, u, 1, u, 2)
     if (i > 0) {
-      const a = (i - 1) * 2
-      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
+      const a = (i - 1) * 4
+      for (let c = 0; c < 3; c++) {
+        const l = a + c
+        idx.push(l, l + 4, l + 1, l + 1, l + 4, l + 5)
+      }
     }
   }
   const geo = new THREE.BufferGeometry()
@@ -613,7 +663,6 @@ function roadRibbon(pts: { x: number; z: number }[]): THREE.BufferGeometry {
   geo.setIndex(idx)
   return geo
 }
-
 
 export class AirportView {
   readonly group = new THREE.Group()
@@ -784,6 +833,8 @@ export class AirportView {
       haloScale: 8,
     })
     st.group.add(this.bigLamps.group)
+    freezeStatic(st.group)
+    freezeStatic(this.lamps.group)
     for (const set of [this.lamps, this.bigLamps]) {
       this.mats.push(...(set.fadeMats as THREE.MeshStandardMaterial[]))
       this.geoms.push(...set.geoms)

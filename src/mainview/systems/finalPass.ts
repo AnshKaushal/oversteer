@@ -6,6 +6,8 @@ export class FinalPass extends Pass {
   private mat: THREE.RawShaderMaterial
   private cs: string | null = null
   private tm: THREE.ToneMapping | null = null
+  private hasAO = false
+  getAO: () => { tex: THREE.Texture; depth: THREE.Texture } | null = () => null
 
   constructor() {
     super()
@@ -15,6 +17,10 @@ export class FinalPass extends Pass {
         toneMappingExposure: { value: 1 },
         texel: { value: new THREE.Vector2() },
         sharpen: { value: 0 },
+        tAO: { value: null },
+        tDepth: { value: null },
+        size: { value: new THREE.Vector2(1, 1) },
+        aoSize: { value: new THREE.Vector2(1, 1) },
       },
       vertexShader: `precision highp float;
         attribute vec3 position;
@@ -29,6 +35,30 @@ export class FinalPass extends Pass {
         #include <tonemapping_pars_fragment>
         #include <colorspace_pars_fragment>
         varying vec2 vUv;
+        #ifdef USE_AO
+        uniform sampler2D tAO, tDepth;
+        uniform vec2 size, aoSize;
+        float aoFactor(vec2 uv){
+          vec2 ip = floor(uv * size);
+          float d0 = texture2D(tDepth, (ip + 0.5) / size).x;
+          vec2 hp = (ip + 0.5) * 0.5 - 0.5;
+          vec2 c = floor(hp + 0.5);
+          float sum = 0.0, ws = 0.0;
+          for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+              vec2 q = clamp(c + vec2(float(x), float(y)), vec2(0.0), aoSize - 1.0);
+              vec2 fp = min(q * 2.0, size - 1.0);
+              float d = texture2D(tDepth, (fp + 0.5) / size).x;
+              vec2 o = q - hp;
+              float w = exp(-dot(o, o) * 0.9) * exp(-abs(d - d0) * 6000.0);
+              sum += texture2D(tAO, (q + 0.5) / aoSize).r * w;
+              ws += w;
+            }
+          }
+          return sum / max(ws, 1e-5);
+        }
+        #endif
+        float gAO = 1.0;
         vec3 tone(vec3 c){
           #if defined(ACES_FILMIC_TONE_MAPPING)
             return ACESFilmicToneMapping(c);
@@ -46,9 +76,13 @@ export class FinalPass extends Pass {
             return c;
           #endif
         }
-        vec3 fetch(vec2 uv){ return tone(texture2D(tDiffuse, uv).rgb); }
+        vec3 fetch(vec2 uv){ return tone(texture2D(tDiffuse, uv).rgb * gAO); }
         void main(){
           vec4 src = texture2D(tDiffuse, vUv);
+          #ifdef USE_AO
+            gAO = aoFactor(vUv);
+            src.rgb *= gAO;
+          #endif
           vec3 c = tone(src.rgb);
           if (sharpen > 0.0) {
             vec3 n = fetch(vUv + vec2(0.0, -texel.y));
@@ -86,7 +120,22 @@ export class FinalPass extends Pass {
     u.tDiffuse.value = readBuffer.texture
     u.toneMappingExposure.value = renderer.toneMappingExposure
     u.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height)
-    if (this.cs !== renderer.outputColorSpace || this.tm !== renderer.toneMapping) {
+    const ao = this.getAO()
+    if (ao) {
+      u.tAO.value = ao.tex
+      u.tDepth.value = ao.depth
+      u.size.value.set(readBuffer.width, readBuffer.height)
+      u.aoSize.value.set(
+        Math.max(1, (readBuffer.width + 1) >> 1),
+        Math.max(1, (readBuffer.height + 1) >> 1),
+      )
+    }
+    if (
+      this.cs !== renderer.outputColorSpace ||
+      this.tm !== renderer.toneMapping ||
+      this.hasAO !== !!ao
+    ) {
+      this.hasAO = !!ao
       this.cs = renderer.outputColorSpace
       this.tm = renderer.toneMapping
       const d: Record<string, string> = {}
@@ -102,6 +151,7 @@ export class FinalPass extends Pass {
       }
       const n = names[this.tm]
       if (n) d[n] = ""
+      if (this.hasAO) d.USE_AO = ""
       this.mat.defines = d
       this.mat.needsUpdate = true
     }

@@ -131,64 +131,102 @@ const STEPS: { key: StepKey; low: number; def: number }[] = [
   { key: "vegetation", low: 60, def: 100 },
 ]
 
+export interface AutoSample {
+  cpuMs: number
+  gpuMs: number | null
+  frameMs: number
+  now: number
+}
+
+const WINDOW_MS = 1000
+const DOWN_FRAC = 0.93
+const UP_FRAC = 0.7
+const SCALE_STEP = 3
+const SETTLE_MS = 2000
+const UP_HOLD_MS = 5000
+
 export class AutoQuality {
-  private slow = 0
-  private fast = 0
+  private costs: number[] = []
+  private windowStart = 0
+  private lastChange = 0
+  private headroom = 0
+  private overAtFloor = 0
   private stage = 0
   private base: Partial<Record<StepKey, number>> = {}
   static readonly MIN_SCALE = 50
-  static readonly TARGET_MS = 1000 / 55
-  static readonly UP_MS = 1000 / 90
+
+  push(m: AutoSample) {
+    if (m.frameMs <= 0 || m.frameMs > 250) return
+    const cost = m.gpuMs !== null ? Math.max(m.cpuMs, m.gpuMs) : m.frameMs
+    this.costs.push(cost)
+  }
 
   tick(
-    frameMs: number,
+    m: AutoSample,
     s: AutoState,
     ceiling: number,
     capMs = 0,
   ): Partial<AutoState> | null {
-    if (frameMs <= 0) return null
-    const target = capMs
-      ? Math.max(AutoQuality.TARGET_MS, capMs * 1.12)
-      : AutoQuality.TARGET_MS
-    const upMs = capMs ? capMs * 1.03 : AutoQuality.UP_MS
-    const upNeeded = capMs ? 60 : 24
-    if (frameMs > target) {
-      this.slow++
-      this.fast = 0
-    } else if (frameMs < upMs) {
-      this.fast++
-      this.slow = 0
-    } else {
-      this.slow = this.fast = 0
+    this.push(m)
+    if (!this.windowStart) this.windowStart = m.now
+    if (m.now - this.windowStart < WINDOW_MS) return null
+    this.windowStart = m.now
+    const n = this.costs.length
+    if (n < 20) {
+      this.costs.length = 0
+      return null
     }
-    if (this.slow >= 4) {
-      this.slow = 0
+    this.costs.sort((a, b) => a - b)
+    const p90 = this.costs[Math.min(n - 1, Math.floor(n * 0.9))]
+    this.costs.length = 0
+    if (m.now - this.lastChange < SETTLE_MS) return null
+
+    const hasGpu = m.gpuMs !== null
+    const budget = capMs ? Math.min(capMs, 1000 / 60) : 1000 / 60
+    const over = p90 > budget * DOWN_FRAC * (hasGpu ? 1 : 1.12)
+    const under = hasGpu ? p90 < budget * UP_FRAC : p90 < budget * 1.04
+
+    if (over) {
+      this.headroom = 0
+      if (s.renderScale > AutoQuality.MIN_SCALE) {
+        this.lastChange = m.now
+        return {
+          renderScale: Math.max(AutoQuality.MIN_SCALE, s.renderScale - SCALE_STEP),
+        }
+      }
+      if (++this.overAtFloor < 3) return null
+      this.overAtFloor = 0
       while (this.stage < STEPS.length) {
         const st = STEPS[this.stage++]
         const cur = s[st.key] ?? st.def
         if (cur > st.low) {
           this.base[st.key] = cur
+          this.lastChange = m.now
           return { [st.key]: st.low } as Partial<AutoState>
         }
       }
-      if (s.renderScale > AutoQuality.MIN_SCALE)
-        return {
-          renderScale: Math.max(AutoQuality.MIN_SCALE, s.renderScale - 5),
-        }
       return null
     }
-    if (this.fast >= upNeeded) {
-      this.fast = 0
-      if (s.renderScale < ceiling)
-        return { renderScale: Math.min(ceiling, s.renderScale + 5) }
-      while (this.stage > 0) {
-        const st = STEPS[--this.stage]
-        const b = this.base[st.key]
-        if (b !== undefined) {
-          delete this.base[st.key]
-          return { [st.key]: b } as Partial<AutoState>
-        }
+    this.overAtFloor = 0
+    if (!under) {
+      this.headroom = 0
+      return null
+    }
+    this.headroom += WINDOW_MS
+    if (this.headroom < (hasGpu ? UP_HOLD_MS : UP_HOLD_MS * 2)) return null
+    this.headroom = 0
+    while (this.stage > 0) {
+      const st = STEPS[--this.stage]
+      const b = this.base[st.key]
+      if (b !== undefined) {
+        delete this.base[st.key]
+        this.lastChange = m.now
+        return { [st.key]: b } as Partial<AutoState>
       }
+    }
+    if (s.renderScale < ceiling) {
+      this.lastChange = m.now
+      return { renderScale: Math.min(ceiling, s.renderScale + SCALE_STEP) }
     }
     return null
   }

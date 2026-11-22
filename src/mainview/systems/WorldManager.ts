@@ -131,6 +131,8 @@ export class WorldManager {
   segFar = new Map<number, boolean>()
   touchedVariants = new Set<number>()
   grassDensity = 1
+  private readonly reflSkip: THREE.InstancedMesh[] = []
+  private readonly reflSkipState: boolean[] = []
   propShadows = true
   readonly SHADOW_FADE_RADIUS = 70
   shadowFadeMat: THREE.MeshDepthMaterial | null = null
@@ -147,6 +149,7 @@ export class WorldManager {
   sunVisual: THREE.Sprite | null = null
   skyDome: SkyDome | null = null
   sunOffset = new THREE.Vector3(120, 180, 60)
+  readonly shadowOffset = new THREE.Vector3(120, 180, 60)
   sceneRef: THREE.Scene | null = null
   starsPoints: THREE.Points | null = null
 
@@ -168,7 +171,7 @@ export class WorldManager {
   readonly snapped = new THREE.Vector3()
 
   snapToShadowGrid(carPos: THREE.Vector3): THREE.Vector3 {
-    const dir = this.sunOffset
+    const dir = this.shadowOffset
     const right = this.lightRight.set(0, 1, 0).cross(dir).normalize()
     const up = this.lightUp.copy(dir).cross(right).normalize()
     const texel = this.shadowTexel
@@ -235,8 +238,41 @@ export class WorldManager {
     camera: THREE.PerspectiveCamera,
     around?: (on: boolean) => void,
     quality?: number,
+    internalScale?: number,
   ) {
-    this.puddles?.renderReflection(renderer, scene, camera, around, quality)
+    const skip = this.reflSkip
+    skip.length = 0
+    for (const pv of this.propVariants)
+      if (
+        pv.category === "grass" ||
+        pv.category === "rock" ||
+        pv.category === "log" ||
+        pv.category === "barrel"
+      ) {
+        skip.push(pv.im)
+        if (pv.far) skip.push(pv.far)
+      }
+    const wrapped = (on: boolean) => {
+      if (on) {
+        this.reflSkipState.length = 0
+        for (const im of skip) {
+          this.reflSkipState.push(im.visible)
+          im.visible = false
+        }
+      } else {
+        for (let i = 0; i < skip.length; i++)
+          skip[i].visible = this.reflSkipState[i]
+      }
+      around?.(on)
+    }
+    this.puddles?.renderReflection(
+      renderer,
+      scene,
+      camera,
+      wrapped,
+      quality,
+      internalScale,
+    )
   }
 
   puddleAt(x: number, z: number): number {

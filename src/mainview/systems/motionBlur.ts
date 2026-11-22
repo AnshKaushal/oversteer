@@ -16,7 +16,18 @@ export class MotionBlurPass extends Pass {
   private hasPrev = false;
   strength = 0;
   maskRoots: THREE.Object3D[] = [];
-  private masked = new Set<THREE.Object3D>();
+  private masked: THREE.Object3D[] = [];
+  private maskAge = 0;
+  private prevClear = new THREE.Color();
+  private footGeo = new THREE.PlaneGeometry(1, 1);
+  private foot: THREE.Mesh[] = [];
+  private footDims: { w: number; l: number }[] = [];
+  private box = new THREE.Box3();
+  private bsize = new THREE.Vector3();
+  private fq = new THREE.Quaternion();
+  private fq0 = new THREE.Quaternion();
+  private fe = new THREE.Euler();
+  private fp = new THREE.Vector3();
   private maskTarget = new THREE.WebGLRenderTarget(1, 1);
   private maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   private savedLayers = new THREE.Layers();
@@ -78,6 +89,17 @@ export class MotionBlurPass extends Pass {
       (this.camera as THREE.PerspectiveCamera).projectionMatrix,
       this.camera.matrixWorldInverse,
     );
+    if (this.hasPrev) {
+      const a = this.vp.elements,
+        b = this.prevVP.elements
+      let d = 0
+      for (let i = 0; i < 16; i++) d = Math.max(d, Math.abs(a[i] - b[i]))
+      if (d < 1e-6) {
+        this.needsSwap = false
+        return
+      }
+    }
+    this.needsSwap = true
     this.renderMask(
       renderer,
       Math.max(1, readBuffer.width >> 1),
@@ -100,26 +122,33 @@ export class MotionBlurPass extends Pass {
     if (this.maskTarget.width !== w || this.maskTarget.height !== h)
       this.maskTarget.setSize(w, h);
     const roots = this.maskRoots;
-    const next = new Set(roots);
-    for (const old of this.masked)
-      if (!next.has(old))
-        old.traverse((o) => o.layers.disable(MASK_LAYER));
-    for (const root of roots)
-      root.traverse((o) => {
-        if (!o.layers.isEnabled(MASK_LAYER)) o.layers.enable(MASK_LAYER);
-      });
-    this.masked = next;
+    let same = roots.length === this.masked.length
+    for (let i = 0; same && i < roots.length; i++)
+      if (roots[i] !== this.masked[i]) same = false
+    if (!same || ++this.maskAge >= 60) {
+      this.maskAge = 0
+      for (const old of this.masked)
+        if (!roots.includes(old))
+          old.traverse((o) => o.layers.disable(MASK_LAYER))
+      for (const root of roots)
+        root.traverse((o) => {
+          if (!o.layers.isEnabled(MASK_LAYER)) o.layers.enable(MASK_LAYER)
+        })
+      this.masked = roots.slice()
+      this.measure(roots)
+    }
     this.savedLayers.mask = this.camera.layers.mask;
     const prevOverride = this.scene.overrideMaterial;
     const prevBg = this.scene.background;
     const prevFog = this.scene.fog;
-    const prevClear = r.getClearColor(new THREE.Color());
+    const prevClear = r.getClearColor(this.prevClear);
     const prevAlpha = r.getClearAlpha();
     const sm = r.shadowMap;
     const prevShadowAuto = sm.autoUpdate;
     const prevShadowNeeds = sm.needsUpdate;
     try {
       this.camera.layers.set(MASK_LAYER);
+      this.placeFootprints(roots);
       this.scene.overrideMaterial = this.maskMat;
       this.scene.background = null;
       this.scene.fog = null;
@@ -130,6 +159,7 @@ export class MotionBlurPass extends Pass {
       r.clear();
       if (roots.length > 0) r.render(this.scene, this.camera);
     } finally {
+      for (const f of this.foot) f.removeFromParent();
       sm.autoUpdate = prevShadowAuto;
       sm.needsUpdate = prevShadowNeeds;
       r.setClearColor(prevClear, prevAlpha);
@@ -140,7 +170,53 @@ export class MotionBlurPass extends Pass {
     }
   }
 
+  private measure(roots: THREE.Object3D[]) {
+    this.footDims.length = 0;
+    for (const root of roots) {
+      this.fq0.copy(root.quaternion);
+      root.quaternion.identity();
+      root.updateMatrixWorld(true);
+      this.box.setFromObject(root);
+      root.quaternion.copy(this.fq0);
+      root.updateMatrixWorld(true);
+      this.box.getSize(this.bsize);
+      const ok =
+        Number.isFinite(this.bsize.x) &&
+        this.bsize.x > 0.5 &&
+        this.bsize.z > 0.5 &&
+        this.bsize.x < 12 &&
+        this.bsize.z < 20;
+      this.footDims.push({
+        w: ok ? this.bsize.x : 2,
+        l: ok ? this.bsize.z : 4.5,
+      });
+    }
+  }
+
+  private placeFootprints(roots: THREE.Object3D[]) {
+    while (this.foot.length < roots.length) {
+      const m = new THREE.Mesh(this.footGeo, this.maskMat);
+      m.rotation.order = "YXZ";
+      m.layers.set(MASK_LAYER);
+      m.frustumCulled = false;
+      this.foot.push(m);
+    }
+    for (let i = 0; i < roots.length; i++) {
+      const root = roots[i];
+      const f = this.foot[i];
+      const d = this.footDims[i] ?? { w: 2, l: 4.5 };
+      root.getWorldPosition(this.fp);
+      root.getWorldQuaternion(this.fq);
+      const yaw = this.fe.setFromQuaternion(this.fq, "YXZ").y;
+      f.position.set(this.fp.x, this.fp.y + 0.05, this.fp.z);
+      f.rotation.set(-Math.PI / 2, yaw, 0);
+      f.scale.set(d.w * 1.6, d.l * 1.8, 1);
+      this.scene.add(f);
+    }
+  }
+
   dispose() {
+    this.footGeo.dispose();
     this.maskTarget.dispose();
     this.maskMat.dispose();
     this.mat.dispose();

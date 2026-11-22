@@ -446,6 +446,7 @@ export class CircuitWorld implements MapWorld {
     beam.castShadow = true
     root.add(beam)
     this.group.add(root)
+    freezeStatic(root)
   }
 
   private treeGeometry(): THREE.BufferGeometry {
@@ -629,6 +630,7 @@ export class CircuitWorld implements MapWorld {
     this.ground.position.y = -0.08
     this.ground.receiveShadow = true
     this.group.add(this.ground)
+    freezeStatic(this.ground)
     this.buildRoad()
     if (this.track.config.barriers) this.buildBarriers()
     if (this.track.config.startLine) this.buildStartLine()

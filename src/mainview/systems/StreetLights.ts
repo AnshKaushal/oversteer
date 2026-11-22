@@ -143,6 +143,12 @@ export class StreetLights {
     this.firstK = Number.NaN
   }
 
+  blocked: ((x: number, z: number) => boolean) | null = null
+
+  invalidate() {
+    this.firstK = Number.NaN
+  }
+
   setEnabled(on: boolean) {
     if (on === this.enabled) return
     this.enabled = on
@@ -162,8 +168,8 @@ export class StreetLights {
     if (this.poolMat) this.poolMat.opacity = this.lit ? 0.25 : 0
     if (!this.enabled || !this.lit) for (const s of this.spots) s.intensity = 0
     for (const s of this.spots) {
-      s.shadow.autoUpdate = this.enabled && this.lit
-      if (!s.shadow.autoUpdate) s.shadow.needsUpdate = true
+      s.shadow.autoUpdate = false
+      s.shadow.needsUpdate = true
     }
     if (!this.enabled) this.park()
   }
@@ -182,6 +188,7 @@ export class StreetLights {
     }
     if (!this.lit) return
     this.assignLights(carPos)
+    for (const s of this.spots) if (s.castShadow) s.shadow.needsUpdate = true
   }
 
   private place(first: number) {
@@ -191,9 +198,10 @@ export class StreetLights {
     const p = new THREE.Vector3()
     const y = new THREE.Vector3(0, 1, 0)
     const poolScale = new THREE.Vector3(12, 1, 12)
-    const n = Math.min(MAX_LAMPS, Math.ceil((RANGE * 2) / SPACING) + 2)
-    for (let i = 0; i < n; i++) {
-      const k = first + i
+    const total = Math.min(MAX_LAMPS, Math.ceil((RANGE * 2) / SPACING) + 2)
+    let n = 0
+    for (let c = 0; c < total; c++) {
+      const k = first + c
       const s = k * SPACING + SPACING / 2
       const side = k % 2 === 0 ? 1 : -1
       const cx = this.roadX(s)
@@ -203,6 +211,8 @@ export class StreetLights {
       const nz = tx / len
       const px = cx + side * SIDE_OFFSET * nx
       const pz = -s + side * SIDE_OFFSET * nz
+      if (this.blocked?.(px, pz)) continue
+      const i = n++
       const dx = -side * nx
       const dz = -side * nz
       q.setFromAxisAngle(y, Math.atan2(dx, dz))

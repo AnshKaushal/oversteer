@@ -1,3 +1,4 @@
+import { syncShadowOffset } from "../shadowCache"
 import { horizonFade, setSunOpacity } from "../sunDisc"
 import * as THREE from "three"
 import { WORLD_CONFIG } from "../../constants/world"
@@ -62,6 +63,7 @@ export function update(
     this.sunLight ??
     ((this.group as any)._sun as THREE.DirectionalLight | undefined)
   if (sun) {
+    syncShadowOffset(this.shadowOffset, this.sunOffset)
     const f = this.snapToShadowGrid(
       this.shadowFocusPos.set(
         carPos.x + this.shadowDirX * this.shadowAhead,
@@ -70,9 +72,9 @@ export function update(
       ),
     )
     sun.position.set(
-      f.x + this.sunOffset.x,
-      f.y + this.sunOffset.y,
-      f.z + this.sunOffset.z,
+      f.x + this.shadowOffset.x,
+      f.y + this.shadowOffset.y,
+      f.z + this.shadowOffset.z,
     )
     sun.target.position.set(f.x, 0, f.z)
     sun.target.updateMatrixWorld()

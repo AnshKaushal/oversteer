@@ -1,3 +1,4 @@
+import { coarseTexel, syncShadowOffset } from "../../systems/shadowCache"
 import * as THREE from "three"
 import { shadowTuning } from "../../systems/shadowTuning"
 import {
@@ -29,6 +30,7 @@ export class SkyRig {
   private fogIntensity = 1
   private drawDistance = 5000
   private readonly sunOffset = new THREE.Vector3(120, 180, 60)
+  private readonly shadowOffset = new THREE.Vector3(120, 180, 60)
   private shadowTexel = 0.1
   private readonly right = new THREE.Vector3()
   private readonly up = new THREE.Vector3()
@@ -256,7 +258,7 @@ export class SkyRig {
   setShadowQuality(pct: number) {
     const t = shadowTuning(pct)
     const { size, half } = t
-    this.shadowTexel = t.texel
+    this.shadowTexel = coarseTexel(t.texel)
     this.shadowAhead = t.ahead
     const sun = this.sun
     const cam = sun.shadow.camera
@@ -274,7 +276,7 @@ export class SkyRig {
   }
 
   private snapToShadowGrid(carPos: THREE.Vector3): THREE.Vector3 {
-    const dir = this.sunOffset
+    const dir = this.shadowOffset
     const right = this.right.set(0, 1, 0).cross(dir).normalize()
     const up = this.up.copy(dir).cross(right).normalize()
     const t = this.shadowTexel
@@ -287,6 +289,7 @@ export class SkyRig {
   }
 
   update(carPos: THREE.Vector3) {
+    syncShadowOffset(this.shadowOffset, this.sunOffset)
     const f = this.snapToShadowGrid(
       this.focusPos.set(
         carPos.x + this.dirX * this.shadowAhead,
@@ -295,9 +298,9 @@ export class SkyRig {
       ),
     )
     this.sun.position.set(
-      f.x + this.sunOffset.x,
-      f.y + this.sunOffset.y,
-      f.z + this.sunOffset.z,
+      f.x + this.shadowOffset.x,
+      f.y + this.shadowOffset.y,
+      f.z + this.shadowOffset.z,
     )
     this.sun.target.position.set(f.x, 0, f.z)
     this.sun.target.updateMatrixWorld()

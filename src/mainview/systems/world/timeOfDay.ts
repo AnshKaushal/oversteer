@@ -1,3 +1,4 @@
+import { coarseTexel } from "../shadowCache"
 import { shadowTuning } from "../shadowTuning"
 import type { ClearZone } from "../Airport"
 import * as THREE from "three"
@@ -97,7 +98,7 @@ export function setShadowQuality(this: WorldManager, pct: number) {
   if (!sun) return
   const t = shadowTuning(pct)
   const { size, half } = t
-  this.shadowTexel = t.texel
+  this.shadowTexel = coarseTexel(t.texel)
   this.shadowAhead = t.ahead
   const cam = sun.shadow.camera
   if (sun.shadow.mapSize.x !== size) {
@@ -132,6 +133,7 @@ export function setClearZones(this: WorldManager, zones: ClearZone[]) {
   mark(this.clearZones)
   mark(zones)
   this.clearZones = zones
+  this.streetLights?.invalidate()
   setPavedZones(zones.filter((z) => z.paved))
   for (const h of this.hills) {
     const p = h.mesh.position

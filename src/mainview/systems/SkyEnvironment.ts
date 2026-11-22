@@ -29,6 +29,9 @@ export class SkyEnvironment {
   private readonly sunMat: THREE.MeshBasicMaterial
   private readonly cache = new Map<string, THREE.WebGLRenderTarget>()
   private key = ""
+  private sun: THREE.DirectionalLight | null = null
+  private readonly dir = new THREE.Vector3()
+  private readonly white = new THREE.Color(0xffffff)
 
   constructor(renderer: THREE.WebGLRenderer) {
     this.pmrem = new THREE.PMREMGenerator(renderer)
@@ -54,18 +57,23 @@ export class SkyEnvironment {
       scene.background instanceof THREE.Color ? scene.background : null
     const fog = scene.fog?.color ?? bg
     if (!bg || !fog) return
-    let sun: THREE.DirectionalLight | null = null
-    scene.traverse((o) => {
-      if (!sun && (o as THREE.DirectionalLight).isDirectionalLight)
-        sun = o as THREE.DirectionalLight
-    })
-    const s = sun as THREE.DirectionalLight | null
+    let s = this.sun
+    if (!s || !s.parent) {
+      s = null
+      scene.traverse((o) => {
+        if (!s && (o as THREE.DirectionalLight).isDirectionalLight)
+          s = o as THREE.DirectionalLight
+      })
+      this.sun = s
+    }
+    const dir = this.dir
+    if (s) dir.copy(s.position).sub(s.target.position).normalize()
     const key = [
-      bg.getHexString(),
-      fog.getHexString(),
-      s ? s.color.getHexString() : "",
-      s ? s.intensity.toFixed(2) : "",
-      s ? s.position.toArray().map((v) => v.toFixed(0)).join(",") : "",
+      bg.getHex(),
+      fog.getHex(),
+      s ? s.color.getHex() : "",
+      s ? Math.round(s.intensity * 100) : "",
+      s ? `${Math.round(dir.x * 100)},${Math.round(dir.y * 100)},${Math.round(dir.z * 100)}` : "",
     ].join("|")
     if (key === this.key) return
     this.key = key
@@ -78,11 +86,10 @@ export class SkyEnvironment {
       this.uniforms.top.value.copy(bg)
       this.uniforms.horizon.value
         .copy(fog)
-        .lerp(new THREE.Color(0xffffff), 0.25)
+        .lerp(this.white, 0.25)
       this.uniforms.ground.value.copy(fog).multiplyScalar(0.35)
       if (s) {
-        const dir = s.position.clone().sub(s.target.position).normalize()
-        this.sunMesh.position.copy(dir.multiplyScalar(40))
+        this.sunMesh.position.copy(dir).multiplyScalar(40)
         this.sunMat.color
           .copy(s.color)
           .multiplyScalar(Math.max(1, s.intensity) * 6)

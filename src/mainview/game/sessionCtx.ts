@@ -64,7 +64,7 @@ export interface SessionCtx {
   } | null>
   pauseFnRef: Ref<() => void>
   resumeFnRef: Ref<() => void>
-  handleUpdateSettingsRef: Ref<(s: AppSettings) => void>
+  handleUpdateSettingsRef: Ref<(s: AppSettings, auto?: boolean) => void>
 
   setLoading: Dispatch<SetStateAction<boolean>>
   setError: Dispatch<SetStateAction<string | null>>

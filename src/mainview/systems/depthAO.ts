@@ -14,6 +14,7 @@ uniform highp sampler2D tDepth;
 uniform vec4 proj;
 uniform vec2 size;
 uniform float radius, intensity, phase;
+uniform int taps;
 out vec4 outColor;
 
 vec3 viewPos(ivec2 p, out bool sky) {
@@ -26,7 +27,7 @@ vec3 viewPos(ivec2 p, out bool sky) {
 }
 
 void main() {
-  ivec2 ip = ivec2(gl_FragCoord.xy);
+  ivec2 ip = ivec2(gl_FragCoord.xy) * 2;
   bool sky, s;
   vec3 p = viewPos(ip, sky);
   float dist = -p.z;
@@ -49,7 +50,7 @@ void main() {
   float ign = fract(52.9829189 * fract(dot(vec2(ip) + phase * 5.588238, vec2(0.06711056, 0.00583715))));
   float a0 = ign * 6.2831853;
   float occ = 0.0;
-  const int N = 12;
+  int N = taps;
   for (int i = 0; i < N; i++) {
     float t = (float(i) + 0.5) / float(N);
     float ang = a0 + t * 6.2831853 * 3.0;
@@ -68,37 +69,23 @@ void main() {
 }
 `
 
-const BLUR_FRAG = `
+const COPY_FRAG = `
 precision highp float;
 precision highp int;
-uniform highp sampler2D tDiffuse, tAO, tDepth;
-uniform vec2 size;
+uniform highp sampler2D tDepth;
 out vec4 outColor;
 void main() {
-  ivec2 ip = ivec2(gl_FragCoord.xy);
-  ivec2 mx = ivec2(size) - 1;
-  vec4 src = texelFetch(tDiffuse, ip, 0);
-  float d0 = texelFetch(tDepth, ip, 0).x;
-  float sum = 0.0, ws = 0.0;
-  for (int y = -2; y <= 2; y++) {
-    for (int x = -2; x <= 2; x++) {
-      ivec2 p = clamp(ip + ivec2(x, y), ivec2(0), mx);
-      float d = texelFetch(tDepth, p, 0).x;
-      float w = exp(-float(x * x + y * y) * 0.2) * exp(-abs(d - d0) * 6000.0);
-      sum += texelFetch(tAO, p, 0).r * w;
-      ws += w;
-    }
-  }
-  outColor = vec4(src.rgb * (sum / max(ws, 1e-5)), src.a);
+  outColor = vec4(texelFetch(tDepth, ivec2(gl_FragCoord.xy), 0).x);
 }
 `
 
 export class DepthAOPass extends Pass {
   private readonly mat: THREE.RawShaderMaterial
-  private readonly blurMat: THREE.RawShaderMaterial
   private readonly quad: FullScreenQuad
-  private readonly blurQuad: FullScreenQuad
   private ao: THREE.WebGLRenderTarget | null = null
+  private depthCopy: THREE.WebGLRenderTarget | null = null
+  private readonly copyMat: THREE.RawShaderMaterial
+  private readonly copyQuad: FullScreenQuad
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -114,27 +101,23 @@ export class DepthAOPass extends Pass {
         radius: { value: 0.6 },
         intensity: { value: 0 },
         phase: { value: 0 },
+        taps: { value: 12 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
       depthTest: false,
       depthWrite: false,
     })
-    this.blurMat = new THREE.RawShaderMaterial({
+    this.copyMat = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
-      uniforms: {
-        tDiffuse: { value: null },
-        tAO: { value: null },
-        tDepth: { value: null },
-        size: { value: new THREE.Vector2(1, 1) },
-      },
+      uniforms: { tDepth: { value: null } },
       vertexShader: VERT,
-      fragmentShader: BLUR_FRAG,
+      fragmentShader: COPY_FRAG,
       depthTest: false,
       depthWrite: false,
     })
     this.quad = new FullScreenQuad(this.mat)
-    this.blurQuad = new FullScreenQuad(this.blurMat)
+    this.copyQuad = new FullScreenQuad(this.copyMat)
   }
 
   animate = false
@@ -146,46 +129,68 @@ export class DepthAOPass extends Pass {
 
   setSize() {}
 
+  get depthTexture(): THREE.Texture | null {
+    return this.depthCopy ? this.depthCopy.texture : null
+  }
+
+  get texture(): THREE.Texture | null {
+    return this.ao ? this.ao.texture : null
+  }
+
   render(
     renderer: THREE.WebGLRenderer,
-    writeBuffer: THREE.WebGLRenderTarget,
+    _writeBuffer: THREE.WebGLRenderTarget,
     readBuffer: THREE.WebGLRenderTarget,
   ) {
     const depth = this.getDepth()
-    this.needsSwap = !!depth
+    this.needsSwap = false
     if (!depth) return
     const w = readBuffer.width,
       h = readBuffer.height
-    if (!this.ao || this.ao.width !== w || this.ao.height !== h) {
+    const aw = Math.max(1, (w + 1) >> 1),
+      ah = Math.max(1, (h + 1) >> 1)
+    if (!this.ao || this.ao.width !== aw || this.ao.height !== ah) {
       this.ao?.dispose()
-      this.ao = new THREE.WebGLRenderTarget(w, h, {
+      this.ao = new THREE.WebGLRenderTarget(aw, ah, {
         type: THREE.HalfFloatType,
         format: THREE.RGBAFormat,
         depthBuffer: false,
       })
     }
+    if (
+      !this.depthCopy ||
+      this.depthCopy.width !== w ||
+      this.depthCopy.height !== h
+    ) {
+      this.depthCopy?.dispose()
+      this.depthCopy = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.FloatType,
+        format: THREE.RedFormat,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        depthBuffer: false,
+      })
+    }
+    this.copyMat.uniforms.tDepth.value = depth
+    renderer.setRenderTarget(this.depthCopy)
+    this.copyQuad.render(renderer)
     const u = this.mat.uniforms
     u.tDepth.value = depth
     const e = this.camera.projectionMatrix.elements
     u.proj.value.set(e[0], e[5], e[10], e[14])
     u.size.value.set(w, h)
     u.phase.value = this.animate ? this.frame++ % 16 : 0
+    u.taps.value = this.animate ? 8 : 12
     renderer.setRenderTarget(this.ao)
     this.quad.render(renderer)
-    const b = this.blurMat.uniforms
-    b.tDiffuse.value = readBuffer.texture
-    b.tAO.value = this.ao.texture
-    b.tDepth.value = depth
-    b.size.value.set(w, h)
-    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer)
-    this.blurQuad.render(renderer)
   }
 
   dispose() {
     this.ao?.dispose()
+    this.depthCopy?.dispose()
+    this.copyMat.dispose()
+    this.copyQuad.dispose()
     this.mat.dispose()
-    this.blurMat.dispose()
     this.quad.dispose()
-    this.blurQuad.dispose()
   }
 }
