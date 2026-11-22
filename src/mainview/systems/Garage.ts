@@ -70,7 +70,7 @@ export class Garage {
   readonly group = new THREE.Group()
   readonly carPos = new THREE.Vector3()
   carYaw = 0
-  private lights: THREE.PointLight[] = []
+  readonly lights: THREE.PointLight[] = []
   readonly holes = new Map<SurfaceId, THREE.Mesh>()
   private dynoGroup = new THREE.Group()
   private dynoFor: CarVisual | null = null

@@ -2,7 +2,6 @@ import { photoState, photoSaved } from "./photoMode"
 import { savePhoto } from "../systems/updater"
 import { SkyEnvironment } from "../systems/SkyEnvironment"
 import { prefetchModels } from "../systems/gltf"
-import { AIRCRAFT } from "../systems/airplane/types"
 import { conditions } from "../physics/core/Conditions"
 import { NPC_HEADLIGHT_CONE } from "../systems/headlightCutoff"
 import { WEATHER_WETNESS } from "../data/surfaces"
@@ -181,7 +180,6 @@ export function startSession(ctx: SessionCtx): () => void {
           getCar(carIdRef.current).modelFile ?? "bmw_m3.glb",
           "garage.glb",
           "street_light.glb",
-          ...AIRCRAFT.map((a) => a.file),
         ])
       }
       const R = await physicsP
@@ -237,16 +235,15 @@ export function startSession(ctx: SessionCtx): () => void {
           upload(o)
           const t1 = performance.now()
           await nextFrame()
-          await renderer!.compileAsync(o, camera, scene)
+          await (aa
+            ? aa.compileAsync(o, scene)
+            : renderer!.compileAsync(o, camera, scene))
           await nextFrame()
           if (import.meta.env.DEV)
             console.debug(
               `[airport] upload ${(t1 - t0).toFixed(1)}ms, total ${(performance.now() - t0).toFixed(1)}ms`,
             )
         })
-        await flyby.init(scene, baseUrl)
-        mark("flyby init")
-        for (const t of flyby.warmTextures) renderer.initTexture(t)
       }
 
       const net = multiplayerRef.current
@@ -295,6 +292,16 @@ export function startSession(ctx: SessionCtx): () => void {
       })
       const { rivals, trafficCars, spawnTrafficLater } = await spawnField({
         deferTraffic: true,
+        precompile: async (o) => {
+          o.traverse((c) => {
+            const m = (c as THREE.Mesh).material as
+              THREE.MeshStandardMaterial | undefined
+            if (m?.map) renderer!.initTexture(m.map)
+          })
+          await (aa
+            ? aa.compileAsync(o, scene)
+            : renderer!.compileAsync(o, camera, scene))
+        },
         isDisposed: () => disposed,
         onTraffic: (r) => allBodies.push(r.car.body),
         setup,
@@ -791,6 +798,20 @@ export function startSession(ctx: SessionCtx): () => void {
             settingsRef.current.motionBlur ?? 0,
             sharpRoots(),
           )
+          if (garage) {
+            const gg = garage.group
+            gg.visible = false
+            try {
+              aa.render(
+                settingsRef.current.antiAliasing ?? "smaa",
+                settingsRef.current.motionBlur ?? 0,
+                sharpRoots(),
+              )
+            } finally {
+              gg.visible = true
+            }
+            mark("in-game variants compiled")
+          }
         } catch (e) {
           console.warn("warm-up render failed", e)
         }
@@ -807,6 +828,16 @@ export function startSession(ctx: SessionCtx): () => void {
       }
       mark("ready")
       setLoading(false)
+      if (flyby) {
+        void flyby
+          .init(scene, baseUrl)
+          .then((ok) => {
+            if (!ok || disposed) return
+            for (const t of flyby.warmTextures) renderer!.initTexture(t)
+            mark("flyby init")
+          })
+          .catch((e) => console.warn("flyby init failed", e))
+      }
       void spawnTrafficLater?.().then(() => mark("traffic spawned"))
 
       const circuit = map.circuit

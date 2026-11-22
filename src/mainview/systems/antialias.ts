@@ -174,6 +174,18 @@ export class AntiAlias {
     restore?.()
   }
 
+  compileAsync(o: THREE.Object3D, target: THREE.Object3D): Promise<unknown> {
+    const rt = this.composer?.readBuffer
+    if (!rt) return this.renderer.compileAsync(o, this.camera, target as THREE.Scene)
+    const prev = this.renderer.getRenderTarget()
+    this.renderer.setRenderTarget(rt)
+    try {
+      return this.renderer.compileAsync(o, this.camera, target as THREE.Scene)
+    } finally {
+      this.renderer.setRenderTarget(prev)
+    }
+  }
+
   dispose() {
     this.composer?.dispose()
     this.blurPass?.dispose()

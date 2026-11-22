@@ -59,6 +59,7 @@ export interface SpawnEnv {
   deferTraffic?: boolean
   isDisposed?: () => boolean
   onTraffic?: (r: Rival) => void
+  precompile?: (o: THREE.Object3D) => Promise<void>
 }
 
 export async function spawnField(env: SpawnEnv) {
@@ -254,6 +255,14 @@ export async function spawnField(env: SpawnEnv) {
       console.warn("traffic model failed", e)
     }
     tvis.setHeadlights(isLowLight(timeOfDayRef.current))
+    if (env.precompile) {
+      try {
+        await env.precompile(tvis.group)
+      } catch (e) {
+        console.warn("traffic precompile failed", e)
+      }
+      if (env.isDisposed?.()) return
+    }
     scene.add(tvis.group)
     const spawned: Rival = {
       car: tc,

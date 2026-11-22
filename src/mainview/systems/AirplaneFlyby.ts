@@ -170,7 +170,6 @@ export class AirplaneFlyby {
         body.add(model)
         root.add(body)
         root.visible = false
-        scene.add(root)
 
         const {
           lightsRoot,
@@ -192,6 +191,19 @@ export class AirplaneFlyby {
             if (spec.gearNodes!.test(o.name)) modelGear.push(o)
           })
         }
+
+        if (this.precompile) {
+          root.visible = true
+          try {
+            await this.precompile(root)
+          } catch (e) {
+            console.warn(`${spec.file} precompile failed`, e)
+          } finally {
+            root.visible = false
+          }
+          if (this.disposed) return false
+        }
+        scene.add(root)
 
         this.aircraft.push({
           spec,

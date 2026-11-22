@@ -14,18 +14,18 @@ precision highp float;
 precision highp int;
 uniform highp sampler2D tCur, tDepth, tHist;
 uniform vec2 srcSize, outSize, jitter;
-uniform mat4 invVPj, prevVPu;
+uniform mat4 invVPu, prevVPu;
 uniform float histOn, motionK;
 out vec4 outColor;
 
-vec3 cur(ivec2 p) {
-  return texelFetch(tCur, clamp(p, ivec2(0), ivec2(srcSize) - 1), 0).rgb;
+vec4 cur(ivec2 p) {
+  return texelFetch(tCur, clamp(p, ivec2(0), ivec2(srcSize) - 1), 0);
 }
 float dep(ivec2 p) {
   return texelFetch(tDepth, clamp(p, ivec2(0), ivec2(srcSize) - 1), 0).x;
 }
 // Catmull-Rom history fetch (5 bilinear taps) keeps accumulated detail sharp.
-vec3 histCR(vec2 uv) {
+vec4 histCR(vec2 uv) {
   vec2 pos = uv * outSize;
   vec2 tc1 = floor(pos - 0.5) + 0.5;
   vec2 f = pos - tc1;
@@ -36,11 +36,11 @@ vec3 histCR(vec2 uv) {
   vec2 w12 = w1 + w2;
   vec2 t0 = (tc1 - 1.0) / outSize, t3 = (tc1 + 2.0) / outSize;
   vec2 t12 = (tc1 + w2 / w12) / outSize;
-  vec3 r = texture(tHist, vec2(t12.x, t0.y)).rgb * (w12.x * w0.y)
-         + texture(tHist, vec2(t0.x, t12.y)).rgb * (w0.x * w12.y)
-         + texture(tHist, vec2(t12.x, t12.y)).rgb * (w12.x * w12.y)
-         + texture(tHist, vec2(t3.x, t12.y)).rgb * (w3.x * w12.y)
-         + texture(tHist, vec2(t12.x, t3.y)).rgb * (w12.x * w3.y);
+  vec4 r = texture(tHist, vec2(t12.x, t0.y)) * (w12.x * w0.y)
+         + texture(tHist, vec2(t0.x, t12.y)) * (w0.x * w12.y)
+         + texture(tHist, vec2(t12.x, t12.y)) * (w12.x * w12.y)
+         + texture(tHist, vec2(t3.x, t12.y)) * (w3.x * w12.y)
+         + texture(tHist, vec2(t12.x, t3.y)) * (w12.x * w3.y);
   float ws = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
   return max(r / ws, 0.0);
 }
@@ -51,6 +51,7 @@ void main() {
   vec2 q = gl_FragCoord.xy * (srcSize / outSize);
   ivec2 c0 = ivec2(floor(q - jitter));
 
+  float accA = 0.0;
   vec3 acc = vec3(0.0), m1 = vec3(0.0), m2 = vec3(0.0);
   vec3 mn = vec3(1e9), mx = vec3(-1e9);
   float wsum = 0.0, nearest = 2.0;
@@ -58,11 +59,12 @@ void main() {
   for (int y = -1; y <= 1; y++) {
     for (int x = -1; x <= 1; x++) {
       ivec2 p = c0 + ivec2(x, y);
-      vec3 c = cur(p);
+      vec4 c4 = cur(p);
+      vec3 c = c4.rgb;
       vec2 d = (vec2(p) + 0.5 + jitter) - q;
       // Gaussian reconstruction, radius tied to the upscale ratio.
       float w = exp(-2.3 * dot(d, d));
-      acc += c * w; wsum += w;
+      acc += c * w; accA += c4.a * w; wsum += w;
       m1 += c; m2 += c * c;
       mn = min(mn, c); mx = max(mx, c);
       float dz = dep(p);
@@ -70,20 +72,26 @@ void main() {
     }
   }
   vec3 curC = acc / max(wsum, 1e-5);
+  float curA = accA / max(wsum, 1e-5);
   vec3 mean = m1 / 9.0;
   vec3 sd = sqrt(max(m2 / 9.0 - mean * mean, 0.0));
 
   float a = 1.0;
   vec3 res = curC;
+  float resA = curA;
   if (histOn > 0.5) {
-    // Reproject: depth of the closest texel -> world -> previous frame.
-    vec2 ndc = (vec2(nearestP) + 0.5) / srcSize * 2.0 - 1.0;
-    vec4 w = invVPj * vec4(ndc, nearest * 2.0 - 1.0, 1.0);
+    // Reproject this output pixel's own (unjittered) position, using the
+    // closest neighbouring depth so edges follow the foreground. Using the
+    // nearest texel's position instead makes the sample point hop around with
+    // the jitter and the whole image wiggles.
+    vec2 ndc = gl_FragCoord.xy / outSize * 2.0 - 1.0;
+    vec4 w = invVPu * vec4(ndc, nearest * 2.0 - 1.0, 1.0);
     w /= w.w;
     vec4 pc = prevVPu * w;
     vec2 puv = (pc.xy / pc.w) * 0.5 + 0.5;
     if (all(greaterThan(puv, vec2(0.0))) && all(lessThan(puv, vec2(1.0))) && pc.w > 0.0) {
-      vec3 h = histCR(puv);
+      vec4 h4 = histCR(puv);
+      vec3 h = h4.rgb;
       // Clamp to the local colour range (variance box inside min/max).
       vec3 lo = max(mn, mean - 1.5 * sd), hi = min(mx, mean + 1.5 * sd);
       vec3 hc = clamp(h, min(lo, hi), max(lo, hi));
@@ -92,9 +100,10 @@ void main() {
       // Less history when it was clamped hard or the pixel moved a lot.
       a = clamp(0.08 + clipped * 0.4 + motion * motionK, 0.08, 1.0);
       res = mix(hc, curC, a);
+      resA = mix(h4.a, curA, a);
     }
   }
-  outColor = vec4(res, 1.0);
+  outColor = vec4(res, resA);
 }
 `
 
@@ -107,6 +116,9 @@ uniform float rcasCon;
 out vec4 outColor;
 vec3 ld(ivec2 p) {
   return texelFetch(tDiffuse, clamp(p, ivec2(0), ivec2(outSize) - 1), 0).rgb;
+}
+float ldA(ivec2 p) {
+  return texelFetch(tDiffuse, clamp(p, ivec2(0), ivec2(outSize) - 1), 0).a;
 }
 float lum(vec3 c) { return c.g + 0.5 * (c.r + c.b); }
 void main() {
@@ -122,7 +134,7 @@ void main() {
   vec3 hitMax = (1.0 - max(mx4, e)) / min(4.0 * mn4 - 4.0, vec3(-1e-5));
   vec3 l3 = max(-hitMin, hitMax);
   float lobe = max(-0.1875, min(max(max(l3.r, l3.g), l3.b), 0.0)) * rcasCon * nz;
-  outColor = vec4(clamp((lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0), 0.0, 1.0), 1.0);
+  outColor = vec4(clamp((lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0), 0.0, 1.0), ldA(ip));
 }
 `
 
@@ -147,7 +159,6 @@ export class TemporalUpscalePass extends Pass {
   private frame = 0
   private hasHist = false
   private readonly unjVP = new THREE.Matrix4()
-  private readonly jitVP = new THREE.Matrix4()
   private readonly prevVP = new THREE.Matrix4()
   private readonly proj = new THREE.Matrix4()
   private srcW = 1
@@ -175,7 +186,7 @@ export class TemporalUpscalePass extends Pass {
       srcSize: { value: new THREE.Vector2(1, 1) },
       outSize: { value: new THREE.Vector2(1, 1) },
       jitter: { value: this.jitter },
-      invVPj: { value: new THREE.Matrix4() },
+      invVPu: { value: new THREE.Matrix4() },
       prevVPu: { value: new THREE.Matrix4() },
       histOn: { value: 0 },
       motionK: { value: 0.01 },
@@ -225,7 +236,6 @@ export class TemporalUpscalePass extends Pass {
     this.camera.updateMatrixWorld()
     const view = this.camera.matrixWorldInverse
     this.unjVP.multiplyMatrices(this.proj, view)
-    this.jitVP.multiplyMatrices(this.camera.projectionMatrix, view)
     return () => {
       e[8] = e8
       e[9] = e9
@@ -245,7 +255,7 @@ export class TemporalUpscalePass extends Pass {
     u.tDepth.value = this.getDepth()
     if (!u.tDepth.value) return
     u.tHist.value = rd.texture
-    u.invVPj.value.copy(this.jitVP).invert()
+    u.invVPu.value.copy(this.unjVP).invert()
     u.prevVPu.value.copy(this.prevVP)
     u.histOn.value = this.hasHist ? 1 : 0
     renderer.setRenderTarget(wr)
