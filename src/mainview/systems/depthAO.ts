@@ -10,7 +10,7 @@ void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
 const FRAG = `
 precision highp float;
 precision highp int;
-uniform highp sampler2D tDiffuse, tDepth;
+uniform highp sampler2D tDepth;
 uniform vec4 proj;
 uniform vec2 size;
 uniform float radius, intensity, phase;
@@ -27,13 +27,12 @@ vec3 viewPos(ivec2 p, out bool sky) {
 
 void main() {
   ivec2 ip = ivec2(gl_FragCoord.xy);
-  vec4 src = texelFetch(tDiffuse, ip, 0);
   bool sky, s;
   vec3 p = viewPos(ip, sky);
   float dist = -p.z;
-  if (sky || dist > 80.0) { outColor = src; return; }
+  if (sky || dist > 80.0) { outColor = vec4(1.0); return; }
   float rpx = radius * proj.y * size.y * 0.5 / dist;
-  if (rpx < 1.5) { outColor = src; return; }
+  if (rpx < 1.5) { outColor = vec4(1.0); return; }
   rpx = min(rpx, 48.0);
 
   vec3 pl = viewPos(ip + ivec2(-1, 0), s), pr = viewPos(ip + ivec2(1, 0), s);
@@ -65,13 +64,41 @@ void main() {
   }
   float ao = 1.0 - clamp(intensity * occ / float(N) * 2.0, 0.0, 0.85);
   ao = mix(1.0, ao, 1.0 - smoothstep(40.0, 80.0, dist));
-  outColor = vec4(src.rgb * ao, src.a);
+  outColor = vec4(ao, 0.0, 0.0, 1.0);
+}
+`
+
+const BLUR_FRAG = `
+precision highp float;
+precision highp int;
+uniform highp sampler2D tDiffuse, tAO, tDepth;
+uniform vec2 size;
+out vec4 outColor;
+void main() {
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  ivec2 mx = ivec2(size) - 1;
+  vec4 src = texelFetch(tDiffuse, ip, 0);
+  float d0 = texelFetch(tDepth, ip, 0).x;
+  float sum = 0.0, ws = 0.0;
+  for (int y = -2; y <= 2; y++) {
+    for (int x = -2; x <= 2; x++) {
+      ivec2 p = clamp(ip + ivec2(x, y), ivec2(0), mx);
+      float d = texelFetch(tDepth, p, 0).x;
+      float w = exp(-float(x * x + y * y) * 0.2) * exp(-abs(d - d0) * 6000.0);
+      sum += texelFetch(tAO, p, 0).r * w;
+      ws += w;
+    }
+  }
+  outColor = vec4(src.rgb * (sum / max(ws, 1e-5)), src.a);
 }
 `
 
 export class DepthAOPass extends Pass {
   private readonly mat: THREE.RawShaderMaterial
+  private readonly blurMat: THREE.RawShaderMaterial
   private readonly quad: FullScreenQuad
+  private readonly blurQuad: FullScreenQuad
+  private ao: THREE.WebGLRenderTarget | null = null
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -81,7 +108,6 @@ export class DepthAOPass extends Pass {
     this.mat = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
       uniforms: {
-        tDiffuse: { value: null },
         tDepth: { value: null },
         proj: { value: new THREE.Vector4() },
         size: { value: new THREE.Vector2(1, 1) },
@@ -94,7 +120,21 @@ export class DepthAOPass extends Pass {
       depthTest: false,
       depthWrite: false,
     })
+    this.blurMat = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      uniforms: {
+        tDiffuse: { value: null },
+        tAO: { value: null },
+        tDepth: { value: null },
+        size: { value: new THREE.Vector2(1, 1) },
+      },
+      vertexShader: VERT,
+      fragmentShader: BLUR_FRAG,
+      depthTest: false,
+      depthWrite: false,
+    })
     this.quad = new FullScreenQuad(this.mat)
+    this.blurQuad = new FullScreenQuad(this.blurMat)
   }
 
   animate = false
@@ -112,22 +152,40 @@ export class DepthAOPass extends Pass {
     readBuffer: THREE.WebGLRenderTarget,
   ) {
     const depth = this.getDepth()
-    const u = this.mat.uniforms
-    u.tDiffuse.value = readBuffer.texture
-    u.tDepth.value = depth
-    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer)
-    if (!depth) {
-      this.mat.uniforms.intensity.value = 0
+    this.needsSwap = !!depth
+    if (!depth) return
+    const w = readBuffer.width,
+      h = readBuffer.height
+    if (!this.ao || this.ao.width !== w || this.ao.height !== h) {
+      this.ao?.dispose()
+      this.ao = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        depthBuffer: false,
+      })
     }
+    const u = this.mat.uniforms
+    u.tDepth.value = depth
     const e = this.camera.projectionMatrix.elements
     u.proj.value.set(e[0], e[5], e[10], e[14])
-    u.size.value.set(readBuffer.width, readBuffer.height)
+    u.size.value.set(w, h)
     u.phase.value = this.animate ? this.frame++ % 16 : 0
+    renderer.setRenderTarget(this.ao)
     this.quad.render(renderer)
+    const b = this.blurMat.uniforms
+    b.tDiffuse.value = readBuffer.texture
+    b.tAO.value = this.ao.texture
+    b.tDepth.value = depth
+    b.size.value.set(w, h)
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer)
+    this.blurQuad.render(renderer)
   }
 
   dispose() {
+    this.ao?.dispose()
     this.mat.dispose()
+    this.blurMat.dispose()
     this.quad.dispose()
+    this.blurQuad.dispose()
   }
 }

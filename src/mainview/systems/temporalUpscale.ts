@@ -93,12 +93,14 @@ void main() {
       vec4 h4 = histCR(puv);
       vec3 h = h4.rgb;
       // Clamp to the local colour range (variance box inside min/max).
-      vec3 lo = max(mn, mean - 1.5 * sd), hi = min(mx, mean + 1.5 * sd);
+      vec3 lo = mean - 2.0 * sd, hi = mean + 2.0 * sd;
+      lo = min(lo, curC); hi = max(hi, curC);
+      lo = max(lo, mn - 0.04); hi = min(hi, mx + 0.04);
       vec3 hc = clamp(h, min(lo, hi), max(lo, hi));
-      float clipped = clamp(length(h - hc) * 6.0, 0.0, 1.0);
+      float clipped = clamp(length(h - hc) * 4.0, 0.0, 1.0);
       float motion = length((puv - gl_FragCoord.xy / outSize) * outSize);
       // Less history when it was clamped hard or the pixel moved a lot.
-      a = clamp(0.1 + clipped * 0.4 + motion * motionK, 0.1, 1.0);
+      a = clamp(0.07 + clipped * 0.35 + motion * motionK, 0.07, 1.0);
       res = mix(hc, curC, a);
       resA = mix(h4.a, curA, a);
     }
@@ -148,7 +150,7 @@ const halton = (i: number, b: number) => {
   return r
 }
 const PHASES = 16
-const JITTER_SCALE = 0.85
+const JITTER_SCALE = 0.6
 
 export class TemporalUpscalePass extends Pass {
   private readonly resMat: THREE.RawShaderMaterial
@@ -195,7 +197,7 @@ export class TemporalUpscalePass extends Pass {
     this.rcasMat = mk(RCAS_FRAG, {
       tDiffuse: { value: null },
       outSize: { value: new THREE.Vector2(1, 1) },
-      rcasCon: { value: Math.pow(2, -RCAS_SHARPNESS) },
+      rcasCon: { value: Math.pow(2, -(RCAS_SHARPNESS + 0.6)) },
     })
     this.resQuad = new FullScreenQuad(this.resMat)
     this.rcasQuad = new FullScreenQuad(this.rcasMat)
